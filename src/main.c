@@ -1,11 +1,70 @@
 #include "hyperian.h"
 
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 static int starts_with(const char *text, const char *prefix) { return !strncmp(text, prefix, strlen(prefix)); }
+
+static int project_name_is_safe(const char *name) {
+    if (!*name) return 0;
+    for (const char *at = name; *at; at++)
+        if (!((*at >= 'a' && *at <= 'z') || (*at >= 'A' && *at <= 'Z') || (*at >= '0' && *at <= '9') || *at == '-' || *at == '_')) return 0;
+    return 1;
+}
+
+static int make_project_directory(const char *path) {
+    if (!mkdir(path, 0755)) return 1;
+    fprintf(stderr, "error: cannot create folder %s: %s\n", path, strerror(errno)); return 0;
+}
+
+static int write_project_file(const char *path, const char *contents) {
+    FILE *file = fopen(path, "wx");
+    if (!file) { fprintf(stderr, "error: cannot create file %s: %s\n", path, strerror(errno)); return 0; }
+    int okay = fputs(contents, file) != EOF;
+    if (fclose(file)) okay = 0;
+    if (!okay) fprintf(stderr, "error: could not finish file %s\n", path);
+    return okay;
+}
+
+static int create_project(const char *name, const char *target) {
+    static const char *targets[] = {"web", "console", "api", "service", "desktop", "game"}; int known = 0;
+    for (size_t i = 0; i < sizeof(targets) / sizeof(targets[0]); i++) if (!strcmp(target, targets[i])) known = 1;
+    if (!project_name_is_safe(name)) { fprintf(stderr, "error: use only letters, numbers, hyphens, or underscores in a project name\n"); return 1; }
+    if (!known) { fprintf(stderr, "error: target must be web, console, api, service, desktop, or game\n"); return 1; }
+    char path[1024], source[4096];
+    if (!make_project_directory(name)) return 1;
+    const char *folders[] = {"models", "controllers", "views", "public"};
+    for (size_t i = 0; i < sizeof(folders) / sizeof(folders[0]); i++) {
+        snprintf(path, sizeof(path), "%s/%s", name, folders[i]); if (!make_project_directory(path)) return 1;
+    }
+    snprintf(source, sizeof(source), "application \"%s\" is %s\n%s\ninclude \"models/item.hyp\"\ninclude \"controllers/items.hyp\"\n%s",
+        name, target, (!strcmp(target, "web") || !strcmp(target, "api")) ? "listen on 8000\nserve files from \"public\" at \"/assets\"" : "",
+        strcmp(target, "api") ? "include \"views/main.hyp\"\n" : "");
+    snprintf(path, sizeof(path), "%s/app.hyp", name); if (!write_project_file(path, source)) return 1;
+    snprintf(path, sizeof(path), "%s/models/item.hyp", name);
+    if (!write_project_file(path, "model Item\n    field name is text required\nend\n")) return 1;
+    if (!strcmp(target, "web")) snprintf(source, sizeof(source),
+        "controller Items\n    when someone visits \"/\"\n        find all Item as items\n        show view \"main\" with items\n    end\nend\n");
+    else if (!strcmp(target, "api")) snprintf(source, sizeof(source),
+        "controller Items\n    when someone visits \"/items\"\n        find all Item as items\n        show json items\n    end\nend\n");
+    else snprintf(source, sizeof(source),
+        "controller Items\n    when application starts\n        find all Item as items\n        show view \"main\" with items\n    end\nend\n");
+    snprintf(path, sizeof(path), "%s/controllers/items.hyp", name); if (!write_project_file(path, source)) return 1;
+    if (strcmp(target, "api")) {
+        snprintf(path, sizeof(path), "%s/views/main.hyp", name);
+        if (!write_project_file(path, "view \"main\"\n    heading \"Welcome to Hyperian\"\n    text \"Your foldered MVC application is ready.\"\nend\n")) return 1;
+    }
+    snprintf(path, sizeof(path), "%s/public/app.css", name);
+    if (!write_project_file(path, "body { font-family: system-ui, sans-serif; margin: 3rem auto; max-width: 48rem; }\n")) return 1;
+    snprintf(path, sizeof(path), "%s/README.md", name);
+    snprintf(source, sizeof(source), "# %s\n\nRun this %s application with:\n\n    hyperian run app.hyp\n", name, target);
+    if (!write_project_file(path, source)) return 1;
+    printf("Created %s as a foldered Hyperian %s application.\n", name, target); return 0;
+}
 
 static int format_source(const char *path) {
     FILE *file = fopen(path, "r"); if (!file) { fprintf(stderr, "error: cannot open %s\n", path); return 1; }
@@ -33,6 +92,7 @@ static void help(void) {
          "\n"
          "Usage:\n"
          "  hyperian compile app.hyp -o app.hyc   Compile source to bytecode\n"
+         "  hyperian new MyApp [--target web]     Create a foldered MVC project\n"
          "  hyperian check app.hyp                Check source for mistakes\n"
          "  hyperian run app.hyp                  Compile and run an app\n"
          "  hyperian run app.hyc [--port 9000]    Run compiled bytecode\n"
@@ -50,6 +110,12 @@ static int ends_with(const char *text, const char *suffix) {
 int main(int argc, char **argv) {
     if (argc < 2 || !strcmp(argv[1], "help") || !strcmp(argv[1], "--help") || !strcmp(argv[1], "-h")) { help(); return 0; }
     if (!strcmp(argv[1], "version") || !strcmp(argv[1], "--version")) { puts("Hyperian " HYPERIAN_VERSION); return 0; }
+    if (!strcmp(argv[1], "new")) {
+        if (argc != 3 && !(argc == 5 && !strcmp(argv[3], "--target"))) {
+            fprintf(stderr, "usage: hyperian new MyApp [--target web]\n"); return 2;
+        }
+        return create_project(argv[2], argc == 5 ? argv[4] : "web");
+    }
     if (!strcmp(argv[1], "compile")) {
         if (argc != 5 || strcmp(argv[3], "-o")) { fprintf(stderr, "usage: hyperian compile app.hyp -o app.hyc\n"); return 2; }
         return compile_file(argv[2], argv[4]);

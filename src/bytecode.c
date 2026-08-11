@@ -126,6 +126,7 @@ const char *opcode_name(uint8_t op) {
         "SET_VALUE", "LOGIC_IF", "OTHERWISE", "END_LOGIC_IF", "REPEAT", "END_REPEAT", "RUN_ACTION", "READ_FORM",
         "TEST", "EXPECT", "END_TEST", "BEFORE_ACTION", "ERROR_VIEW", "STATIC_FILES",
         "STYLE", "SCRIPT", "IMAGE", "TEXTAREA", "CHECKBOX",
-        "DATA_VERSION", "MIGRATION", "RENAME_FIELD", "END_MIGRATION"};
+        "DATA_VERSION", "MIGRATION", "RENAME_FIELD", "END_MIGRATION",
+        "RETURN_VALUE", "READ_FILE", "WRITE_FILE", "BACKGROUND", "RECTANGLE"};
     return op < sizeof(names) / sizeof(names[0]) ? names[op] : "UNKNOWN";
 }

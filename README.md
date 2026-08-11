@@ -8,7 +8,7 @@ Hyperian is an English-like, general-purpose language where every application is
 - a bytecode virtual machine;
 - separate native runtimes for different application targets.
 
-The goal is that a beginner can read the source aloud and understand it. Web, console, API, and one-shot service programs are executable today. Desktop and game backends fit behind the same MVC language design.
+The goal is that a beginner can read the source aloud and understand it. Web, console, API, one-shot service, native GTK desktop, and native SDL2 game programs are executable today.
 
 ## Build the compiler
 
@@ -88,7 +88,16 @@ application "Worker" is service
 application "Adventure" is game
 ```
 
-The compiler recognizes all six targets and records the target in bytecode. `web`, `console`, `api`, and `service` have working native backends. Desktop and game programs currently give a clear “backend is not implemented yet” message when run; they are reserved backend boundaries, not fake aliases for another target.
+The compiler recognizes all six targets and records the target in bytecode. Each target has a real backend: HTTP for `web` and `api`, terminal execution for `console` and `service`, GTK widgets for `desktop`, and an SDL2 render loop for `game`. GTK3 and SDL2 are optional native build dependencies.
+
+Create a complete foldered project for any target:
+
+```sh
+hyperian new MyWebsite --target web
+hyperian new MyTool --target console
+hyperian new MyDesktopApp --target desktop
+hyperian new MyGame --target game
+```
 
 ## Web example
 
@@ -353,12 +362,58 @@ before every route run action "prepare every request"
 before route "/admin" run action "require an administrator"
 ```
 
+Actions can accept an input and return a result, making them readable functions:
+
+```hyperian
+action "greet person" using person
+    return "Hello," joined with person
+end
+
+run action "greet person" using Ada as greeting
+```
+
+Native applications can read and atomically write text files:
+
+```hyperian
+write greeting to file "greeting.txt"
+read file "greeting.txt" as saved_greeting
+```
+
 Applications can replace built-in responses for any HTTP error from 400 through 599. The error view can show the numeric `status` value:
 
 ```hyperian
 when error 404 show view "not-found"
 when error 500 show view "server-problem"
 ```
+
+## Native desktop and games
+
+Desktop views become real GTK controls:
+
+```hyperian
+application "Desktop Notes" is desktop
+
+view "notes"
+    heading "Native desktop notes"
+    input "Note title" as title
+    textarea "Note details" as details
+    checkbox "Important" as important
+    button "Save note"
+end
+```
+
+Game views are rendered in a native SDL2 window and event loop:
+
+```hyperian
+application "Blocks" is game
+
+view "playfield"
+    fill background with color 18 24 38
+    draw rectangle at 100 100 sized 180 by 80 with color 70 170 255
+end
+```
+
+See [examples/desktop_notes.hyp](examples/desktop_notes.hyp) and [examples/blocks_game.hyp](examples/blocks_game.hyp). This first visual release provides native widgets and 2D colored scenes; richer widget actions, animation, input, audio, sprites, and physics are upcoming layers.
 
 ## Programs split across files
 
@@ -463,6 +518,6 @@ Quoted text may contain spaces. `#` starts a comment. Indentation is optional bu
 
 ## Project status
 
-Version 0.9.1 is a small but real MVC platform: custom bytecode, a native VM, target-aware compilation, working web/console/API/service runtimes, versioned data migrations, persistent models, complete CRUD, reusable layouts/components, static assets and richer controls, safe HTML and typed JSON, authentication and authorization, English controller logic, multi-file programs, global and route-specific middleware, custom HTTP error views, source formatting, and tests written in English.
+Version 0.10 is a small but real MVC platform: custom bytecode, a native VM, six executable targets, GTK desktop widgets, SDL2 game rendering, reusable actions with inputs and results, native file access, foldered project generation, versioned data migrations, persistent models, complete CRUD, layouts/components, safe HTML and typed JSON, authentication and authorization, middleware, custom HTTP error views, source formatting, and tests written in English.
 
-The next major layers are broader middleware and error handlers, packages, a debugger, then native desktop and game runtimes. Those are not claimed as complete yet.
+The next major layers are collections, structured errors, HTTP clients, SQLite adapters, packages, a debugger, richer desktop events, game input/animation/audio/physics, mobile backends, and standalone application packaging. Those are not claimed as complete yet.

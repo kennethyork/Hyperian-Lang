@@ -254,10 +254,45 @@ static int execute_logic_at(const Bytecode *code, size_t *position, Scope *scope
         *position = end;
     } else if (in->opcode == OP_RUN_ACTION) {
         for (size_t action = 0; action < code->count; action++) if (code->items[action].opcode == OP_ACTION && !strcmp(code->items[action].args[0], in->args[0])) {
+            if (in->argc >= 3) {
+                char input[2048]; evaluate(scope, in->args[1], input, sizeof(input));
+                if (code->items[action].argc < 2 || !*code->items[action].args[1]) {
+                    snprintf(error, error_size, "action %s does not accept an input", in->args[0]); return 0;
+                }
+                local_set(scope->locals, code->items[action].args[1], input);
+                local_set(scope->locals, "__hyperian_return", "");
+            }
             size_t end = find_end(code, action, OP_ACTION, OP_END_ACTION);
-            return execute_logic_range(code, action + 1, end, scope, depth + 1, error, error_size);
+            if (!execute_logic_range(code, action + 1, end, scope, depth + 1, error, error_size)) return 0;
+            if (in->argc >= 3) {
+                const char *returned = local_value(scope->locals, "__hyperian_return");
+                local_set(scope->locals, in->args[2], returned ? returned : "");
+            }
+            return 1;
         }
         snprintf(error, error_size, "the requested action does not exist"); return 0;
+    } else if (in->opcode == OP_RETURN_VALUE) {
+        char value[2048]; evaluate(scope, in->args[0], value, sizeof(value)); local_set(scope->locals, "__hyperian_return", value);
+    } else if (in->opcode == OP_READ_FILE) {
+        char path[2048]; evaluate(scope, in->args[0], path, sizeof(path)); FILE *file = fopen(path, "rb");
+        if (!file) { snprintf(error, error_size, "could not read file %s: %s", path, strerror(errno)); return 0; }
+        char contents[2048]; size_t length = fread(contents, 1, sizeof(contents) - 1, file);
+        int failed = ferror(file), finished = feof(file); fclose(file);
+        if (failed) { snprintf(error, error_size, "could not read file %s", path); return 0; }
+        if (!finished) { snprintf(error, error_size, "file %s is larger than 2047 characters", path); return 0; }
+        contents[length] = 0; local_set(scope->locals, in->args[1], contents);
+    } else if (in->opcode == OP_WRITE_FILE) {
+        char value[2048], path[2048], temporary[2100];
+        evaluate(scope, in->args[0], value, sizeof(value)); evaluate(scope, in->args[1], path, sizeof(path));
+        if (snprintf(temporary, sizeof(temporary), "%s.tmp", path) >= (int)sizeof(temporary)) {
+            snprintf(error, error_size, "the file path is too long"); return 0;
+        }
+        FILE *file = fopen(temporary, "wb");
+        if (!file) { snprintf(error, error_size, "could not write file %s: %s", path, strerror(errno)); return 0; }
+        size_t length = strlen(value); int okay = fwrite(value, 1, length, file) == length;
+        if (fclose(file)) okay = 0;
+        if (okay) okay = rename(temporary, path) == 0;
+        if (!okay) { remove(temporary); snprintf(error, error_size, "could not finish writing file %s", path); return 0; }
     }
     return 1;
 }
@@ -265,7 +300,8 @@ static int execute_logic_at(const Bytecode *code, size_t *position, Scope *scope
 static int execute_logic_range(const Bytecode *code, size_t from, size_t to, Scope *scope, int depth, char *error, size_t error_size) {
     for (size_t i = from; i < to; i++)
         if (code->items[i].opcode == OP_SET_VALUE || code->items[i].opcode == OP_LOGIC_IF ||
-            code->items[i].opcode == OP_REPEAT || code->items[i].opcode == OP_RUN_ACTION)
+            code->items[i].opcode == OP_REPEAT || code->items[i].opcode == OP_RUN_ACTION || code->items[i].opcode == OP_RETURN_VALUE ||
+            code->items[i].opcode == OP_READ_FILE || code->items[i].opcode == OP_WRITE_FILE)
             if (!execute_logic_at(code, &i, scope, depth, error, error_size)) return 0;
     return 1;
 }
@@ -637,7 +673,8 @@ static Response execute_route(const Bytecode *code, size_t route_at, Form *form,
             const char *value = pair_value(form->pairs, form->count, in->args[0]); local_set(&locals, in->args[1], value ? value : "");
             continue;
         }
-        if (in->opcode == OP_SET_VALUE || in->opcode == OP_LOGIC_IF || in->opcode == OP_REPEAT || in->opcode == OP_RUN_ACTION) {
+        if (in->opcode == OP_SET_VALUE || in->opcode == OP_LOGIC_IF || in->opcode == OP_REPEAT || in->opcode == OP_RUN_ACTION ||
+            in->opcode == OP_RETURN_VALUE || in->opcode == OP_READ_FILE || in->opcode == OP_WRITE_FILE) {
             if (!execute_logic_at(code, &i, &scope, 0, error, sizeof(error)))
                 return (Response){500, error_page(error), NULL, "text/html; charset=utf-8", response_cookie, 0};
             continue;
@@ -938,7 +975,8 @@ static int run_console(const Bytecode *code, const char *app_name) {
                 if (!fgets(answer, sizeof(answer), stdin)) answer[0] = 0;
                 answer[strcspn(answer, "\r\n")] = 0;
                 local_set(&locals, in->args[1], answer);
-            } else if (in->opcode == OP_SET_VALUE || in->opcode == OP_LOGIC_IF || in->opcode == OP_REPEAT || in->opcode == OP_RUN_ACTION) {
+            } else if (in->opcode == OP_SET_VALUE || in->opcode == OP_LOGIC_IF || in->opcode == OP_REPEAT || in->opcode == OP_RUN_ACTION ||
+                in->opcode == OP_RETURN_VALUE || in->opcode == OP_READ_FILE || in->opcode == OP_WRITE_FILE) {
                 char error[256];
                 if (!execute_logic_at(code, &i, &scope, 0, error, sizeof(error))) { fprintf(stderr, "error: %s\n", error); records_free(records); return 1; }
             } else if (in->opcode == OP_FIND_ALL) {
@@ -968,6 +1006,8 @@ int run_bytecode(const char *path, int port_override) {
     if (!strcmp(target, "console") || !strcmp(target, "service")) {
         int result = run_console(&code, name); bytecode_free(&code); return result;
     }
+    if (!strcmp(target, "desktop")) { int result = run_desktop_app(&code, name); bytecode_free(&code); return result; }
+    if (!strcmp(target, "game")) { int result = run_game_app(&code, name); bytecode_free(&code); return result; }
     if (strcmp(target, "web") && strcmp(target, "api")) {
         fprintf(stderr, "error: the %s backend is declared but is not implemented yet\n", target);
         bytecode_free(&code); return 1;
@@ -1013,7 +1053,8 @@ int test_bytecode(const char *path) {
         size_t end = find_end(&code, i, OP_TEST, OP_END_TEST); int failed = 0;
         for (size_t at = i + 1; at < end; at++) {
             if (code.items[at].opcode == OP_SET_VALUE || code.items[at].opcode == OP_LOGIC_IF ||
-                code.items[at].opcode == OP_REPEAT || code.items[at].opcode == OP_RUN_ACTION) {
+                code.items[at].opcode == OP_REPEAT || code.items[at].opcode == OP_RUN_ACTION || code.items[at].opcode == OP_RETURN_VALUE ||
+                code.items[at].opcode == OP_READ_FILE || code.items[at].opcode == OP_WRITE_FILE) {
                 if (!execute_logic_at(&code, &at, &scope, 0, error, sizeof(error))) {
                     printf("FAIL  %s — %s\n", code.items[i].args[0], error); failed = 1; break;
                 }

@@ -1,0 +1,21 @@
+application "Desktop Notes" is desktop
+
+model Note
+    field title is text required
+end
+
+controller Notes
+    when application starts
+        find all Note as notes
+        show view "notes" with notes
+    end
+end
+
+view "notes"
+    heading "Native desktop notes"
+    text "This window and its controls are rendered by GTK, not a browser."
+    input "Note title" as title
+    textarea "Note details" as details
+    checkbox "Important" as important
+    button "Save note"
+end

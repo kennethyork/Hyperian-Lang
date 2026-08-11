@@ -125,6 +125,13 @@ static int validate(Bytecode *code, const char *path) {
         if (in->opcode == OP_RUN_ACTION && !known_name(code, OP_ACTION, in->args[0])) {
             source_error(path, in->line, "this controller action does not exist"); return 0;
         }
+        if (in->opcode == OP_RUN_ACTION) {
+            Instruction *action = NULL;
+            for (size_t at = 0; at < code->count; at++) if (code->items[at].opcode == OP_ACTION && !strcmp(code->items[at].args[0], in->args[0])) action = &code->items[at];
+            int accepts_input = action && action->argc > 1 && *action->args[1];
+            if (in->argc >= 3 && !accepts_input) { source_error(path, in->line, "this action does not accept an input"); return 0; }
+            if (in->argc < 3 && accepts_input) { source_error(path, in->line, "this action needs an input and a result name"); return 0; }
+        }
         if (in->opcode == OP_BEFORE_ACTION && !known_name(code, OP_ACTION, in->args[0])) {
             source_error(path, in->line, "the before-route action does not exist"); return 0;
         }
@@ -381,8 +388,9 @@ int compile_file(const char *source_path, const char *output_path) {
             } else { source_error(source_path, number, "say: field name is text [required] [unique] [default value] [minimum value] [maximum value]"); okay = 0; }
         } else if (current == BLOCK_CONTROLLER) {
             const char *method = NULL;
-            if (n == 2 && !strcmp(w[0], "action") && *w[1]) {
-                okay = emit(&code, OP_ACTION, 1, &w[1], number); stack[depth++] = BLOCK_ACTION; continue;
+            if ((n == 2 || (n == 4 && !strcmp(w[2], "using") && is_name(w[3]))) && !strcmp(w[0], "action") && *w[1]) {
+                char *args[2] = {w[1], n == 4 ? w[3] : ""};
+                okay = emit(&code, OP_ACTION, 2, args, number); stack[depth++] = BLOCK_ACTION; continue;
             }
             if (n == 2 && !strcmp(w[0], "test") && *w[1]) {
                 okay = emit(&code, OP_TEST, 1, &w[1], number); stack[depth++] = BLOCK_TEST; continue;
@@ -452,6 +460,16 @@ int compile_file(const char *source_path, const char *output_path) {
                 char *arg = expression; okay = emit(&code, OP_REPEAT, 1, &arg, number); stack[depth++] = BLOCK_REPEAT;
             } else if (n == 3 && !strcmp(w[0], "run") && !strcmp(w[1], "action")) {
                 okay = emit(&code, OP_RUN_ACTION, 1, &w[2], number);
+            } else if (n == 7 && !strcmp(w[0], "run") && !strcmp(w[1], "action") && !strcmp(w[3], "using") &&
+                !strcmp(w[5], "as") && is_name(w[6])) {
+                char *args[3] = {w[2], w[4], w[6]}; okay = emit(&code, OP_RUN_ACTION, 3, args, number);
+            } else if (n >= 2 && !strcmp(w[0], "return")) {
+                char expression[MAX_LINE]; join_words(expression, sizeof(expression), w, 1, n);
+                char *arg = expression; okay = emit(&code, OP_RETURN_VALUE, 1, &arg, number);
+            } else if (n == 5 && !strcmp(w[0], "read") && !strcmp(w[1], "file") && !strcmp(w[3], "as") && is_name(w[4])) {
+                char *args[2] = {w[2], w[4]}; okay = emit(&code, OP_READ_FILE, 2, args, number);
+            } else if (n == 5 && !strcmp(w[0], "write") && !strcmp(w[2], "to") && !strcmp(w[3], "file")) {
+                char *args[2] = {w[1], w[4]}; okay = emit(&code, OP_WRITE_FILE, 2, args, number);
             } else if (n >= 5 && !strcmp(w[0], "expect") && !strcmp(w[2], "to") && !strcmp(w[3], "be") && current == BLOCK_TEST) {
                 char expected[MAX_LINE], condition[MAX_LINE]; join_words(expected, sizeof(expected), w, 4, n);
                 if (strlen(w[1]) + strlen(expected) + 5 >= sizeof(condition)) {
@@ -481,6 +499,13 @@ int compile_file(const char *source_path, const char *output_path) {
             else if (n == 2 && !strcmp(w[0], "script")) okay = emit(&code, OP_SCRIPT, 1, &w[1], number);
             else if (n == 5 && !strcmp(w[0], "image") && !strcmp(w[2], "described") && !strcmp(w[3], "as")) {
                 char *args[2] = {w[1], w[4]}; okay = emit(&code, OP_IMAGE, 2, args, number);
+            }
+            else if (n == 7 && !strcmp(w[0], "fill") && !strcmp(w[1], "background") && !strcmp(w[2], "with") && !strcmp(w[3], "color")) {
+                char *args[3] = {w[4], w[5], w[6]}; okay = emit(&code, OP_BACKGROUND, 3, args, number);
+            }
+            else if (n == 14 && !strcmp(w[0], "draw") && !strcmp(w[1], "rectangle") && !strcmp(w[2], "at") &&
+                !strcmp(w[5], "sized") && !strcmp(w[7], "by") && !strcmp(w[9], "with") && !strcmp(w[10], "color")) {
+                char *args[7] = {w[3], w[4], w[6], w[8], w[11], w[12], w[13]}; okay = emit(&code, OP_RECTANGLE, 7, args, number);
             }
             else if (n == 3 && !strcmp(w[0], "use") && !strcmp(w[1], "layout") && current == BLOCK_VIEW)
                 okay = emit(&code, OP_USE_LAYOUT, 1, &w[2], number);

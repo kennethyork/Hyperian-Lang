@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(Hyperian VERSION 0.9.1 LANGUAGES C)
+project(Hyperian VERSION 0.10.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -10,10 +10,26 @@ add_executable(hyperian
     src/compiler.c
     src/bytecode.c
     src/runtime.c
+    src/desktop.c
+    src/game.c
     src/security.c
 )
 target_include_directories(hyperian PRIVATE src)
 target_compile_options(hyperian PRIVATE -Wall -Wextra -Wpedantic)
+
+find_package(PkgConfig QUIET)
+if(PkgConfig_FOUND)
+    pkg_check_modules(GTK3 QUIET IMPORTED_TARGET gtk+-3.0)
+    pkg_check_modules(SDL2 QUIET IMPORTED_TARGET sdl2)
+endif()
+if(GTK3_FOUND)
+    target_compile_definitions(hyperian PRIVATE HYPERIAN_HAVE_GTK3=1)
+    target_link_libraries(hyperian PRIVATE PkgConfig::GTK3)
+endif()
+if(SDL2_FOUND)
+    target_compile_definitions(hyperian PRIVATE HYPERIAN_HAVE_SDL2=1)
+    target_link_libraries(hyperian PRIVATE PkgConfig::SDL2)
+endif()
 
 install(TARGETS hyperian RUNTIME DESTINATION bin)
 
@@ -61,6 +77,16 @@ add_test(NAME compile_multi_file_program
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/modular/app.hyp -o ${CMAKE_BINARY_DIR}/modular.hyc)
 add_test(NAME compile_foldered_mvc_program
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/foldered_app/app.hyp -o ${CMAKE_BINARY_DIR}/foldered_app.hyc)
+add_test(NAME compile_native_desktop
+    COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/desktop_notes.hyp -o ${CMAKE_BINARY_DIR}/desktop_notes.hyc)
+add_test(NAME compile_native_game
+    COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/blocks_game.hyp -o ${CMAKE_BINARY_DIR}/blocks_game.hyc)
+if(SDL2_FOUND)
+    add_test(NAME run_native_game_headless
+        COMMAND ${CMAKE_COMMAND} -E env SDL_VIDEODRIVER=dummy HYPERIAN_VISUAL_TEST=1
+            $<TARGET_FILE:hyperian> run ${CMAKE_BINARY_DIR}/blocks_game.hyc)
+    set_tests_properties(run_native_game_headless PROPERTIES DEPENDS compile_native_game)
+endif()
 add_test(NAME compile_data_migrations
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/migrating_tasks.hyp -o ${CMAKE_BINARY_DIR}/migrating_tasks.hyc)
 add_test(NAME inspect_data_migrations

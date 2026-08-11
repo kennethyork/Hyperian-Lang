@@ -36,6 +36,17 @@ controller Calculator
         set message to "The form was calculated"
     end
 
+    action "greet person" using person
+        set greeting to "Hello," joined with person
+        return greeting
+    end
+
+    action "save and load" using message
+        write message to file "/tmp/hyperian-language-file-test.txt"
+        read file "/tmp/hyperian-language-file-test.txt" as loaded
+        return loaded
+    end
+
     test "repeating addition"
         set total to 2
         repeat 4 times
@@ -49,6 +60,16 @@ controller Calculator
         set quantity to 6
         run action "multiply form numbers"
         expect total to be 42
+    end
+
+    test "actions accept input and return a result"
+        run action "greet person" using Ada as greeting
+        expect greeting to be "Hello,Ada"
+    end
+
+    test "native files preserve text"
+        run action "save and load" using "Saved by Hyperian" as loaded
+        expect loaded to be "Saved by Hyperian"
     end
 
     when someone visits "/"

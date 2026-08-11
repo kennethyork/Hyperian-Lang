@@ -1,0 +1,17 @@
+application "Blocks Game" is game
+
+model Player
+    field score is number default 0
+end
+
+controller Game
+    when application starts
+        show view "playfield"
+    end
+end
+
+view "playfield"
+    fill background with color 18 24 38
+    draw rectangle at 100 100 sized 180 by 80 with color 70 170 255
+    draw rectangle at 400 260 sized 120 by 120 with color 255 110 90
+end
