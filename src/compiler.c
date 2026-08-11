@@ -128,11 +128,23 @@ static int validate(Bytecode *code, const char *path) {
         if (in->opcode == OP_BEFORE_ACTION && !known_name(code, OP_ACTION, in->args[0])) {
             source_error(path, in->line, "the before-route action does not exist"); return 0;
         }
+        if (in->opcode == OP_BEFORE_ACTION && in->argc > 1 && strcmp(in->args[1], "*")) {
+            int route_exists = 0;
+            for (size_t route = 0; route < code->count; route++) if (code->items[route].opcode == OP_ROUTE &&
+                !strcmp(code->items[route].args[1], in->args[1])) route_exists = 1;
+            if (!route_exists) { source_error(path, in->line, "the before-route address does not exist"); return 0; }
+        }
         if (in->opcode == OP_TEST && duplicate_name(code, OP_TEST, in->args[0])) {
             source_error(path, in->line, "this test name is used twice"); return 0;
         }
         if (in->opcode == OP_ERROR_VIEW && !known_name(code, OP_VIEW, in->args[1])) {
             source_error(path, in->line, "the error view does not exist"); return 0;
+        }
+        if (in->opcode == OP_ERROR_VIEW) {
+            char *end; long status = strtol(in->args[0], &end, 10);
+            if (*end || status < 400 || status > 599) { source_error(path, in->line, "an HTTP error status must be between 400 and 599"); return 0; }
+            for (size_t other = 0; other < i; other++) if (code->items[other].opcode == OP_ERROR_VIEW &&
+                !strcmp(code->items[other].args[0], in->args[0])) { source_error(path, in->line, "this error status already has a view"); return 0; }
         }
         if (in->opcode == OP_USE_LAYOUT && !known_name(code, OP_LAYOUT, in->args[0])) {
             source_error(path, in->line, "this layout does not exist"); return 0;
@@ -368,7 +380,12 @@ int compile_file(const char *source_path, const char *output_path) {
             }
             if (n == 6 && !strcmp(w[0], "before") && !strcmp(w[1], "every") && !strcmp(w[2], "route") &&
                 !strcmp(w[3], "run") && !strcmp(w[4], "action")) {
-                okay = emit(&code, OP_BEFORE_ACTION, 1, &w[5], number); continue;
+                char *args[2] = {w[5], "*"}; okay = emit(&code, OP_BEFORE_ACTION, 2, args, number); continue;
+            }
+            if (n == 6 && !strcmp(w[0], "before") && !strcmp(w[1], "route") && !strcmp(w[3], "run") && !strcmp(w[4], "action")) {
+                if (w[2][0] != '/') { source_error(source_path, number, "the middleware route must start with /"); okay = 0; }
+                else { char *args[2] = {w[5], w[2]}; okay = emit(&code, OP_BEFORE_ACTION, 2, args, number); }
+                continue;
             }
             if (n == 3 && !strcmp(w[0], "when") && !strcmp(w[1], "application") && !strcmp(w[2], "starts")) {
                 char *event = "START"; okay = emit(&code, OP_EVENT, 1, &event, number); stack[depth++] = BLOCK_ROUTE; continue;

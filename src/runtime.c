@@ -622,6 +622,8 @@ static Response execute_route(const Bytecode *code, size_t route_at, Form *form,
     Scope scope = {.variables = route_variables, .variable_count = route_id ? 1 : 0, .locals = &locals}; char error[256] = {0};
     const char *response_cookie = NULL;
     for (size_t middleware = 0; middleware < code->count; middleware++) if (code->items[middleware].opcode == OP_BEFORE_ACTION) {
+        if (code->items[middleware].argc > 1 && strcmp(code->items[middleware].args[1], "*") &&
+            strcmp(code->items[middleware].args[1], code->items[route_at].args[1])) continue;
         Instruction call = {.opcode = OP_RUN_ACTION, .argc = 1, .args = {code->items[middleware].args[0]}};
         Instruction saved = code->items[middleware];
         ((Bytecode *)code)->items[middleware] = call;
@@ -744,9 +746,6 @@ static void serve_client(int client, const Bytecode *code, Record **records, Ses
     char token[65]; char *request_headers_end = strstr(request, "\r\n\r\n");
     session_cookie(request, request_headers_end ? request_headers_end : request + used, token);
     Response response = {404, error_page("Page not found"), NULL, "text/html; charset=utf-8", NULL, 0};
-    for (size_t i = 0; i < code->count; i++) if (code->items[i].opcode == OP_ERROR_VIEW && !strcmp(code->items[i].args[0], "404")) {
-        Scope error_scope = {0}; free(response.body); response.body = render_view(code, code->items[i].args[1], &error_scope, *records, app_name); break;
-    }
     int served_static = !strcmp(method, "GET") && load_static_response(code, path, &response);
     for (size_t i = 0; !served_static && i < code->count; i++) if (code->items[i].opcode == OP_ROUTE && !strcmp(code->items[i].args[0], method)) {
         char route_id[512] = {0};
@@ -754,8 +753,17 @@ static void serve_client(int client, const Bytecode *code, Record **records, Ses
             free(response.body); response = execute_route(code, i, &form, records, app_name, *route_id ? route_id : NULL, token, sessions); break;
         }
     }
+    if (response.status >= 400) {
+        char wanted[16]; snprintf(wanted, sizeof(wanted), "%d", response.status);
+        for (size_t i = 0; i < code->count; i++) if (code->items[i].opcode == OP_ERROR_VIEW && !strcmp(code->items[i].args[0], wanted)) {
+            Pair error_variables[1] = {{"status", wanted}}; Scope error_scope = {.variables = error_variables, .variable_count = 1};
+            free(response.body); response.body = render_view(code, code->items[i].args[1], &error_scope, *records, app_name);
+            response.content_type = "text/html; charset=utf-8"; response.body_length = 0; break;
+        }
+    }
     const char *status = response.status == 200 ? "200 OK" : response.status == 303 ? "303 See Other" : response.status == 401 ? "401 Unauthorized" :
-        response.status == 400 ? "400 Bad Request" : response.status == 404 ? "404 Not Found" : "500 Internal Server Error";
+        response.status == 400 ? "400 Bad Request" : response.status == 403 ? "403 Forbidden" : response.status == 404 ? "404 Not Found" :
+        response.status == 422 ? "422 Unprocessable Content" : "500 Internal Server Error";
     Buffer header; buffer_init(&header);
     size_t response_length = response.body_length ? response.body_length : strlen(response.body);
     buffer_format(&header, "HTTP/1.1 %s\r\nContent-Type: %s\r\nContent-Length: %zu\r\nConnection: close\r\n", status,

@@ -11,7 +11,12 @@ controller Calculator
         set prepared to yes
     end
 
+    action "prepare calculation route"
+        set route_prepared to yes
+    end
+
     before every route run action "prepare every route"
+    before route "/calculate" run action "prepare calculation route"
 
     action calculate
         set total to 2
@@ -68,6 +73,8 @@ view "result"
     show message
     text "Middleware prepared:"
     show prepared
+    text "This route was specially prepared:"
+    show route_prepared
     form posts to "/calculate"
         input "Price" as price required
         input "Quantity" as quantity required

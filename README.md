@@ -349,12 +349,15 @@ action "prepare every request"
 end
 
 before every route run action "prepare every request"
+
+before route "/admin" run action "require an administrator"
 ```
 
-Applications can replace the built-in missing-page response:
+Applications can replace built-in responses for any HTTP error from 400 through 599. The error view can show the numeric `status` value:
 
 ```hyperian
 when error 404 show view "not-found"
+when error 500 show view "server-problem"
 ```
 
 ## Programs split across files
@@ -430,6 +433,6 @@ Quoted text may contain spaces. `#` starts a comment. Indentation is optional bu
 
 ## Project status
 
-Version 0.9 is a small but real MVC platform: custom bytecode, a native VM, target-aware compilation, working web/console/API/service runtimes, versioned data migrations, persistent models, complete CRUD, reusable layouts/components, static assets and richer controls, safe HTML and typed JSON, authentication and authorization, English controller logic, multi-file programs, middleware, custom error views, source formatting, and tests written in English.
+Version 0.9.1 is a small but real MVC platform: custom bytecode, a native VM, target-aware compilation, working web/console/API/service runtimes, versioned data migrations, persistent models, complete CRUD, reusable layouts/components, static assets and richer controls, safe HTML and typed JSON, authentication and authorization, English controller logic, multi-file programs, global and route-specific middleware, custom HTTP error views, source formatting, and tests written in English.
 
 The next major layers are broader middleware and error handlers, packages, a debugger, then native desktop and game runtimes. Those are not claimed as complete yet.
