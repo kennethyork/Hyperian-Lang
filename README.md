@@ -93,6 +93,7 @@ build/hyperian debug examples/english_logic.hyp --action greet --input Kenneth
 ```
 
 The debugger follows the same bytecode as the real application. It shows source line numbers, nested action calls, and the final state, so behavior does not need to be recreated in a separate interpreter.
+Because it executes the real VM, actions that write files, call services, or change persistent models perform those changes while being debugged. Use `HYPERIAN_DATA` to point debugging at a separate data file when needed.
 
 For a complete persistent CRUD example:
 
@@ -528,6 +529,23 @@ end
 
 “Current values” are controller values and synchronized view inputs whose names match model fields. Finding a record exposes values such as `saved_note_title`, `saved_note_id`, and `saved_note_found`, making them available to later actions and reactive views. See [examples/native_crud.hyp](examples/native_crud.hyp) and [examples/desktop_notes.hyp](examples/desktop_notes.hyp).
 
+Controllers can collect one safe field from every record into a normal Hyperian list, and native or console views can repeat that list:
+
+```hyperian
+action "load note titles"
+    collect every Note title as note_titles
+end
+
+view "notes"
+    heading "Saved notes"
+    for each note_title in note_titles show
+        show note_title
+    end
+end
+```
+
+Collected fields must exist and cannot be secret. The compiler checks both rules. Native repeated values are rendered as real GTK labels and are rebuilt when an action opens or refreshes the view.
+
 Services, desktop apps, and mobile previews can schedule recurring controller work:
 
 ```hyperian
@@ -692,6 +710,6 @@ Quoted text may contain spaces. `#` starts a comment. Indentation is optional bu
 
 ## Project status
 
-Version 0.21 is a small but real MVC platform: custom bytecode, a native VM, standalone executable and asset-bundle creation, native backend diagnostics, seven compiler targets, an English source-line debugger, persistent model CRUD inside native controller actions, recurring service and native-interface timers, interactive multi-view GTK desktop and phone-sized mobile preview interfaces with close events, SDL2 keyboard/frame events, frame timing, BMP sprites, WAV sound, and state-driven rendering, native lists and maps, selectable HDB or transactional SQLite storage, recoverable runtime errors, an HTTP/HTTPS client, local packages, reusable actions, native file access, foldered project generation, versioned migrations, persistent CRUD models, safe HTML and typed JSON, authentication and authorization, middleware, formatting, and English tests.
+Version 0.22 is a small but real MVC platform: custom bytecode, a native VM, standalone executable and asset-bundle creation, native backend diagnostics, seven compiler targets, an English source-line debugger, persistent model CRUD and collection queries inside native controller actions, repeated native collection views, recurring service and native-interface timers, interactive multi-view GTK desktop and phone-sized mobile preview interfaces with close events, SDL2 keyboard/frame events, frame timing, BMP sprites, WAV sound, and state-driven rendering, native lists and maps, selectable HDB or transactional SQLite storage, recoverable runtime errors, an HTTP/HTTPS client, local packages, reusable actions, native file access, foldered project generation, versioned migrations, persistent CRUD models, safe HTML and typed JSON, authentication and authorization, middleware, formatting, and English tests.
 
 The next major layers are richer desktop and mobile events, Android/iOS export, game animation and physics helpers, more media formats, and automated cross-compilation. Those are not claimed as complete yet.

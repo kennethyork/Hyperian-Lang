@@ -30,6 +30,15 @@ static size_t desktop_end(const Bytecode *code, size_t start, uint8_t close) {
     return code->count;
 }
 
+static size_t desktop_each_end(const Bytecode *code, size_t start) {
+    int depth = 1;
+    for (size_t i = start + 1; i < code->count; i++) {
+        if (code->items[i].opcode == OP_EACH) depth++;
+        else if (code->items[i].opcode == OP_END_EACH && --depth == 0) return i;
+    }
+    return code->count;
+}
+
 static const char *starting_view(const Bytecode *code) {
     for (size_t i = 0; i < code->count; i++) if (code->items[i].opcode == OP_EVENT && !strcmp(code->items[i].args[0], "START")) {
         size_t end = desktop_end(code, i, OP_END_ROUTE);
@@ -84,16 +93,32 @@ static void remember_input(DesktopContext *context, const char *name, GtkWidget 
     if (context->input_count < HYPERIAN_STATE_MAX) context->inputs[context->input_count++] = (DesktopInput){name, widget, kind};
 }
 
-static void add_desktop_widgets(DesktopContext *context, GtkWidget *box, size_t from, size_t to) {
+static int next_desktop_list_value(const char **cursor, char *value, size_t value_size) {
+    if (!**cursor) return 0;
+    char *end; unsigned long length = strtoul(*cursor, &end, 10);
+    if (end == *cursor || *end != ':' || length >= value_size || strlen(end + 1) < length) return -1;
+    memcpy(value, end + 1, length); value[length] = 0; *cursor = end + 1 + length; return 1;
+}
+
+static void add_desktop_widgets(DesktopContext *context, GtkWidget *box, size_t from, size_t to, int reactive) {
     for (size_t i = from; i < to; i++) {
         Instruction *in = &context->code->items[i]; GtkWidget *widget = NULL;
-        if (in->opcode == OP_HEADING) {
+        if (in->opcode == OP_EACH) {
+            size_t end = desktop_each_end(context->code, i); const char *encoded = hyperian_state_get(&context->state, in->args[1]);
+            const char *cursor = encoded ? encoded : ""; char value[HYPERIAN_VALUE_SIZE]; int next;
+            while ((next = next_desktop_list_value(&cursor, value, sizeof(value))) > 0) {
+                hyperian_state_set(&context->state, in->args[0], value); add_desktop_widgets(context, box, i + 1, end, 0);
+            }
+            if (next < 0) hyperian_state_set(&context->state, "error", "a collected list could not be displayed");
+            i = end; continue;
+        } else if (in->opcode == OP_HEADING) {
             char *safe = g_markup_escape_text(in->args[0], -1), *markup = g_strdup_printf("<span size=\"xx-large\" weight=\"bold\">%s</span>", safe);
             widget = gtk_label_new(NULL); gtk_label_set_markup(GTK_LABEL(widget), markup); g_free(markup); g_free(safe);
         } else if (in->opcode == OP_TEXT) widget = gtk_label_new(in->args[0]);
         else if (in->opcode == OP_SHOW_VALUE) {
             widget = gtk_label_new("");
-            if (context->output_count < HYPERIAN_STATE_MAX) context->outputs[context->output_count++] = (DesktopOutput){in->args[0], widget};
+            if (reactive && context->output_count < HYPERIAN_STATE_MAX) context->outputs[context->output_count++] = (DesktopOutput){in->args[0], widget};
+            else { char value[HYPERIAN_VALUE_SIZE]; hyperian_state_evaluate(&context->state, in->args[0], value, sizeof(value)); gtk_label_set_text(GTK_LABEL(widget), value); }
         } else if (in->opcode == OP_BUTTON) widget = gtk_button_new_with_label(in->args[0]);
         else if (in->opcode == OP_BUTTON_ACTION) {
             widget = gtk_button_new_with_label(in->args[0]);
@@ -118,7 +143,7 @@ static int show_interface_view(DesktopContext *context, const char *name) {
     for (GList *at = children; at; at = at->next) gtk_widget_destroy(GTK_WIDGET(at->data));
     g_list_free(children); context->input_count = context->output_count = context->button_count = 0;
     for (size_t i = 0; i < context->code->count; i++) if (context->code->items[i].opcode == OP_VIEW && !strcmp(context->code->items[i].args[0], name)) {
-        add_desktop_widgets(context, context->box, i + 1, desktop_end(context->code, i, OP_END_VIEW));
+        add_desktop_widgets(context, context->box, i + 1, desktop_end(context->code, i, OP_END_VIEW), 1);
         hyperian_state_set(&context->state, "current_view", name); refresh_outputs(context); gtk_widget_show_all(context->box); return 1;
     }
     return 0;
@@ -165,6 +190,12 @@ static int run_interface_app(const Bytecode *code, const char *name, int mobile)
         for (int i = 0; test_timer && i < context.timer_count; i++) if (!strcmp(context.timers[i].event, test_timer)) timer_fired(&context.timers[i]);
         const char *test_name = getenv("HYPERIAN_VISUAL_TEST_STATE");
         if (test_name) printf("%s=%s\n", test_name, hyperian_state_get(&context.state, test_name) ? hyperian_state_get(&context.state, test_name) : "");
+        if (getenv("HYPERIAN_VISUAL_TEST_LABELS")) {
+            GList *children = gtk_container_get_children(GTK_CONTAINER(context.box));
+            for (GList *at = children; at; at = at->next) if (GTK_IS_LABEL(at->data))
+                printf("label=%s\n", gtk_label_get_text(GTK_LABEL(at->data)));
+            g_list_free(children);
+        }
         gtk_main_iteration_do(FALSE);
     } else gtk_main();
     hyperian_data_close(context.data); return 0;

@@ -132,6 +132,6 @@ const char *opcode_name(uint8_t op) {
         "TRY", "CATCH", "END_TRY", "HTTP_GET",
         "MAKE_MAP", "MAP_PUT", "MAP_GET", "MAP_REMOVE", "MAP_COUNT", "STORAGE",
         "BUTTON_ACTION", "SPRITE", "PLAY_SOUND", "OPEN_VIEW",
-        "CREATE_STATE", "FIND_STATE", "UPDATE_STATE", "DELETE_STATE", "COUNT_RECORDS"};
+        "CREATE_STATE", "FIND_STATE", "UPDATE_STATE", "DELETE_STATE", "COUNT_RECORDS", "COLLECT_FIELD"};
     return op < sizeof(names) / sizeof(names[0]) ? names[op] : "UNKNOWN";
 }

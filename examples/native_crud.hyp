@@ -17,6 +17,9 @@ controller Notes
         update the Note numbered note_id using the current values
         find the Note numbered note_id as updated_note
         set loaded_title to updated_note_title
+        collect every Note title as note_titles
+        count note_titles as collected_count
+        take item 1 from note_titles as first_collected_title
 
         delete the Note numbered note_id
         count all Note records as remaining
@@ -32,6 +35,11 @@ view "result"
     heading "Native persistent data"
     text "Loaded the updated title:"
     show loaded_title
+    text "First title from the collected records:"
+    show first_collected_title
     text "Records remaining after deletion:"
     show remaining
+    for each note_title in note_titles show
+        show note_title
+    end
 end

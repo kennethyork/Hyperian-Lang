@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(Hyperian VERSION 0.21.0 LANGUAGES C)
+project(Hyperian VERSION 0.22.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -79,6 +79,9 @@ set_tests_properties(reject_duplicate_field PROPERTIES WILL_FAIL TRUE)
 add_test(NAME reject_crud_without_id
     COMMAND hyperian check ${CMAKE_SOURCE_DIR}/tests/bad_crud_route.hyp)
 set_tests_properties(reject_crud_without_id PROPERTIES WILL_FAIL TRUE)
+add_test(NAME reject_secret_collection
+    COMMAND hyperian check ${CMAKE_SOURCE_DIR}/tests/bad_collect_secret.hyp)
+set_tests_properties(reject_secret_collection PROPERTIES WILL_FAIL TRUE)
 add_test(NAME compile_api_relationships
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/blog_api.hyp -o ${CMAKE_BINARY_DIR}/blog_api.hyc)
 add_test(NAME compile_authentication

@@ -352,7 +352,7 @@ static int is_logic_instruction(uint8_t opcode) {
         opcode == OP_MAKE_LIST || opcode == OP_LIST_ADD || opcode == OP_LIST_REMOVE || opcode == OP_LIST_COUNT ||
         opcode == OP_LIST_ITEM || opcode == OP_HTTP_GET || opcode == OP_MAKE_MAP || opcode == OP_MAP_PUT ||
         opcode == OP_MAP_GET || opcode == OP_MAP_REMOVE || opcode == OP_MAP_COUNT || opcode == OP_PLAY_SOUND || opcode == OP_OPEN_VIEW ||
-        opcode == OP_CREATE_STATE || opcode == OP_FIND_STATE || opcode == OP_UPDATE_STATE || opcode == OP_DELETE_STATE || opcode == OP_COUNT_RECORDS;
+        opcode == OP_CREATE_STATE || opcode == OP_FIND_STATE || opcode == OP_UPDATE_STATE || opcode == OP_DELETE_STATE || opcode == OP_COUNT_RECORDS || opcode == OP_COLLECT_FIELD;
 }
 
 static HyperianSoundHandler sound_handler = NULL;
@@ -391,6 +391,7 @@ static void debug_instruction(const Instruction *in, int depth) {
         case OP_UPDATE_STATE: printf("update the %s numbered %s using the current values", in->args[0], in->args[1]); break;
         case OP_DELETE_STATE: printf("delete the %s numbered %s", in->args[0], in->args[1]); break;
         case OP_COUNT_RECORDS: printf("count all %s records as %s", in->args[0], in->args[1]); break;
+        case OP_COLLECT_FIELD: printf("collect every %s %s as %s", in->args[0], in->args[1], in->args[2]); break;
         default: printf("execute %s", opcode_name(in->opcode)); break;
     }
     putchar('\n');
@@ -581,6 +582,17 @@ static int execute_logic_at(const Bytecode *code, size_t *position, Scope *scope
         if (!scope->data) { snprintf(error, error_size, "persistent model work is not available in this context"); return 0; }
         int count = 0; for (Record *record = scope->data->records; record; record = record->next) if (!strcmp(record->model, in->args[0])) count++;
         char value[32]; snprintf(value, sizeof(value), "%d", count); local_set(scope->locals, in->args[1], value);
+    } else if (in->opcode == OP_COLLECT_FIELD) {
+        if (!scope->data) { snprintf(error, error_size, "persistent model work is not available in this context"); return 0; }
+        char collection[HYPERIAN_VALUE_SIZE] = "";
+        for (Record *record = scope->data->records; record; record = record->next) if (!strcmp(record->model, in->args[0])) {
+            const char *value = record_value(record, in->args[1]); char combined[HYPERIAN_VALUE_SIZE];
+            if (!list_add_value(collection, value ? value : "", combined, sizeof(combined))) {
+                snprintf(error, error_size, "the collected values are too large to fit in %s", in->args[2]); return 0;
+            }
+            snprintf(collection, sizeof(collection), "%s", combined);
+        }
+        local_set(scope->locals, in->args[2], collection);
     }
     if (debugger_active) debug_changes(&before, scope->locals, depth);
     return 1;

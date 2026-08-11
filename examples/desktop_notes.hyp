@@ -9,12 +9,15 @@ end
 controller Notes
     action "initialize desktop"
         set status to "Ready for a note"
+        collect every Note title as note_titles
     end
 
     action "save note"
         create a Note using the current values as note_id
         count all Note records as note_count
-        set status to "Saved note " joined with note_id
+        collect every Note title as note_titles
+        set status to "Saved note:" joined with note_id
+        open view "notes"
     end
 
     when application starts
@@ -32,4 +35,8 @@ view "notes"
     button "Save note" runs action "save note"
     text "Application status:"
     show status
+    text "Saved note titles:"
+    for each note_title in note_titles show
+        show note_title
+    end
 end
