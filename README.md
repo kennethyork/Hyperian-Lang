@@ -8,7 +8,7 @@ Hyperian is an English-like, general-purpose language where every application is
 - a bytecode virtual machine;
 - separate native runtimes for different application targets.
 
-The goal is that a beginner can read the source aloud and understand it. Web, installable offline web application, console, API, one-shot service, native GTK desktop, phone-sized mobile preview, and native SDL2 game programs are executable today. Mobile programs can also be compiled into versioned Android or iOS deployment packages and driven through the native mobile runtime library. Android exports include a native Android Studio project.
+The goal is that a beginner can read the source aloud and understand it. Web, installable offline web application, console, API, one-shot service, native GTK desktop, phone-sized mobile preview, and native SDL2 game programs are executable today. Mobile programs can also be compiled into versioned Android or iOS deployment packages and driven through the native mobile runtime library. Android exports include a native Android Studio project, and iOS exports include a native SwiftUI Xcode project.
 
 ## Build the compiler
 
@@ -125,7 +125,7 @@ application "Worker" is service
 application "Adventure" is game
 ```
 
-The compiler recognizes all eight targets and records the target in bytecode. Its native HTTP runtime runs `web`, installable web applications, and `api`; the terminal runs `console` and `service`; GTK widgets run `desktop` and the phone-sized `mobile` preview; and SDL2 runs `game`. GTK3 and SDL2 are optional native build dependencies. The mobile preview validates interface behavior on a development computer. Android and iOS bytecode deployment packages, the portable native runtime bridge, and native Android project generation are implemented. The iOS interface adapter and signed store-ready builds are not complete yet.
+The compiler recognizes all eight targets and records the target in bytecode. Its native HTTP runtime runs `web`, installable web applications, and `api`; the terminal runs `console` and `service`; GTK widgets run `desktop` and the phone-sized `mobile` preview; and SDL2 runs `game`. GTK3 and SDL2 are optional native build dependencies. The mobile preview validates interface behavior on a development computer. Android and iOS bytecode deployment packages, the portable native runtime bridge, native Android project generation, and native SwiftUI Xcode project generation are implemented. Signed store-ready builds are not complete yet.
 
 Create a complete foldered project for any target:
 
@@ -147,7 +147,7 @@ hyperian export MyPhoneApp/app.hyp for android to AndroidPackage
 hyperian export MyPhoneApp/app.hyp for ios to IosPackage
 ```
 
-Each `HYMB1` package contains the compiled `application.hyc`, copied `assets/` and `public/` folders when present, the intended phone platform, the toolchain version, and a versioned runtime-interface number. Export rejects non-mobile applications and never needs Python. An Android package also contains a self-contained `android/` project; an iOS package is not an Xcode project yet.
+Each `HYMB1` package contains the compiled `application.hyc`, copied `assets/` and `public/` folders when present, the intended phone platform, the toolchain version, and a versioned runtime-interface number. Export rejects non-mobile applications and never needs Python. Android packages contain a self-contained `android/` project, and iOS packages contain a self-contained `ios/HyperianIOS.xcodeproj`.
 
 ### Native Android project
 
@@ -156,6 +156,12 @@ The generated Android project uses Android Gradle Plugin 9.3, API level 37, CMak
 Its Java Activity turns the bridge’s current view into native Android headings, text, inputs, text areas, checkboxes, buttons, links, and images. Before a button action it synchronizes input values into Hyperian state; the native VM then executes the English controller action, persistent HDB model work, expressions, and view navigation. Repeating Hyperian timers are dispatched on Android’s main event loop.
 
 Open the exported `android/` folder in Android Studio and run its `app` configuration. A local Android SDK, NDK, and JDK 17 or newer are required. Store distribution still requires choosing a unique application ID and signing the release with your own key. HTTPS/SQLite integration in the Android runtime and automated APK/AAB signing remain future layers.
+
+### Native iOS project
+
+The generated iOS project embeds the same C runtime and `.hyc` bytecode. An Objective-C class owns the native Hyperian session and exposes it to Swift through a bridging header. SwiftUI supplies the app entry point and native headings, text, values, fields, text editors, toggles, buttons, links, images, navigation, and repeating timers.
+
+Open `ios/HyperianIOS.xcodeproj` in Xcode, choose a development team and unique bundle identifier, and run the `HyperianIOS` scheme. The project targets iOS 16 or newer and stores HDB data in the app's private Documents folder. Store distribution still requires an Apple Developer identity, provisioning, archiving, and signing. Because this development environment is Linux and has no Xcode or Apple SDK, project structure, XML, bridge wiring, runtime behavior, installed export resources, and bytecode identity are tested here, but an iOS simulator/device build is not claimed as locally verified.
 
 ## Native mobile runtime bridge
 
@@ -744,6 +750,6 @@ Quoted text may contain spaces. `#` starts a comment. Indentation is optional bu
 
 ## Project status
 
-Version 0.26 is a small but real MVC platform: custom bytecode, a native VM, standalone executable and asset-bundle creation, versioned Android/iOS mobile deployment packages, a linkable native mobile runtime bridge, self-contained native Android Studio project generation, native backend diagnostics, eight compiler targets including installable offline web applications, an English source-line debugger, persistent model CRUD and collection queries inside native controller actions, repeated native collection views, recurring service and native-interface timers, interactive multi-view GTK desktop and phone-sized mobile preview interfaces with close events, SDL2 keyboard/frame events, frame timing, BMP sprites, WAV sound, and state-driven rendering, native lists and maps, selectable HDB or transactional SQLite storage, recoverable runtime errors, an HTTP/HTTPS client, local packages, reusable actions, native file access, foldered project generation, versioned migrations, persistent CRUD models, safe HTML and typed JSON, authentication and authorization, middleware, formatting, and English tests.
+Version 0.27 is a small but real MVC platform: custom bytecode, a native VM, standalone executable and asset-bundle creation, versioned Android/iOS mobile deployment packages, a linkable native mobile runtime bridge, self-contained native Android Studio and SwiftUI Xcode project generation, native backend diagnostics, eight compiler targets including installable offline web applications, an English source-line debugger, persistent model CRUD and collection queries inside native controller actions, repeated native collection views, recurring service and native-interface timers, interactive multi-view GTK desktop and phone-sized mobile preview interfaces with close events, SDL2 keyboard/frame events, frame timing, BMP sprites, WAV sound, and state-driven rendering, native lists and maps, selectable HDB or transactional SQLite storage, recoverable runtime errors, an HTTP/HTTPS client, local packages, reusable actions, native file access, foldered project generation, versioned migrations, persistent CRUD models, safe HTML and typed JSON, authentication and authorization, middleware, formatting, and English tests.
 
-The next major layers are an iOS user-interface adapter, automated APK/AAB/IPA builds and signing, richer desktop and mobile events, game animation and physics helpers, more media formats, and broader cross-compilation. Those are not claimed as complete yet.
+The next major layers are automated APK/AAB/IPA builds and signing, HTTPS/SQLite phone integration, richer desktop and mobile events, game animation and physics helpers, more media formats, and broader cross-compilation. Those are not claimed as complete yet.

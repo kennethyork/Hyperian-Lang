@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(Hyperian VERSION 0.26.0 LANGUAGES C)
+project(Hyperian VERSION 0.27.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -70,6 +70,7 @@ endif()
 install(TARGETS hyperian_mobile_runtime ARCHIVE DESTINATION lib)
 install(FILES src/hyperian.h DESTINATION include/hyperian)
 install(DIRECTORY platform/android DESTINATION share/hyperian/platform)
+install(DIRECTORY platform/ios DESTINATION share/hyperian/platform)
 install(FILES src/mobile.c src/runtime.c src/bytecode.c src/network.c src/security.c src/security.h src/desktop.c src/game.c src/hyperian.h
     DESTINATION share/hyperian/runtime)
 
