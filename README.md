@@ -36,6 +36,15 @@ build/hyperian run examples/tasks.hyp
 # or: build/hyperian run build/tasks.hyc
 ```
 
+Build one executable containing the native runtime and compiled MVC bytecode:
+
+```sh
+build/hyperian build examples/report_service.hyp -o MyReport
+./MyReport
+```
+
+The executable no longer needs the `.hyp` or `.hyc` file. Web and API executables accept `--port 9000`. Public assets and images remain beside it so they can be updated independently. Native GTK, SDL2, and other dynamically linked system libraries must be installed on the destination platform.
+
 Open <http://127.0.0.1:8080>. Stop it with Ctrl+C.
 
 The same compiler runs native console software:
@@ -562,6 +571,6 @@ Quoted text may contain spaces. `#` starts a comment. Indentation is optional bu
 
 ## Project status
 
-Version 0.11 is a small but real MVC platform: custom bytecode, a native VM, six executable targets, native lists, recoverable runtime errors, an HTTP/HTTPS client, local packages, GTK desktop widgets, SDL2 game rendering, reusable actions with inputs and results, native file access, foldered project generation, versioned migrations, persistent CRUD models, layouts/components, safe HTML and typed JSON, authentication and authorization, middleware, source formatting, and tests written in English.
+Version 0.12 is a small but real MVC platform: custom bytecode, a native VM, standalone executable creation, six executable targets, native lists, recoverable runtime errors, an HTTP/HTTPS client, local packages, GTK desktop widgets, SDL2 game rendering, reusable actions with inputs and results, native file access, foldered project generation, versioned migrations, persistent CRUD models, layouts/components, safe HTML and typed JSON, authentication and authorization, middleware, source formatting, and tests written in English.
 
-The next major layers are maps and richer collection operations, SQLite adapters, a debugger, richer desktop events, game input/animation/audio/physics, mobile backends, and standalone application packaging. Those are not claimed as complete yet.
+The next major layers are maps and richer collection operations, SQLite adapters, a debugger, richer desktop events, game input/animation/audio/physics, mobile backends, and cross-platform release packaging. Those are not claimed as complete yet.

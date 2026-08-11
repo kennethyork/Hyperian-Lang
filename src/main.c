@@ -9,6 +9,77 @@
 
 static int starts_with(const char *text, const char *prefix) { return !strncmp(text, prefix, strlen(prefix)); }
 
+static int write_u64(FILE *file, uint64_t value) {
+    unsigned char bytes[8]; for (int i = 0; i < 8; i++) bytes[i] = (unsigned char)(value >> (i * 8));
+    return fwrite(bytes, 1, 8, file) == 8;
+}
+
+static int read_u64(FILE *file, uint64_t *value) {
+    unsigned char bytes[8]; if (fread(bytes, 1, 8, file) != 8) return 0; *value = 0;
+    for (int i = 0; i < 8; i++) *value |= (uint64_t)bytes[i] << (i * 8);
+    return 1;
+}
+
+static FILE *running_executable(const char *fallback) {
+    FILE *file = fopen("/proc/self/exe", "rb"); return file ? file : fopen(fallback, "rb");
+}
+
+static int embedded_bytecode(FILE *executable, uint64_t *offset, uint64_t *length) {
+    if (fseek(executable, 0, SEEK_END)) return 0;
+    long end = ftell(executable);
+    if (end < 12 || fseek(executable, end - 12, SEEK_SET)) return 0;
+    char magic[4]; if (fread(magic, 1, 4, executable) != 4 || memcmp(magic, "HYEX", 4) || !read_u64(executable, length)) return 0;
+    if (*length > (uint64_t)end - 12) return 0;
+    *offset = (uint64_t)end - 12 - *length; return 1;
+}
+
+static int copy_bytes(FILE *from, FILE *to, uint64_t count) {
+    unsigned char buffer[65536];
+    while (count) {
+        size_t wanted = count < sizeof(buffer) ? (size_t)count : sizeof(buffer);
+        size_t got = fread(buffer, 1, wanted, from); if (!got || fwrite(buffer, 1, got, to) != got) return 0;
+        count -= got;
+    }
+    return 1;
+}
+
+static int build_executable(const char *source, const char *output, const char *self_path) {
+    char bytecode_path[128]; snprintf(bytecode_path, sizeof(bytecode_path), "/tmp/hyperian-build-%ld.hyc", (long)getpid());
+    int result = compile_file(source, bytecode_path); if (result) return result;
+    FILE *runtime = running_executable(self_path), *bytecode = fopen(bytecode_path, "rb");
+    if (!runtime || !bytecode) { fprintf(stderr, "error: cannot read the runtime or compiled bytecode\n"); if (runtime) fclose(runtime); if (bytecode) fclose(bytecode); unlink(bytecode_path); return 1; }
+    if (fseek(runtime, 0, SEEK_END) || fseek(bytecode, 0, SEEK_END)) { fclose(runtime); fclose(bytecode); unlink(bytecode_path); return 1; }
+    long runtime_size = ftell(runtime), bytecode_size = ftell(bytecode); uint64_t old_offset, old_length;
+    if (embedded_bytecode(runtime, &old_offset, &old_length)) runtime_size = (long)old_offset;
+    rewind(runtime); rewind(bytecode);
+    struct stat runtime_info, output_info;
+    if (!fstat(fileno(runtime), &runtime_info) && !stat(output, &output_info) && runtime_info.st_dev == output_info.st_dev && runtime_info.st_ino == output_info.st_ino) {
+        fprintf(stderr, "error: output cannot replace the compiler while it is running\n"); fclose(runtime); fclose(bytecode); unlink(bytecode_path); return 1;
+    }
+    FILE *built = fopen(output, "wb");
+    int okay = built && runtime_size >= 0 && bytecode_size >= 0 && copy_bytes(runtime, built, (uint64_t)runtime_size) &&
+        copy_bytes(bytecode, built, (uint64_t)bytecode_size) && fwrite("HYEX", 1, 4, built) == 4 && write_u64(built, (uint64_t)bytecode_size);
+    if (built && fclose(built)) okay = 0;
+    fclose(runtime); fclose(bytecode); unlink(bytecode_path);
+    if (!okay || chmod(output, 0755)) { fprintf(stderr, "error: could not create executable %s\n", output); return 1; }
+    printf("Built standalone executable %s.\n", output); return 0;
+}
+
+static int run_embedded_program(int argc, char **argv, int *found) {
+    *found = 0; FILE *executable = running_executable(argv[0]); if (!executable) return 0;
+    uint64_t offset, length; if (!embedded_bytecode(executable, &offset, &length)) { fclose(executable); return 0; }
+    *found = 1; int port = 0;
+    if (argc == 3 && !strcmp(argv[1], "--port")) port = atoi(argv[2]);
+    else if (argc != 1) { fprintf(stderr, "usage: %s [--port 9000]\n", argv[0]); fclose(executable); return 2; }
+    if (port < 0 || port > 65535) { fprintf(stderr, "error: invalid port\n"); fclose(executable); return 2; }
+    char path[128]; snprintf(path, sizeof(path), "/tmp/hyperian-embedded-%ld.hyc", (long)getpid()); FILE *bytecode = fopen(path, "wb");
+    int okay = bytecode && !fseek(executable, (long)offset, SEEK_SET) && copy_bytes(executable, bytecode, length);
+    if (bytecode && fclose(bytecode)) okay = 0;
+    fclose(executable);
+    if (!okay) { unlink(path); fprintf(stderr, "error: could not load embedded Hyperian bytecode\n"); return 1; }
+    int result = run_bytecode(path, port); unlink(path); return result;
+}
+
 static int project_name_is_safe(const char *name) {
     if (!*name) return 0;
     for (const char *at = name; *at; at++)
@@ -94,6 +165,7 @@ static void help(void) {
          "\n"
          "Usage:\n"
          "  hyperian compile app.hyp -o app.hyc   Compile source to bytecode\n"
+         "  hyperian build app.hyp -o MyApp       Build one executable application\n"
          "  hyperian new MyApp [--target web]     Create a foldered MVC project\n"
          "  hyperian check app.hyp                Check source for mistakes\n"
          "  hyperian run app.hyp                  Compile and run an app\n"
@@ -110,6 +182,7 @@ static int ends_with(const char *text, const char *suffix) {
 }
 
 int main(int argc, char **argv) {
+    int embedded = 0, embedded_result = run_embedded_program(argc, argv, &embedded); if (embedded) return embedded_result;
     if (argc < 2 || !strcmp(argv[1], "help") || !strcmp(argv[1], "--help") || !strcmp(argv[1], "-h")) { help(); return 0; }
     if (!strcmp(argv[1], "version") || !strcmp(argv[1], "--version")) { puts("Hyperian " HYPERIAN_VERSION); return 0; }
     if (!strcmp(argv[1], "new")) {
@@ -121,6 +194,10 @@ int main(int argc, char **argv) {
     if (!strcmp(argv[1], "compile")) {
         if (argc != 5 || strcmp(argv[3], "-o")) { fprintf(stderr, "usage: hyperian compile app.hyp -o app.hyc\n"); return 2; }
         return compile_file(argv[2], argv[4]);
+    }
+    if (!strcmp(argv[1], "build")) {
+        if (argc != 5 || strcmp(argv[3], "-o")) { fprintf(stderr, "usage: hyperian build app.hyp -o MyApp\n"); return 2; }
+        return build_executable(argv[2], argv[4], argv[0]);
     }
     if (!strcmp(argv[1], "check")) {
         if (argc != 3) { fprintf(stderr, "usage: hyperian check app.hyp\n"); return 2; }

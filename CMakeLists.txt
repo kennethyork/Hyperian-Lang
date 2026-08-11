@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(Hyperian VERSION 0.11.0 LANGUAGES C)
+project(Hyperian VERSION 0.12.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -75,6 +75,11 @@ add_test(NAME compile_english_logic
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/english_logic.hyp -o ${CMAKE_BINARY_DIR}/english_logic.hyc)
 add_test(NAME run_service
     COMMAND hyperian run ${CMAKE_SOURCE_DIR}/examples/report_service.hyp)
+add_test(NAME build_standalone_service
+    COMMAND hyperian build ${CMAKE_SOURCE_DIR}/examples/report_service.hyp -o ${CMAKE_BINARY_DIR}/standalone_report)
+add_test(NAME run_standalone_service
+    COMMAND ${CMAKE_BINARY_DIR}/standalone_report)
+set_tests_properties(run_standalone_service PROPERTIES DEPENDS build_standalone_service)
 add_test(NAME format_source
     COMMAND hyperian format ${CMAKE_SOURCE_DIR}/examples/english_logic.hyp)
 add_test(NAME english_language_tests
