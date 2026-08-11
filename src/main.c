@@ -7,9 +7,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 static int starts_with(const char *text, const char *prefix) { return !strncmp(text, prefix, strlen(prefix)); }
+static int ends_with(const char *text, const char *suffix);
 
 static int temporary_bytecode(char *path, size_t size) {
     if (snprintf(path, size, "/tmp/hyperian-bytecode-XXXXXX") >= (int)size) {
@@ -58,8 +60,8 @@ static int copy_bytes(FILE *from, FILE *to, uint64_t count) {
 }
 
 static int build_executable(const char *source, const char *output, const char *self_path, int bundled) {
-    char bytecode_path[128]; snprintf(bytecode_path, sizeof(bytecode_path), "/tmp/hyperian-build-%ld.hyc", (long)getpid());
-    int result = compile_file(source, bytecode_path); if (result) return result;
+    char bytecode_path[128]; if (!temporary_bytecode(bytecode_path, sizeof(bytecode_path))) return 1;
+    int result = compile_file(source, bytecode_path); if (result) { unlink(bytecode_path); return result; }
     FILE *runtime = running_executable(self_path), *bytecode = fopen(bytecode_path, "rb");
     if (!runtime || !bytecode) { fprintf(stderr, "error: cannot read the runtime or compiled bytecode\n"); if (runtime) fclose(runtime); if (bytecode) fclose(bytecode); unlink(bytecode_path); return 1; }
     if (fseek(runtime, 0, SEEK_END) || fseek(bytecode, 0, SEEK_END)) { fclose(runtime); fclose(bytecode); unlink(bytecode_path); return 1; }
@@ -98,7 +100,8 @@ static int run_embedded_program(int argc, char **argv, int *found) {
     if (argc == 3 && !strcmp(argv[1], "--port")) port = atoi(argv[2]);
     else if (argc != 1) { fprintf(stderr, "usage: %s [--port 9000]\n", argv[0]); fclose(executable); return 2; }
     if (port < 0 || port > 65535) { fprintf(stderr, "error: invalid port\n"); fclose(executable); return 2; }
-    char path[128]; snprintf(path, sizeof(path), "/tmp/hyperian-embedded-%ld.hyc", (long)getpid()); FILE *bytecode = fopen(path, "wb");
+    char path[128]; if (!temporary_bytecode(path, sizeof(path))) { fclose(executable); return 1; }
+    FILE *bytecode = fopen(path, "wb");
     int okay = bytecode && !fseek(executable, (long)offset, SEEK_SET) && copy_bytes(executable, bytecode, length);
     if (bytecode && fclose(bytecode)) okay = 0;
     fclose(executable);
@@ -142,6 +145,22 @@ static int copy_bundle_file(const char *source, const char *destination, mode_t 
     return okay;
 }
 
+static int copy_new_file(const char *source, const char *destination, mode_t mode) {
+    FILE *from = fopen(source, "rb"), *to = from ? fopen(destination, "wx") : NULL; int okay = from && to;
+    unsigned char data[65536]; size_t count;
+    while (okay && (count = fread(data, 1, sizeof(data), from)) != 0)
+        if (fwrite(data, 1, count, to) != count) okay = 0;
+    if (from && ferror(from)) okay = 0;
+    if (to && fclose(to)) okay = 0;
+    if (from) fclose(from);
+    if (okay && chmod(destination, mode & 0777)) okay = 0;
+    if (!okay) {
+        if (to) unlink(destination);
+        fprintf(stderr, "error: cannot create mobile application artifact %s: %s\n", destination, strerror(errno));
+    }
+    return okay;
+}
+
 static int copy_bundle_tree(const char *source, const char *destination) {
     struct stat info;
     if (lstat(source, &info)) return errno == ENOENT;
@@ -160,6 +179,21 @@ static int copy_bundle_tree(const char *source, const char *destination) {
         else { fprintf(stderr, "error: unsupported bundle asset %s\n", from); okay = 0; }
     }
     closedir(directory); return okay;
+}
+
+static int remove_bundle_tree(const char *path) {
+    struct stat info;
+    if (lstat(path, &info)) return errno == ENOENT;
+    if (!S_ISDIR(info.st_mode) || S_ISLNK(info.st_mode)) return !unlink(path);
+    DIR *directory = opendir(path); if (!directory) return 0; int okay = 1; struct dirent *entry;
+    while (okay && (entry = readdir(directory))) {
+        if (!strcmp(entry->d_name, ".") || !strcmp(entry->d_name, "..")) continue;
+        char child[PATH_MAX];
+        if (snprintf(child, sizeof(child), "%s/%s", path, entry->d_name) >= (int)sizeof(child) || !remove_bundle_tree(child)) okay = 0;
+    }
+    if (closedir(directory)) okay = 0;
+    if (okay && rmdir(path)) okay = 0;
+    return okay;
 }
 
 static void source_directory(const char *source, char *directory, size_t size) {
@@ -339,6 +373,139 @@ static int export_mobile_application(const char *source, const char *platform, c
     printf("Exported %s for %s to %s.\n", source, !strcmp(platform, "ios") ? "iOS" : "Android", output); return 0;
 }
 
+static int safe_application_id(const char *value) {
+    if (!value || !*value || !strchr(value, '.')) return 0;
+    int starts_segment = 1;
+    for (const char *at = value; *at; at++) {
+        int letter = (*at >= 'a' && *at <= 'z') || (*at >= 'A' && *at <= 'Z');
+        int digit = *at >= '0' && *at <= '9';
+        if (*at == '.') { if (starts_segment) return 0; starts_segment = 1; continue; }
+        if ((starts_segment && !letter) || (!letter && !digit && *at != '_')) return 0;
+        starts_segment = 0;
+    }
+    return !starts_segment;
+}
+
+static int safe_team_id(const char *value) {
+    if (!value || strlen(value) != 10) return 0;
+    for (const char *at = value; *at; at++)
+        if (!((*at >= 'A' && *at <= 'Z') || (*at >= '0' && *at <= '9'))) return 0;
+    return 1;
+}
+
+static int run_mobile_tool(const char *directory, char *const arguments[]) {
+    pid_t child = fork();
+    if (child < 0) { fprintf(stderr, "error: cannot start %s: %s\n", arguments[0], strerror(errno)); return 0; }
+    if (!child) {
+        if (chdir(directory)) { fprintf(stderr, "error: cannot enter mobile project %s: %s\n", directory, strerror(errno)); _exit(127); }
+        execvp(arguments[0], arguments);
+        fprintf(stderr, "error: cannot run %s: %s\n", arguments[0], strerror(errno)); _exit(127);
+    }
+    int status;
+    while (waitpid(child, &status, 0) < 0) if (errno != EINTR) { fprintf(stderr, "error: cannot wait for %s: %s\n", arguments[0], strerror(errno)); return 0; }
+    if (!WIFEXITED(status) || WEXITSTATUS(status)) {
+        fprintf(stderr, "error: %s did not finish the mobile build successfully\n", arguments[0]); return 0;
+    }
+    return 1;
+}
+
+static int build_android_application(const char *package, const char *kind, const char *output) {
+    const char *identifier = getenv("HYPERIAN_APPLICATION_ID"), *keystore = getenv("HYPERIAN_ANDROID_KEYSTORE");
+    const char *alias = getenv("HYPERIAN_ANDROID_KEY_ALIAS"), *store_password = getenv("HYPERIAN_ANDROID_STORE_PASSWORD");
+    const char *key_password = getenv("HYPERIAN_ANDROID_KEY_PASSWORD"); struct stat info;
+    if (!safe_application_id(identifier)) {
+        fprintf(stderr, "error: set HYPERIAN_APPLICATION_ID to a reverse-domain name such as com.example.myapp\n"); return 0;
+    }
+    char resolved_keystore[PATH_MAX];
+    if (!keystore || !*keystore || !realpath(keystore, resolved_keystore) || stat(resolved_keystore, &info) || !S_ISREG(info.st_mode)) {
+        fprintf(stderr, "error: set HYPERIAN_ANDROID_KEYSTORE to your release keystore file\n"); return 0;
+    }
+    if (!alias || !*alias || !store_password || !*store_password || !key_password || !*key_password) {
+        fprintf(stderr, "error: set HYPERIAN_ANDROID_KEY_ALIAS, HYPERIAN_ANDROID_STORE_PASSWORD, and HYPERIAN_ANDROID_KEY_PASSWORD\n"); return 0;
+    }
+    if (setenv("HYPERIAN_ANDROID_KEYSTORE", resolved_keystore, 1)) {
+        fprintf(stderr, "error: cannot prepare the Android signing environment: %s\n", strerror(errno)); return 0;
+    }
+    char project[PATH_MAX], artifact[PATH_MAX];
+    if (snprintf(project, sizeof(project), "%s/android", package) >= (int)sizeof(project) ||
+        snprintf(artifact, sizeof(artifact), "%s/app/build/outputs/%s/release/app-release.%s", project,
+            !strcmp(kind, "apk") ? "apk" : "bundle", kind) >= (int)sizeof(artifact)) {
+        fprintf(stderr, "error: Android build path is too long\n"); return 0;
+    }
+    const char *configured = getenv("HYPERIAN_GRADLE"); char *tool = (char *)(configured && *configured ? configured : "gradle");
+    char *arguments[] = {tool, "--no-daemon", !strcmp(kind, "apk") ? ":app:assembleRelease" : ":app:bundleRelease", NULL};
+    if (!run_mobile_tool(project, arguments)) return 0;
+    if (stat(artifact, &info) || !S_ISREG(info.st_mode)) {
+        fprintf(stderr, "error: Android finished without creating the expected signed %s\n", kind); return 0;
+    }
+    return copy_new_file(artifact, output, 0644);
+}
+
+static int write_ios_export_options(const char *path, const char *team, const char *method) {
+    char contents[1024]; snprintf(contents, sizeof(contents),
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+        "<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n"
+        "<plist version=\"1.0\"><dict>\n"
+        "<key>method</key><string>%s</string>\n<key>signingStyle</key><string>automatic</string>\n"
+        "<key>teamID</key><string>%s</string>\n</dict></plist>\n", method, team);
+    return write_project_file(path, contents);
+}
+
+static int build_ios_application(const char *temporary_root, const char *package, const char *output) {
+    const char *identifier = getenv("HYPERIAN_APPLICATION_ID"), *team = getenv("HYPERIAN_IOS_TEAM");
+    const char *method = getenv("HYPERIAN_IOS_DISTRIBUTION"); if (!method || !*method) method = "app-store-connect";
+    if (!safe_application_id(identifier)) {
+        fprintf(stderr, "error: set HYPERIAN_APPLICATION_ID to a reverse-domain name such as com.example.myapp\n"); return 0;
+    }
+    if (!safe_team_id(team)) { fprintf(stderr, "error: set HYPERIAN_IOS_TEAM to your 10-character Apple development team identifier\n"); return 0; }
+    if (strcmp(method, "app-store-connect") && strcmp(method, "ad-hoc") && strcmp(method, "development") && strcmp(method, "enterprise")) {
+        fprintf(stderr, "error: HYPERIAN_IOS_DISTRIBUTION must be app-store-connect, ad-hoc, development, or enterprise\n"); return 0;
+    }
+    char project[PATH_MAX], archive[PATH_MAX], export_directory[PATH_MAX], options[PATH_MAX], artifact[PATH_MAX];
+    if (snprintf(project, sizeof(project), "%s/ios", package) >= (int)sizeof(project) ||
+        snprintf(archive, sizeof(archive), "%s/HyperianIOS.xcarchive", temporary_root) >= (int)sizeof(archive) ||
+        snprintf(export_directory, sizeof(export_directory), "%s/export", temporary_root) >= (int)sizeof(export_directory) ||
+        snprintf(options, sizeof(options), "%s/ExportOptions.plist", temporary_root) >= (int)sizeof(options) ||
+        snprintf(artifact, sizeof(artifact), "%s/HyperianIOS.ipa", export_directory) >= (int)sizeof(artifact)) {
+        fprintf(stderr, "error: iOS build path is too long\n"); return 0;
+    }
+    if (!write_ios_export_options(options, team, method)) return 0;
+    const char *configured = getenv("HYPERIAN_XCODEBUILD"); char *tool = (char *)(configured && *configured ? configured : "xcodebuild");
+    char team_setting[64], identifier_setting[512];
+    snprintf(team_setting, sizeof(team_setting), "DEVELOPMENT_TEAM=%s", team);
+    snprintf(identifier_setting, sizeof(identifier_setting), "PRODUCT_BUNDLE_IDENTIFIER=%s", identifier);
+    char *archive_arguments[] = {tool, "-project", "HyperianIOS.xcodeproj", "-scheme", "HyperianIOS", "-configuration", "Release",
+        "-archivePath", archive, team_setting, identifier_setting, "-allowProvisioningUpdates", "archive", NULL};
+    char *export_arguments[] = {tool, "-exportArchive", "-archivePath", archive, "-exportPath", export_directory,
+        "-exportOptionsPlist", options, "-allowProvisioningUpdates", NULL};
+    if (!run_mobile_tool(project, archive_arguments) || !run_mobile_tool(project, export_arguments)) return 0;
+    struct stat info;
+    if (stat(artifact, &info) || !S_ISREG(info.st_mode)) {
+        fprintf(stderr, "error: Xcode finished without creating the expected signed IPA\n"); return 0;
+    }
+    return copy_new_file(artifact, output, 0644);
+}
+
+static int build_mobile_application(const char *source, const char *platform, const char *output, const char *self_path) {
+    const char *kind = ends_with(output, ".apk") ? "apk" : ends_with(output, ".aab") ? "aab" : ends_with(output, ".ipa") ? "ipa" : NULL;
+    if ((!strcmp(platform, "android") && (!kind || !strcmp(kind, "ipa"))) || (!strcmp(platform, "ios") && (!kind || strcmp(kind, "ipa"))) ||
+        (strcmp(platform, "android") && strcmp(platform, "ios"))) {
+        fprintf(stderr, "error: build Android as a .apk or .aab file, or iOS as a .ipa file\n"); return 2;
+    }
+    struct stat existing;
+    if (!stat(output, &existing)) { fprintf(stderr, "error: mobile application output %s already exists\n", output); return 1; }
+    if (errno != ENOENT) { fprintf(stderr, "error: cannot inspect mobile output %s: %s\n", output, strerror(errno)); return 1; }
+    char temporary_root[] = "/tmp/hyperian-mobile-build-XXXXXX";
+    if (!mkdtemp(temporary_root)) { fprintf(stderr, "error: cannot create temporary mobile build folder: %s\n", strerror(errno)); return 1; }
+    char package[PATH_MAX]; int okay = snprintf(package, sizeof(package), "%s/package", temporary_root) < (int)sizeof(package) &&
+        !export_mobile_application(source, platform, package, self_path);
+    if (okay && !strcmp(platform, "android")) okay = build_android_application(package, kind, output);
+    if (okay && !strcmp(platform, "ios")) okay = build_ios_application(temporary_root, package, output);
+    if (!remove_bundle_tree(temporary_root)) fprintf(stderr, "warning: could not remove temporary mobile build folder %s\n", temporary_root);
+    if (!okay) return 1;
+    printf("Built signed %s application %s.\n", !strcmp(platform, "ios") ? "iOS" : "Android", output); return 0;
+}
+
 static int doctor(void) {
     puts("Hyperian " HYPERIAN_VERSION " toolchain check\n"
          "  compiler and bytecode VM: ready\n"
@@ -370,7 +537,7 @@ static int doctor(void) {
          "  native mobile runtime bridge library: ready\n"
          "  generated native Android Studio projects: ready\n"
          "  generated native iOS Xcode projects: ready\n"
-         "  signed store applications: not implemented yet");
+         "  signed APK, AAB, and IPA build automation: ready when platform SDKs and identities are installed");
     return 0;
 }
 
@@ -472,6 +639,8 @@ static void help(void) {
          "Usage:\n"
          "  hyperian compile app.hyp -o app.hyc   Compile source to bytecode\n"
          "  hyperian build app.hyp -o MyApp       Build one executable application\n"
+         "  hyperian build app.hyp for android as App.aab\n"
+         "                                          Build and sign a phone application\n"
          "  hyperian bundle app.hyp -o App        Bundle an executable and assets\n"
          "  hyperian export app.hyp for android to App\n"
          "                                          Export a phone deployment package\n"
@@ -513,8 +682,11 @@ int main(int argc, char **argv) {
         return compile_file(argv[2], argv[4]);
     }
     if (!strcmp(argv[1], "build")) {
-        if (argc != 5 || strcmp(argv[3], "-o")) { fprintf(stderr, "usage: hyperian build app.hyp -o MyApp\n"); return 2; }
-        return build_executable(argv[2], argv[4], argv[0], 0);
+        if (argc == 5 && !strcmp(argv[3], "-o")) return build_executable(argv[2], argv[4], argv[0], 0);
+        if (argc == 7 && !strcmp(argv[3], "for") && !strcmp(argv[5], "as"))
+            return build_mobile_application(argv[2], argv[4], argv[6], argv[0]);
+        fprintf(stderr, "usage: hyperian build app.hyp -o MyApp\n"
+                        "   or: hyperian build app.hyp for android as App.aab\n"); return 2;
     }
     if (!strcmp(argv[1], "bundle")) {
         if (argc != 5 || strcmp(argv[3], "-o")) { fprintf(stderr, "usage: hyperian bundle app.hyp -o App\n"); return 2; }

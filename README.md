@@ -8,7 +8,7 @@ Hyperian is an English-like, general-purpose language where every application is
 - a bytecode virtual machine;
 - separate native runtimes for different application targets.
 
-The goal is that a beginner can read the source aloud and understand it. Web, installable offline web application, console, API, one-shot service, native GTK desktop, phone-sized mobile preview, and native SDL2 game programs are executable today. Mobile programs can also be compiled into versioned Android or iOS deployment packages and driven through the native mobile runtime library. Android exports include a native Android Studio project, and iOS exports include a native SwiftUI Xcode project.
+The goal is that a beginner can read the source aloud and understand it. Web, installable offline web application, console, API, one-shot service, native GTK desktop, phone-sized mobile preview, and native SDL2 game programs are executable today. Mobile programs can also be compiled into versioned Android or iOS deployment packages, driven through the native mobile runtime library, or built as signed APK, AAB, and IPA artifacts when the platform SDK and signing identity are installed. Android exports include a native Android Studio project, and iOS exports include a native SwiftUI Xcode project.
 
 ## Build the compiler
 
@@ -127,7 +127,7 @@ application "Worker" is service
 application "Adventure" is game
 ```
 
-The compiler recognizes all eight targets and records the target in bytecode. Its native HTTP runtime runs `web`, installable web applications, and `api`; the terminal runs `console` and `service`; GTK widgets run `desktop` and the phone-sized `mobile` preview; and SDL2 runs `game`. GTK3 and SDL2 are optional native build dependencies. The mobile preview validates interface behavior on a development computer. Android and iOS bytecode deployment packages, the portable native runtime bridge, native Android project generation, and native SwiftUI Xcode project generation are implemented. Signed store-ready builds are not complete yet.
+The compiler recognizes all eight targets and records the target in bytecode. Its native HTTP runtime runs `web`, installable web applications, and `api`; the terminal runs `console` and `service`; GTK widgets run `desktop` and the phone-sized `mobile` preview; and SDL2 runs `game`. GTK3 and SDL2 are optional native build dependencies. The mobile preview validates interface behavior on a development computer. Android and iOS bytecode deployment packages, the portable native runtime bridge, native Android project generation, native SwiftUI Xcode project generation, and signed APK/AAB/IPA build orchestration are implemented. Producing a real signed artifact requires the corresponding platform SDK and the developer's signing identity.
 
 Create a complete foldered project for any target:
 
@@ -151,19 +151,49 @@ hyperian export MyPhoneApp/app.hyp for ios to IosPackage
 
 Each `HYMB1` package contains the compiled `application.hyc`, copied `assets/` and `public/` folders when present, the intended phone platform, the toolchain version, and a versioned runtime-interface number. Export rejects non-mobile applications and never needs Python. Android packages contain a self-contained `android/` project, and iOS packages contain a self-contained `ios/HyperianIOS.xcodeproj`.
 
+Build a signed phone application directly with another English-shaped command:
+
+```sh
+hyperian build MyPhoneApp/app.hyp for android as MyPhoneApp.apk
+hyperian build MyPhoneApp/app.hyp for android as MyPhoneApp.aab
+hyperian build MyPhoneApp/app.hyp for ios as MyPhoneApp.ipa
+```
+
+Hyperian first compiles and exports the application into a private temporary folder, invokes the native platform builder without a shell, checks that the expected signed artifact was created, copies it to the requested filename without overwriting an existing file, and removes the temporary project. Signing passwords stay in environment variables and are never passed as command arguments.
+
 ### Native Android project
 
 The generated Android project uses Android Gradle Plugin 9.3, API level 37, CMake, JNI, and the Android NDK. It contains the Hyperian C runtime sources and compiled application bytecode, so it does not depend on Python, JavaScript, a web server, or the desktop compiler at runtime.
 
 Its Java Activity turns the bridge’s current view into native Android headings, text, inputs, text areas, checkboxes, buttons, links, and images. It synchronizes native input values into Hyperian state before button actions, change events, keyboard submission events, lifecycle events, taps, holds, and swipes; the native VM then executes the English controller behavior, persistent HDB model work, expressions, and view navigation. Repeating Hyperian timers, pause/resume, focus/unfocus, taps, holds, and four-direction fling gestures are dispatched on Android’s main event loop.
 
-Open the exported `android/` folder in Android Studio and run its `app` configuration. A local Android SDK, NDK, and JDK 17 or newer are required. Store distribution still requires choosing a unique application ID and signing the release with your own key. HTTPS/SQLite integration in the Android runtime and automated APK/AAB signing remain future layers.
+Open the exported `android/` folder in Android Studio and run its `app` configuration, or let Hyperian create a signed release artifact. A local Android SDK, NDK, Gradle, and JDK 17 or newer are required. Configure signing without putting secrets in source code:
+
+```sh
+export HYPERIAN_APPLICATION_ID=com.example.mytasks
+export HYPERIAN_ANDROID_KEYSTORE=/secure/release.jks
+export HYPERIAN_ANDROID_KEY_ALIAS=release
+export HYPERIAN_ANDROID_STORE_PASSWORD='your store password'
+export HYPERIAN_ANDROID_KEY_PASSWORD='your key password'
+hyperian build MyPhoneApp/app.hyp for android as MyPhoneApp.aab
+```
+
+Set `HYPERIAN_GRADLE` to an executable path if `gradle` is not on `PATH`. `.apk` runs Gradle's release APK task; `.aab` runs its release bundle task. Hyperian validates the application identifier, keystore, alias, and passwords before starting Gradle. HTTPS/SQLite integration in the Android runtime remains a future layer.
 
 ### Native iOS project
 
 The generated iOS project embeds the same C runtime and `.hyc` bytecode. An Objective-C class owns the native Hyperian session and exposes it to Swift through a bridging header. SwiftUI supplies the app entry point and native headings, text, values, fields, text editors, toggles, buttons, links, images, navigation, repeating timers, live input changes, keyboard submission, scene lifecycle events, and simultaneous tap, hold, and swipe recognition.
 
-Open `ios/HyperianIOS.xcodeproj` in Xcode, choose a development team and unique bundle identifier, and run the `HyperianIOS` scheme. The project targets iOS 16 or newer and stores HDB data in the app's private Documents folder. Store distribution still requires an Apple Developer identity, provisioning, archiving, and signing. Because this development environment is Linux and has no Xcode or Apple SDK, project structure, XML, bridge wiring, runtime behavior, installed export resources, and bytecode identity are tested here, but an iOS simulator/device build is not claimed as locally verified.
+Open `ios/HyperianIOS.xcodeproj` in Xcode, choose a development team and unique bundle identifier, and run the shared `HyperianIOS` scheme, or let Hyperian archive and export a signed IPA:
+
+```sh
+export HYPERIAN_APPLICATION_ID=com.example.mytasks
+export HYPERIAN_IOS_TEAM=ABCDE12345
+export HYPERIAN_IOS_DISTRIBUTION=app-store-connect
+hyperian build MyPhoneApp/app.hyp for ios as MyPhoneApp.ipa
+```
+
+Distribution may be `app-store-connect`, `ad-hoc`, `development`, or `enterprise`. Set `HYPERIAN_XCODEBUILD` when `xcodebuild` is not on `PATH`. The project targets iOS 16 or newer and stores HDB data in the app's private Documents folder. Xcode still requires a valid Apple Developer identity and provisioning access. Because this development environment is Linux and has no Xcode or Apple SDK, project structure, shared-scheme wiring, archive/export arguments, export options, artifact handoff, native bridge behavior, and bytecode identity are tested with a deterministic SDK stand-in, but a real Apple-signed IPA is not claimed as locally built.
 
 ## Native mobile runtime bridge
 
@@ -835,6 +865,6 @@ Quoted text may contain spaces. `#` starts a comment. Indentation is optional bu
 
 ## Project status
 
-Version 0.34 is a small but real MVC platform: custom bytecode, a native VM, standalone executable and asset-bundle creation, versioned Android/iOS mobile deployment packages, a linkable native mobile runtime bridge, self-contained native Android Studio and SwiftUI Xcode project generation, native backend diagnostics, eight compiler targets including installable offline web applications, parallel-safe compiler tooling, an English source-line debugger, persistent model CRUD plus filtered and ordered collection queries inside native controller actions, repeated native collection views, recurring service and native-interface timers, interactive multi-view GTK desktop and phone-sized mobile preview interfaces with close, live-input-change, keyboard-submission, focus, pause, resume, tap, press-and-hold, and four-direction swipe events, matching generated Android/iOS lifecycle and gesture events, SDL2 keyboard/frame events, frame-rate-independent movement, gravity, smooth value transitions, timed animation frames, boundaries, rectangle collision detection, BMP sprites, WAV sound, and state-driven rendering, native lists and maps, selectable HDB or transactional SQLite storage, recoverable runtime errors, an HTTP/HTTPS client, local packages, reusable actions, native file access, foldered project generation, versioned migrations, persistent CRUD models, safe HTML and typed JSON, authentication and authorization, middleware, formatting, and English tests.
+Version 0.35 is a small but real MVC platform: custom bytecode, a native VM, standalone executable and asset-bundle creation, versioned Android/iOS mobile deployment packages, automated signed APK/AAB/IPA orchestration, a linkable native mobile runtime bridge, self-contained native Android Studio and SwiftUI Xcode project generation, native backend diagnostics, eight compiler targets including installable offline web applications, parallel-safe compiler tooling, an English source-line debugger, persistent model CRUD plus filtered and ordered collection queries inside native controller actions, repeated native collection views, recurring service and native-interface timers, interactive multi-view GTK desktop and phone-sized mobile preview interfaces with close, live-input-change, keyboard-submission, focus, pause, resume, tap, press-and-hold, and four-direction swipe events, matching generated Android/iOS lifecycle and gesture events, SDL2 keyboard/frame events, frame-rate-independent movement, gravity, smooth value transitions, timed animation frames, boundaries, rectangle collision detection, BMP sprites, WAV sound, and state-driven rendering, native lists and maps, selectable HDB or transactional SQLite storage, recoverable runtime errors, an HTTP/HTTPS client, local packages, reusable actions, native file access, foldered project generation, versioned migrations, persistent CRUD models, safe HTML and typed JSON, authentication and authorization, middleware, formatting, and English tests.
 
-The next major layers are automated APK/AAB/IPA builds and signing, HTTPS/SQLite phone integration, more collision shapes, more media formats, and broader cross-compilation. Those are not claimed as complete yet.
+The next major layers are HTTPS/SQLite phone integration, more collision shapes, more media formats, and broader cross-compilation. Those are not claimed as complete yet.

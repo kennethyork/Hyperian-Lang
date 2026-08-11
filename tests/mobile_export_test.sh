@@ -25,6 +25,9 @@ if [ "$platform" = android ]; then
     cmp "$package/application.hyc" "$android/app/src/main/assets/application.hyc"
     grep 'id("com.android.application") version "9.3.0"' "$android/build.gradle.kts"
     grep 'externalNativeBuild' "$android/app/build.gradle.kts"
+    grep 'HYPERIAN_APPLICATION_ID' "$android/app/build.gradle.kts"
+    grep 'HYPERIAN_ANDROID_KEYSTORE' "$android/app/build.gradle.kts"
+    grep 'signingConfigs.getByName("release")' "$android/app/build.gradle.kts"
     grep 'add_library(hyperian_mobile_jni SHARED' "$android/app/src/main/cpp/CMakeLists.txt"
     grep 'hyperian_mobile_run_action' "$android/app/src/main/cpp/hyperian_jni.c"
     grep 'hyperian_mobile_send_event' "$android/app/src/main/cpp/hyperian_jni.c"
@@ -48,6 +51,7 @@ if [ "$platform" = ios ]; then
     test -f "$ios/HyperianIOS/HyperianApp.swift"
     test -f "$ios/HyperianIOS/ContentView.swift"
     test -f "$ios/HyperianIOS/HyperianBridge.m"
+    test -f "$ios/HyperianIOS.xcodeproj/xcshareddata/xcschemes/HyperianIOS.xcscheme"
     test -f "$ios/HyperianIOS/Runtime/mobile.c"
     test -f "$ios/HyperianIOS/Runtime/runtime.c"
     cmp "$package/application.hyc" "$ios/HyperianIOS/Resources/application.hyc"
@@ -69,5 +73,8 @@ if [ "$platform" = ios ]; then
     grep 'application.gesture("LONG_PRESS")' "$ios/HyperianIOS/ContentView.swift"
     grep '<string>Mobile Tasks</string>' "$ios/HyperianIOS/Info.plist"
     grep -Eq 'rootObject = [0-9A-F]{24};' "$ios/HyperianIOS.xcodeproj/project.pbxproj"
-    if command -v xmllint >/dev/null 2>&1; then xmllint --noout "$ios/HyperianIOS/Info.plist"; fi
+    if command -v xmllint >/dev/null 2>&1; then
+        xmllint --noout "$ios/HyperianIOS/Info.plist"
+        xmllint --noout "$ios/HyperianIOS.xcodeproj/xcshareddata/xcschemes/HyperianIOS.xcscheme"
+    fi
 fi

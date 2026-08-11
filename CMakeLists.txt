@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(Hyperian VERSION 0.34.0 LANGUAGES C)
+project(Hyperian VERSION 0.35.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -268,6 +268,76 @@ set_tests_properties(build_ios_export PROPERTIES DEPENDS clean_ios_export)
 add_test(NAME verify_ios_export
     COMMAND sh ${CMAKE_SOURCE_DIR}/tests/mobile_export_test.sh ${CMAKE_BINARY_DIR}/IosExport ios)
 set_tests_properties(verify_ios_export PROPERTIES DEPENDS build_ios_export)
+add_test(NAME prepare_mobile_build_tests
+    COMMAND ${CMAKE_COMMAND} -E touch ${CMAKE_BINARY_DIR}/fake-release.keystore)
+add_test(NAME clean_android_apk_build
+    COMMAND ${CMAKE_COMMAND} -E remove ${CMAKE_BINARY_DIR}/MobileTasks.apk ${CMAKE_BINARY_DIR}/MobileTasks-apk.log)
+add_test(NAME build_signed_android_apk
+    COMMAND ${CMAKE_COMMAND} -E env
+        HYPERIAN_APPLICATION_ID=com.example.mobiletasks
+        HYPERIAN_ANDROID_KEYSTORE=${CMAKE_BINARY_DIR}/fake-release.keystore
+        HYPERIAN_ANDROID_KEY_ALIAS=release
+        HYPERIAN_ANDROID_STORE_PASSWORD=store-secret
+        HYPERIAN_ANDROID_KEY_PASSWORD=key-secret
+        HYPERIAN_GRADLE=${CMAKE_SOURCE_DIR}/tests/fake_mobile_builder.sh
+        HYPERIAN_FAKE_PLATFORM=android-apk
+        HYPERIAN_FAKE_LOG=${CMAKE_BINARY_DIR}/MobileTasks-apk.log
+        $<TARGET_FILE:hyperian> build ${CMAKE_SOURCE_DIR}/examples/mobile_tasks.hyp for android as ${CMAKE_BINARY_DIR}/MobileTasks.apk)
+set_tests_properties(build_signed_android_apk PROPERTIES DEPENDS "prepare_mobile_build_tests;clean_android_apk_build")
+add_test(NAME verify_signed_android_apk
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/mobile_build_test.sh ${CMAKE_BINARY_DIR}/MobileTasks.apk apk ${CMAKE_BINARY_DIR}/MobileTasks-apk.log)
+set_tests_properties(verify_signed_android_apk PROPERTIES DEPENDS build_signed_android_apk)
+add_test(NAME clean_android_aab_build
+    COMMAND ${CMAKE_COMMAND} -E remove ${CMAKE_BINARY_DIR}/MobileTasks.aab ${CMAKE_BINARY_DIR}/MobileTasks-aab.log)
+add_test(NAME build_signed_android_aab
+    COMMAND ${CMAKE_COMMAND} -E env
+        HYPERIAN_APPLICATION_ID=com.example.mobiletasks
+        HYPERIAN_ANDROID_KEYSTORE=${CMAKE_BINARY_DIR}/fake-release.keystore
+        HYPERIAN_ANDROID_KEY_ALIAS=release
+        HYPERIAN_ANDROID_STORE_PASSWORD=store-secret
+        HYPERIAN_ANDROID_KEY_PASSWORD=key-secret
+        HYPERIAN_GRADLE=${CMAKE_SOURCE_DIR}/tests/fake_mobile_builder.sh
+        HYPERIAN_FAKE_PLATFORM=android-aab
+        HYPERIAN_FAKE_LOG=${CMAKE_BINARY_DIR}/MobileTasks-aab.log
+        $<TARGET_FILE:hyperian> build ${CMAKE_SOURCE_DIR}/examples/mobile_tasks.hyp for android as ${CMAKE_BINARY_DIR}/MobileTasks.aab)
+set_tests_properties(build_signed_android_aab PROPERTIES DEPENDS "prepare_mobile_build_tests;clean_android_aab_build")
+add_test(NAME verify_signed_android_aab
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/mobile_build_test.sh ${CMAKE_BINARY_DIR}/MobileTasks.aab aab ${CMAKE_BINARY_DIR}/MobileTasks-aab.log)
+set_tests_properties(verify_signed_android_aab PROPERTIES DEPENDS build_signed_android_aab)
+add_test(NAME clean_ios_ipa_build
+    COMMAND ${CMAKE_COMMAND} -E remove ${CMAKE_BINARY_DIR}/MobileTasks.ipa ${CMAKE_BINARY_DIR}/MobileTasks-ipa.log)
+add_test(NAME build_signed_ios_ipa
+    COMMAND ${CMAKE_COMMAND} -E env
+        HYPERIAN_APPLICATION_ID=com.example.mobiletasks
+        HYPERIAN_IOS_TEAM=ABCDE12345
+        HYPERIAN_IOS_DISTRIBUTION=app-store-connect
+        HYPERIAN_XCODEBUILD=${CMAKE_SOURCE_DIR}/tests/fake_mobile_builder.sh
+        HYPERIAN_FAKE_PLATFORM=ios
+        HYPERIAN_FAKE_LOG=${CMAKE_BINARY_DIR}/MobileTasks-ipa.log
+        $<TARGET_FILE:hyperian> build ${CMAKE_SOURCE_DIR}/examples/mobile_tasks.hyp for ios as ${CMAKE_BINARY_DIR}/MobileTasks.ipa)
+set_tests_properties(build_signed_ios_ipa PROPERTIES DEPENDS clean_ios_ipa_build)
+add_test(NAME verify_signed_ios_ipa
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/mobile_build_test.sh ${CMAKE_BINARY_DIR}/MobileTasks.ipa ipa ${CMAKE_BINARY_DIR}/MobileTasks-ipa.log)
+set_tests_properties(verify_signed_ios_ipa PROPERTIES DEPENDS build_signed_ios_ipa)
+add_test(NAME reject_mobile_build_extension
+    COMMAND hyperian build ${CMAKE_SOURCE_DIR}/examples/mobile_tasks.hyp for android as ${CMAKE_BINARY_DIR}/MobileTasks.bin)
+set_tests_properties(reject_mobile_build_extension PROPERTIES WILL_FAIL TRUE)
+add_test(NAME reject_mobile_build_without_identity
+    COMMAND ${CMAKE_COMMAND} -E env HYPERIAN_APPLICATION_ID=
+        $<TARGET_FILE:hyperian> build ${CMAKE_SOURCE_DIR}/examples/mobile_tasks.hyp for android as ${CMAKE_BINARY_DIR}/MissingIdentity.apk)
+set_tests_properties(reject_mobile_build_without_identity PROPERTIES WILL_FAIL TRUE)
+add_test(NAME reject_ios_build_without_team
+    COMMAND ${CMAKE_COMMAND} -E env HYPERIAN_APPLICATION_ID=com.example.mobiletasks HYPERIAN_IOS_TEAM=
+        $<TARGET_FILE:hyperian> build ${CMAKE_SOURCE_DIR}/examples/mobile_tasks.hyp for ios as ${CMAKE_BINARY_DIR}/MissingTeam.ipa)
+set_tests_properties(reject_ios_build_without_team PROPERTIES WILL_FAIL TRUE)
+add_test(NAME preserve_existing_mobile_output
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/mobile_output_guard_test.sh $<TARGET_FILE:hyperian>
+        ${CMAKE_SOURCE_DIR}/examples/mobile_tasks.hyp ${CMAKE_BINARY_DIR}/ProtectedMobile.apk
+        ${CMAKE_BINARY_DIR}/fake-release.keystore ${CMAKE_SOURCE_DIR}/tests/fake_mobile_builder.sh)
+set_tests_properties(preserve_existing_mobile_output PROPERTIES DEPENDS prepare_mobile_build_tests)
+add_test(NAME reject_web_mobile_build
+    COMMAND hyperian build ${CMAKE_SOURCE_DIR}/examples/tasks.hyp for android as ${CMAKE_BINARY_DIR}/WrongTarget.apk)
+set_tests_properties(reject_web_mobile_build PROPERTIES WILL_FAIL TRUE)
 add_test(NAME reject_web_mobile_export
     COMMAND hyperian export ${CMAKE_SOURCE_DIR}/examples/tasks.hyp for android to ${CMAKE_BINARY_DIR}/BadMobileExport)
 set_tests_properties(reject_web_mobile_export PROPERTIES WILL_FAIL TRUE)

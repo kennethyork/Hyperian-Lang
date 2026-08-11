@@ -6,4 +6,4 @@ The project uses Android Gradle Plugin 9.3, API level 37, CMake, and the Android
 
 `MainActivity` renders headings, text, values, inputs, text areas, checkboxes, buttons, links, and images as Android widgets. It synchronizes input values before English-named controller actions, dispatches recurring timer events, follows Hyperian view navigation, and keeps model data in the application's private storage.
 
-Change the generated `applicationId` and namespace before publishing multiple Hyperian applications. A release APK or Android App Bundle must be signed with your own Android signing key.
+Hyperian can invoke this project automatically and sign a release APK or Android App Bundle. Set `HYPERIAN_APPLICATION_ID`, `HYPERIAN_ANDROID_KEYSTORE`, `HYPERIAN_ANDROID_KEY_ALIAS`, `HYPERIAN_ANDROID_STORE_PASSWORD`, and `HYPERIAN_ANDROID_KEY_PASSWORD`, then run `hyperian build app.hyp for android as App.apk` or use an `.aab` output. Set `HYPERIAN_GRADLE` when the Gradle executable is not on `PATH`. Passwords are read from the environment and are not placed in command arguments or generated files.
