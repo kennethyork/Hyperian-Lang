@@ -1,0 +1,20 @@
+application "Wrong Physics Target" is console
+
+model Item
+    field name is text
+end
+
+controller Main
+    when application starts
+        set x to 0
+        set y to 0
+        set velocity_x to 1
+        set velocity_y to 1
+        move position x y using velocity velocity_x velocity_y
+        show view "main"
+    end
+end
+
+view "main"
+    text "Physics belongs in a game application."
+end

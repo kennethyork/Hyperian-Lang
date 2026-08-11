@@ -1,0 +1,35 @@
+application "English Physics" is game
+
+model Player
+    field best_score is number default 0
+end
+
+controller World
+    action initialize
+        set player_x to 10
+        set player_y to 10
+        set player_velocity_x to 100
+        set player_velocity_y to 0
+        set obstacle_x to 15
+        set obstacle_y to 10
+        set player_hit to false
+    end
+
+    when application starts
+        run action initialize
+        show view "world"
+    end
+
+    when game updates
+        apply gravity 200 to player_velocity_y
+        move position player_x player_y using velocity player_velocity_x player_velocity_y
+        keep position player_x player_y inside 40 by 40 sized 10 by 10
+        check collision between player_x player_y sized 10 by 10 and obstacle_x obstacle_y sized 30 by 30 as player_hit
+    end
+end
+
+view "world"
+    fill background with color 18 24 38
+    draw rectangle at player_x player_y sized 10 by 10 with color 70 170 255
+    draw rectangle at obstacle_x obstacle_y sized 30 by 30 with color 255 110 90
+end

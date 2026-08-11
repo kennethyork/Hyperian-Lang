@@ -352,7 +352,8 @@ static int is_logic_instruction(uint8_t opcode) {
         opcode == OP_MAKE_LIST || opcode == OP_LIST_ADD || opcode == OP_LIST_REMOVE || opcode == OP_LIST_COUNT ||
         opcode == OP_LIST_ITEM || opcode == OP_HTTP_GET || opcode == OP_MAKE_MAP || opcode == OP_MAP_PUT ||
         opcode == OP_MAP_GET || opcode == OP_MAP_REMOVE || opcode == OP_MAP_COUNT || opcode == OP_PLAY_SOUND || opcode == OP_OPEN_VIEW ||
-        opcode == OP_CREATE_STATE || opcode == OP_FIND_STATE || opcode == OP_UPDATE_STATE || opcode == OP_DELETE_STATE || opcode == OP_COUNT_RECORDS || opcode == OP_COLLECT_FIELD;
+        opcode == OP_CREATE_STATE || opcode == OP_FIND_STATE || opcode == OP_UPDATE_STATE || opcode == OP_DELETE_STATE || opcode == OP_COUNT_RECORDS || opcode == OP_COLLECT_FIELD ||
+        opcode == OP_MOVE_POSITION || opcode == OP_APPLY_GRAVITY || opcode == OP_KEEP_INSIDE || opcode == OP_CHECK_COLLISION;
 }
 
 static HyperianSoundHandler sound_handler = NULL;
@@ -392,6 +393,10 @@ static void debug_instruction(const Instruction *in, int depth) {
         case OP_DELETE_STATE: printf("delete the %s numbered %s", in->args[0], in->args[1]); break;
         case OP_COUNT_RECORDS: printf("count all %s records as %s", in->args[0], in->args[1]); break;
         case OP_COLLECT_FIELD: printf("collect every %s %s as %s", in->args[0], in->args[1], in->args[2]); break;
+        case OP_MOVE_POSITION: printf("move position %s %s using velocity %s %s", in->args[0], in->args[1], in->args[2], in->args[3]); break;
+        case OP_APPLY_GRAVITY: printf("apply gravity %s to %s", in->args[0], in->args[1]); break;
+        case OP_KEEP_INSIDE: printf("keep position %s %s inside %s by %s sized %s by %s", in->args[0], in->args[1], in->args[2], in->args[3], in->args[4], in->args[5]); break;
+        case OP_CHECK_COLLISION: printf("check collision and store it as %s", in->args[8]); break;
         default: printf("execute %s", opcode_name(in->opcode)); break;
     }
     putchar('\n');
@@ -418,6 +423,16 @@ static void form_from_current_values(const Bytecode *code, const char *model, Sc
     }
 }
 
+static int physics_number(Scope *scope, const char *expression, double *number, char *error, size_t error_size) {
+    char value[128], *end; evaluate(scope, expression, value, sizeof(value)); *number = strtod(value, &end);
+    if (*value && !*end) return 1;
+    snprintf(error, error_size, "game physics needs a number for %s", expression); return 0;
+}
+
+static void set_physics_number(HyperianState *state, const char *name, double number) {
+    char value[64]; snprintf(value, sizeof(value), "%.15g", number); local_set(state, name, value);
+}
+
 static void expose_record_values(const Bytecode *code, Scope *scope, Record *record, const char *name) {
     char key[128];
     for (int i = 0; i < record->field_count; i++) {
@@ -434,6 +449,36 @@ static int execute_logic_at(const Bytecode *code, size_t *position, Scope *scope
     if (debugger_active) { before = *scope->locals; debug_instruction(in, depth); }
     if (in->opcode == OP_SET_VALUE) {
         char value[2048]; evaluate(scope, in->args[1], value, sizeof(value)); local_set(scope->locals, in->args[0], value);
+    } else if (in->opcode == OP_MOVE_POSITION) {
+        double x, y, velocity_x, velocity_y, seconds;
+        if (!physics_number(scope, in->args[0], &x, error, error_size) || !physics_number(scope, in->args[1], &y, error, error_size) ||
+            !physics_number(scope, in->args[2], &velocity_x, error, error_size) || !physics_number(scope, in->args[3], &velocity_y, error, error_size) ||
+            !physics_number(scope, "seconds_since_last_frame", &seconds, error, error_size)) return 0;
+        set_physics_number(scope->locals, in->args[0], x + velocity_x * seconds);
+        set_physics_number(scope->locals, in->args[1], y + velocity_y * seconds);
+    } else if (in->opcode == OP_APPLY_GRAVITY) {
+        double gravity, velocity, seconds;
+        if (!physics_number(scope, in->args[0], &gravity, error, error_size) || !physics_number(scope, in->args[1], &velocity, error, error_size) ||
+            !physics_number(scope, "seconds_since_last_frame", &seconds, error, error_size)) return 0;
+        set_physics_number(scope->locals, in->args[1], velocity + gravity * seconds);
+    } else if (in->opcode == OP_KEEP_INSIDE) {
+        double x, y, width, height, item_width, item_height;
+        if (!physics_number(scope, in->args[0], &x, error, error_size) || !physics_number(scope, in->args[1], &y, error, error_size) ||
+            !physics_number(scope, in->args[2], &width, error, error_size) || !physics_number(scope, in->args[3], &height, error, error_size) ||
+            !physics_number(scope, in->args[4], &item_width, error, error_size) || !physics_number(scope, in->args[5], &item_height, error, error_size)) return 0;
+        if (width < 0 || height < 0 || item_width < 0 || item_height < 0) { snprintf(error, error_size, "game area and object sizes cannot be negative"); return 0; }
+        double maximum_x = width > item_width ? width - item_width : 0, maximum_y = height > item_height ? height - item_height : 0;
+        if (x < 0) x = 0; else if (x > maximum_x) x = maximum_x;
+        if (y < 0) y = 0; else if (y > maximum_y) y = maximum_y;
+        set_physics_number(scope->locals, in->args[0], x); set_physics_number(scope->locals, in->args[1], y);
+    } else if (in->opcode == OP_CHECK_COLLISION) {
+        double x1, y1, width1, height1, x2, y2, width2, height2;
+        if (!physics_number(scope, in->args[0], &x1, error, error_size) || !physics_number(scope, in->args[1], &y1, error, error_size) ||
+            !physics_number(scope, in->args[2], &width1, error, error_size) || !physics_number(scope, in->args[3], &height1, error, error_size) ||
+            !physics_number(scope, in->args[4], &x2, error, error_size) || !physics_number(scope, in->args[5], &y2, error, error_size) ||
+            !physics_number(scope, in->args[6], &width2, error, error_size) || !physics_number(scope, in->args[7], &height2, error, error_size)) return 0;
+        if (width1 < 0 || height1 < 0 || width2 < 0 || height2 < 0) { snprintf(error, error_size, "collision sizes cannot be negative"); return 0; }
+        local_set(scope->locals, in->args[8], x1 < x2 + width2 && x1 + width1 > x2 && y1 < y2 + height2 && y1 + height1 > y2 ? "true" : "false");
     } else if (in->opcode == OP_LOGIC_IF) {
         size_t end = find_end(code, *position, OP_LOGIC_IF, OP_END_LOGIC_IF), otherwise = logic_otherwise(code, *position, end);
         if (end == code->count) { snprintf(error, error_size, "an if instruction is missing its end"); return 0; }

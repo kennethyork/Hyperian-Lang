@@ -266,6 +266,11 @@ static int validate(Bytecode *code, const char *path) {
     if (!models || !controllers || (!views && strcmp(target, "api"))) {
         source_error(path, 1, "an MVC program needs at least one model, controller, and view"); return 0;
     }
+    if (strcmp(target, "game")) for (size_t i = 0; i < code->count; i++)
+        if (code->items[i].opcode == OP_MOVE_POSITION || code->items[i].opcode == OP_APPLY_GRAVITY ||
+            code->items[i].opcode == OP_KEEP_INSIDE || code->items[i].opcode == OP_CHECK_COLLISION) {
+            source_error(path, code->items[i].line, "game physics instructions require an application declared as game"); return 0;
+        }
     if (!strcmp(target, "web") || !strcmp(target, "pwa")) {
         int routes = 0;
         for (size_t i = 0; i < code->count; i++) routes += code->items[i].opcode == OP_ROUTE;
@@ -486,7 +491,20 @@ int compile_file(const char *source_path, const char *output_path) {
             if (!method || w[3][0] != '/') { source_error(source_path, number, "say: when someone visits \"/path\""); okay = 0; }
             else { char *args[2] = {(char *)method, w[3]}; okay = emit(&code, OP_ROUTE, 2, args, number); stack[depth++] = BLOCK_ROUTE; }
         } else if (current == BLOCK_ROUTE || current == BLOCK_ACTION || current == BLOCK_LOGIC_IF || current == BLOCK_REPEAT || current == BLOCK_TEST || current == BLOCK_TRY) {
-            if (n == 9 && !strcmp(w[0], "create") && !strcmp(w[1], "a") && !strcmp(w[3], "using") &&
+            if (n == 8 && !strcmp(w[0], "move") && !strcmp(w[1], "position") && !strcmp(w[4], "using") &&
+                !strcmp(w[5], "velocity") && is_name(w[2]) && is_name(w[3]) && is_name(w[6]) && is_name(w[7])) {
+                char *args[4] = {w[2], w[3], w[6], w[7]}; okay = emit(&code, OP_MOVE_POSITION, 4, args, number);
+            } else if (n == 5 && !strcmp(w[0], "apply") && !strcmp(w[1], "gravity") && !strcmp(w[3], "to") && is_name(w[4])) {
+                char *args[2] = {w[2], w[4]}; okay = emit(&code, OP_APPLY_GRAVITY, 2, args, number);
+            } else if (n == 12 && !strcmp(w[0], "keep") && !strcmp(w[1], "position") && !strcmp(w[4], "inside") &&
+                !strcmp(w[6], "by") && !strcmp(w[8], "sized") && !strcmp(w[10], "by") && is_name(w[2]) && is_name(w[3])) {
+                char *args[6] = {w[2], w[3], w[5], w[7], w[9], w[11]}; okay = emit(&code, OP_KEEP_INSIDE, 6, args, number);
+            } else if (n == 18 && !strcmp(w[0], "check") && !strcmp(w[1], "collision") && !strcmp(w[2], "between") &&
+                !strcmp(w[5], "sized") && !strcmp(w[7], "by") && !strcmp(w[9], "and") && !strcmp(w[12], "sized") &&
+                !strcmp(w[14], "by") && !strcmp(w[16], "as") && is_name(w[17])) {
+                char *args[9] = {w[3], w[4], w[6], w[8], w[10], w[11], w[13], w[15], w[17]};
+                okay = emit(&code, OP_CHECK_COLLISION, 9, args, number);
+            } else if (n == 9 && !strcmp(w[0], "create") && !strcmp(w[1], "a") && !strcmp(w[3], "using") &&
                 !strcmp(w[4], "the") && !strcmp(w[5], "current") && !strcmp(w[6], "values") && !strcmp(w[7], "as") && is_name(w[8])) {
                 char *args[2] = {w[2], w[8]}; okay = emit(&code, OP_CREATE_STATE, 2, args, number);
             } else if (n == 7 && !strcmp(w[0], "find") && !strcmp(w[1], "the") && !strcmp(w[3], "numbered") &&

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(Hyperian VERSION 0.27.0 LANGUAGES C)
+project(Hyperian VERSION 0.28.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -218,6 +218,18 @@ add_test(NAME reject_missing_desktop_action
 set_tests_properties(reject_missing_desktop_action PROPERTIES WILL_FAIL TRUE)
 add_test(NAME compile_native_game
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/blocks_game.hyp -o ${CMAKE_BINARY_DIR}/blocks_game.hyc)
+add_test(NAME compile_game_physics
+    COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/physics_game.hyp -o ${CMAKE_BINARY_DIR}/physics_game.hyc)
+add_executable(hyperian_game_physics_test tests/game_physics_test.c)
+target_include_directories(hyperian_game_physics_test PRIVATE src)
+target_compile_options(hyperian_game_physics_test PRIVATE -Wall -Wextra -Wpedantic)
+target_link_libraries(hyperian_game_physics_test PRIVATE hyperian_mobile_runtime)
+add_test(NAME run_game_physics
+    COMMAND hyperian_game_physics_test ${CMAKE_BINARY_DIR}/physics_game.hyc)
+set_tests_properties(run_game_physics PROPERTIES DEPENDS compile_game_physics)
+add_test(NAME reject_physics_outside_game
+    COMMAND hyperian check ${CMAKE_SOURCE_DIR}/tests/bad_physics_target.hyp)
+set_tests_properties(reject_physics_outside_game PROPERTIES WILL_FAIL TRUE)
 add_test(NAME compile_game_media
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/game_media.hyp -o ${CMAKE_BINARY_DIR}/game_media.hyc)
 if(SDL2_FOUND)
@@ -230,6 +242,10 @@ if(SDL2_FOUND)
         COMMAND ${CMAKE_COMMAND} -E env SDL_VIDEODRIVER=dummy HYPERIAN_VISUAL_TEST=1 HYPERIAN_VISUAL_TEST_STATE=seconds_since_last_frame
             $<TARGET_FILE:hyperian> run ${CMAKE_BINARY_DIR}/blocks_game.hyc)
     set_tests_properties(run_game_timing_headless PROPERTIES DEPENDS compile_native_game PASS_REGULAR_EXPRESSION "seconds_since_last_frame=0\\.")
+    add_test(NAME run_game_physics_headless
+        COMMAND ${CMAKE_COMMAND} -E env SDL_VIDEODRIVER=dummy HYPERIAN_VISUAL_TEST=1 HYPERIAN_VISUAL_TEST_STATE=player_hit
+            $<TARGET_FILE:hyperian> run ${CMAKE_BINARY_DIR}/physics_game.hyc)
+    set_tests_properties(run_game_physics_headless PROPERTIES DEPENDS compile_game_physics PASS_REGULAR_EXPRESSION "player_hit=true")
     add_test(NAME create_game_media_assets COMMAND hyperian_game_media_fixture)
     add_test(NAME run_game_media_headless
         COMMAND ${CMAKE_COMMAND} -E env SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy HYPERIAN_VISUAL_TEST=1
