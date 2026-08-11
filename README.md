@@ -446,27 +446,55 @@ Desktop views become real GTK controls:
 ```hyperian
 application "Desktop Notes" is desktop
 
+controller Notes
+    action "save note"
+        set status to "Saved:" joined with title
+    end
+
+    when application starts
+        set status to ready
+        show view "notes"
+    end
+end
+
 view "notes"
     heading "Native desktop notes"
     input "Note title" as title
     textarea "Note details" as details
     checkbox "Important" as important
-    button "Save note"
+    button "Save note" runs action "save note"
+    show status
 end
 ```
+
+GTK inputs synchronize into controller state before the action runs. Afterwards, `show` labels refresh from the updated state. Actions may use the same calculations, lists, maps, files, HTTP requests, and recoverable errors as every other target.
 
 Game views are rendered in a native SDL2 window and event loop:
 
 ```hyperian
 application "Blocks" is game
 
+controller Game
+    action "move right"
+        set player_x to player_x plus 20
+    end
+
+    when player presses right
+        run action "move right"
+    end
+
+    when game updates
+        run action "update world"
+    end
+end
+
 view "playfield"
     fill background with color 18 24 38
-    draw rectangle at 100 100 sized 180 by 80 with color 70 170 255
+    draw rectangle at player_x player_y sized 180 by 80 with color 70 170 255
 end
 ```
 
-See [examples/desktop_notes.hyp](examples/desktop_notes.hyp) and [examples/blocks_game.hyp](examples/blocks_game.hyp). This first visual release provides native widgets and 2D colored scenes; richer widget actions, animation, input, audio, sprites, and physics are upcoming layers.
+The SDL2 backend dispatches arrow, space, and enter keys through `when player presses ...`, runs `when game updates` every frame, and evaluates drawing positions, sizes, and colors from controller state. See [examples/desktop_notes.hyp](examples/desktop_notes.hyp) and [examples/blocks_game.hyp](examples/blocks_game.hyp). Audio, sprites, physics, and richer timing remain upcoming layers.
 
 ## Programs split across files
 
@@ -590,6 +618,6 @@ Quoted text may contain spaces. `#` starts a comment. Indentation is optional bu
 
 ## Project status
 
-Version 0.13 is a small but real MVC platform: custom bytecode, a native VM, standalone executable creation, six executable targets, native lists and maps, selectable HDB or transactional SQLite storage, recoverable runtime errors, an HTTP/HTTPS client, local packages, GTK desktop widgets, SDL2 game rendering, reusable actions with inputs and results, native file access, foldered project generation, versioned migrations, persistent CRUD models, layouts/components, safe HTML and typed JSON, authentication and authorization, middleware, source formatting, and tests written in English.
+Version 0.14 is a small but real MVC platform: custom bytecode, a native VM, standalone executable creation, six executable targets, interactive GTK controller buttons and reactive values, SDL2 keyboard/frame events and state-driven rendering, native lists and maps, selectable HDB or transactional SQLite storage, recoverable runtime errors, an HTTP/HTTPS client, local packages, reusable actions, native file access, foldered project generation, versioned migrations, persistent CRUD models, safe HTML and typed JSON, authentication and authorization, middleware, formatting, and English tests.
 
-The next major layers are richer collection operations, a debugger, richer desktop events, game input/animation/audio/physics, mobile backends, and cross-platform release packaging. Those are not claimed as complete yet.
+The next major layers are a source-level debugger, richer desktop window events, game animation/audio/physics, mobile backends, and cross-platform release packaging. Those are not claimed as complete yet.

@@ -128,6 +128,9 @@ static int validate(Bytecode *code, const char *path) {
         if (in->opcode == OP_RUN_ACTION && !known_name(code, OP_ACTION, in->args[0])) {
             source_error(path, in->line, "this controller action does not exist"); return 0;
         }
+        if (in->opcode == OP_BUTTON_ACTION && !known_name(code, OP_ACTION, in->args[1])) {
+            source_error(path, in->line, "this desktop button action does not exist"); return 0;
+        }
         if (in->opcode == OP_RUN_ACTION) {
             Instruction *action = NULL;
             for (size_t at = 0; at < code->count; at++) if (code->items[at].opcode == OP_ACTION && !strcmp(code->items[at].args[0], in->args[0])) action = &code->items[at];
@@ -237,7 +240,7 @@ static int validate(Bytecode *code, const char *path) {
                 source_error(path, in->line, "a route must finish by showing a view, showing JSON, or redirecting"); return 0;
             }
         }
-        if (in->opcode == OP_EVENT) {
+        if (in->opcode == OP_EVENT && !strcmp(in->args[0], "START")) {
             size_t last = i;
             while (++last < code->count && code->items[last].opcode != OP_END_ROUTE) {}
             if (last == i + 1 || code->items[last - 1].opcode != OP_SHOW_VIEW) {
@@ -259,7 +262,7 @@ static int validate(Bytecode *code, const char *path) {
         if (!routes) { source_error(path, 1, "a web application needs at least one route"); return 0; }
     } else if (!strcmp(target, "console")) {
         int starts = 0;
-        for (size_t i = 0; i < code->count; i++) starts += code->items[i].opcode == OP_EVENT;
+        for (size_t i = 0; i < code->count; i++) starts += code->items[i].opcode == OP_EVENT && !strcmp(code->items[i].args[0], "START");
         if (!starts) { source_error(path, 1, "a console application needs: when application starts"); return 0; }
     }
     return 1;
@@ -443,6 +446,13 @@ int compile_file(const char *source_path, const char *output_path) {
             if (n == 3 && !strcmp(w[0], "when") && !strcmp(w[1], "application") && !strcmp(w[2], "starts")) {
                 char *event = "START"; okay = emit(&code, OP_EVENT, 1, &event, number); stack[depth++] = BLOCK_ROUTE; continue;
             }
+            if (n == 4 && !strcmp(w[0], "when") && !strcmp(w[1], "player") && !strcmp(w[2], "presses") && is_name(w[3])) {
+                char event[256]; snprintf(event, sizeof(event), "KEY:%s", w[3]); char *arg = event;
+                okay = emit(&code, OP_EVENT, 1, &arg, number); stack[depth++] = BLOCK_ROUTE; continue;
+            }
+            if (n == 3 && !strcmp(w[0], "when") && !strcmp(w[1], "game") && !strcmp(w[2], "updates")) {
+                char *event = "FRAME"; okay = emit(&code, OP_EVENT, 1, &event, number); stack[depth++] = BLOCK_ROUTE; continue;
+            }
             if (n == 4 && !strcmp(w[0], "when") && !strcmp(w[1], "someone")) {
                 if (!strcmp(w[2], "visits")) method = "GET";
                 else if (!strcmp(w[2], "submits")) method = "POST";
@@ -594,6 +604,9 @@ int compile_file(const char *source_path, const char *output_path) {
             } else if (n == 4 && !strcmp(w[0], "checkbox") && !strcmp(w[2], "as")) {
                 char *a[2] = {w[1], w[3]}; okay = emit(&code, OP_CHECKBOX, 2, a, number);
             } else if (n == 2 && !strcmp(w[0], "button")) okay = emit(&code, OP_BUTTON, 1, &w[1], number);
+            else if (n == 5 && !strcmp(w[0], "button") && !strcmp(w[2], "runs") && !strcmp(w[3], "action")) {
+                char *args[2] = {w[1], w[4]}; okay = emit(&code, OP_BUTTON_ACTION, 2, args, number);
+            }
             else if (n == 6 && !strcmp(w[0], "for") && !strcmp(w[1], "each") && !strcmp(w[3], "in") && !strcmp(w[5], "show")) {
                 char *a[2] = {w[2], w[4]}; okay = emit(&code, OP_EACH, 2, a, number); stack[depth++] = BLOCK_EACH;
             } else if (n == 2 && !strcmp(w[0], "if")) { okay = emit(&code, OP_IF, 1, &w[1], number); stack[depth++] = BLOCK_IF; }

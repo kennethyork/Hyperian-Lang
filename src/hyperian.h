@@ -5,9 +5,11 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#define HYPERIAN_VERSION "0.13.0"
+#define HYPERIAN_VERSION "0.14.0"
 #define HYC_MAGIC "HYC1"
 #define HYC_MAX_ARGS 9
+#define HYPERIAN_STATE_MAX 64
+#define HYPERIAN_VALUE_SIZE 2048
 
 typedef enum {
     OP_APPLICATION = 1, OP_PORT,
@@ -31,7 +33,8 @@ typedef enum {
     OP_RETURN_VALUE, OP_READ_FILE, OP_WRITE_FILE, OP_BACKGROUND, OP_RECTANGLE,
     OP_MAKE_LIST, OP_LIST_ADD, OP_LIST_REMOVE, OP_LIST_COUNT, OP_LIST_ITEM,
     OP_TRY, OP_CATCH, OP_END_TRY, OP_HTTP_GET,
-    OP_MAKE_MAP, OP_MAP_PUT, OP_MAP_GET, OP_MAP_REMOVE, OP_MAP_COUNT, OP_STORAGE
+    OP_MAKE_MAP, OP_MAP_PUT, OP_MAP_GET, OP_MAP_REMOVE, OP_MAP_COUNT, OP_STORAGE,
+    OP_BUTTON_ACTION
 } OpCode;
 
 typedef struct {
@@ -46,6 +49,12 @@ typedef struct {
     size_t count;
     size_t capacity;
 } Bytecode;
+
+typedef struct {
+    char names[HYPERIAN_STATE_MAX][64];
+    char values[HYPERIAN_STATE_MAX][HYPERIAN_VALUE_SIZE];
+    int count;
+} HyperianState;
 
 void bytecode_init(Bytecode *code);
 void bytecode_free(Bytecode *code);
@@ -62,5 +71,11 @@ int migrate_bytecode(const char *path);
 int run_desktop_app(const Bytecode *code, const char *name);
 int run_game_app(const Bytecode *code, const char *name);
 int hyperian_http_get(const char *url, char *body, size_t body_size, long *status, char *error, size_t error_size);
+void hyperian_state_init(HyperianState *state);
+const char *hyperian_state_get(const HyperianState *state, const char *name);
+void hyperian_state_set(HyperianState *state, const char *name, const char *value);
+void hyperian_state_evaluate(HyperianState *state, const char *expression, char *output, size_t output_size);
+int hyperian_execute_action(const Bytecode *code, const char *name, const char *input, HyperianState *state, char *error, size_t error_size);
+int hyperian_execute_event(const Bytecode *code, const char *event, HyperianState *state, char *error, size_t error_size);
 
 #endif

@@ -5,13 +5,35 @@ model Player
 end
 
 controller Game
+    action "initialize player"
+        set player_x to 100
+        set player_y to 100
+    end
+
+    action "move right"
+        set player_x to player_x plus 20
+    end
+
+    action "update world"
+        set player_y to player_y plus 1
+    end
+
     when application starts
+        run action "initialize player"
         show view "playfield"
+    end
+
+    when player presses right
+        run action "move right"
+    end
+
+    when game updates
+        run action "update world"
     end
 end
 
 view "playfield"
     fill background with color 18 24 38
-    draw rectangle at 100 100 sized 180 by 80 with color 70 170 255
+    draw rectangle at player_x player_y sized 180 by 80 with color 70 170 255
     draw rectangle at 400 260 sized 120 by 120 with color 255 110 90
 end

@@ -5,7 +5,16 @@ model Note
 end
 
 controller Notes
+    action "initialize desktop"
+        set status to "Ready for a note"
+    end
+
+    action "save note"
+        set status to "Saved:" joined with title
+    end
+
     when application starts
+        run action "initialize desktop"
         find all Note as notes
         show view "notes" with notes
     end
@@ -17,5 +26,7 @@ view "notes"
     input "Note title" as title
     textarea "Note details" as details
     checkbox "Important" as important
-    button "Save note"
+    button "Save note" runs action "save note"
+    text "Application status:"
+    show status
 end

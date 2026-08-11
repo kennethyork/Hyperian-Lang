@@ -1,0 +1,15 @@
+application BadDesktop is desktop
+
+model Item
+    field name is text
+end
+
+controller Items
+    when application starts
+        show view "main"
+    end
+end
+
+view "main"
+    button "Broken" runs action "does not exist"
+end

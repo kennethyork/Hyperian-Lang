@@ -122,12 +122,21 @@ static int create_project(const char *name, const char *target) {
         "controller Items\n    when someone visits \"/\"\n        find all Item as items\n        show view \"main\" with items\n    end\nend\n");
     else if (!strcmp(target, "api")) snprintf(source, sizeof(source),
         "controller Items\n    when someone visits \"/items\"\n        find all Item as items\n        show json items\n    end\nend\n");
+    else if (!strcmp(target, "desktop")) snprintf(source, sizeof(source),
+        "controller Items\n    action initialize\n        set status to ready\n    end\n    action activate\n        set status to \"Button pressed\"\n    end\n    when application starts\n        run action initialize\n        show view \"main\"\n    end\nend\n");
+    else if (!strcmp(target, "game")) snprintf(source, sizeof(source),
+        "controller Items\n    action initialize\n        set player_x to 100\n    end\n    action \"move right\"\n        set player_x to player_x plus 20\n    end\n    when application starts\n        run action initialize\n        show view \"main\"\n    end\n    when player presses right\n        run action \"move right\"\n    end\nend\n");
     else snprintf(source, sizeof(source),
         "controller Items\n    when application starts\n        find all Item as items\n        show view \"main\" with items\n    end\nend\n");
     snprintf(path, sizeof(path), "%s/controllers/items.hyp", name); if (!write_project_file(path, source)) return 1;
     if (strcmp(target, "api")) {
         snprintf(path, sizeof(path), "%s/views/main.hyp", name);
-        if (!write_project_file(path, "view \"main\"\n    heading \"Welcome to Hyperian\"\n    text \"Your foldered MVC application is ready.\"\nend\n")) return 1;
+        const char *view = !strcmp(target, "desktop") ?
+            "view \"main\"\n    heading \"Native desktop application\"\n    input \"Your name\" as name\n    button \"Run action\" runs action activate\n    show status\nend\n" :
+            !strcmp(target, "game") ?
+            "view \"main\"\n    fill background with color 18 24 38\n    draw rectangle at player_x 100 sized 100 by 100 with color 70 170 255\nend\n" :
+            "view \"main\"\n    heading \"Welcome to Hyperian\"\n    text \"Your foldered MVC application is ready.\"\nend\n";
+        if (!write_project_file(path, view)) return 1;
     }
     snprintf(path, sizeof(path), "%s/public/app.css", name);
     if (!write_project_file(path, "body { font-family: system-ui, sans-serif; margin: 3rem auto; max-width: 48rem; }\n")) return 1;
@@ -152,7 +161,8 @@ static int format_source(const char *path) {
             starts_with(start, "layout ") || starts_with(start, "component ") || starts_with(start, "action ") ||
             starts_with(start, "test ") ||
             starts_with(start, "when data changes from ") ||
-            starts_with(start, "when someone ") || !strcmp(start, "when application starts") || starts_with(start, "form ") ||
+            starts_with(start, "when someone ") || starts_with(start, "when player presses ") || !strcmp(start, "when game updates") ||
+            !strcmp(start, "when application starts") || starts_with(start, "form ") ||
             starts_with(start, "for each ") || starts_with(start, "if ") || starts_with(start, "repeat ") || !strcmp(start, "try") ||
             !strcmp(start, "otherwise") || starts_with(start, "when it fails as ");
         if (opening) indentation++;

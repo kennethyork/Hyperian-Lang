@@ -23,7 +23,7 @@ typedef struct { char *key, *value; } Pair;
 typedef struct Record { char *model; Pair fields[FIELD_MAX]; int field_count; struct Record *next; } Record;
 typedef struct Session { char token[65]; char *model, *record_id; struct Session *next; } Session;
 typedef struct { Pair pairs[FIELD_MAX]; int count; } Form;
-typedef struct { char names[FIELD_MAX][64]; char values[FIELD_MAX][2048]; int count; } VariableSet;
+typedef HyperianState VariableSet;
 typedef struct {
     const char *collection_alias, *model, *item_alias;
     Record *item;
@@ -103,10 +103,18 @@ static void local_set(VariableSet *locals, const char *name, const char *value) 
     if (!locals) return;
     int at = locals->count;
     for (int i = 0; i < locals->count; i++) if (!strcmp(locals->names[i], name)) { at = i; break; }
-    if (at == FIELD_MAX) return;
+    if (at == HYPERIAN_STATE_MAX) return;
     if (at == locals->count) { snprintf(locals->names[at], sizeof(locals->names[at]), "%s", name); locals->count++; }
     snprintf(locals->values[at], sizeof(locals->values[at]), "%s", value);
 }
+
+void hyperian_state_init(HyperianState *state) { memset(state, 0, sizeof(*state)); }
+
+const char *hyperian_state_get(const HyperianState *state, const char *name) {
+    return local_value((VariableSet *)state, name);
+}
+
+void hyperian_state_set(HyperianState *state, const char *name, const char *value) { local_set(state, name, value); }
 
 static int list_next(const char **cursor, char *value, size_t value_size) {
     if (!**cursor) return 0;
@@ -282,6 +290,10 @@ static void evaluate(Scope *scope, const char *expression, char *output, size_t 
     const char *resolved = resolve(scope, clean);
     if (*resolved || local_value(scope->locals, clean)) snprintf(output, size, "%s", resolved);
     else snprintf(output, size, "%s", clean);
+}
+
+void hyperian_state_evaluate(HyperianState *state, const char *expression, char *output, size_t output_size) {
+    Scope scope = {.locals = state}; evaluate(&scope, expression, output, output_size);
 }
 
 static int condition_is_true(Scope *scope, const char *expression) {
@@ -463,6 +475,26 @@ static int execute_logic_range(const Bytecode *code, size_t from, size_t to, Sco
     for (size_t i = from; i < to; i++)
         if (is_logic_instruction(code->items[i].opcode))
             if (!execute_logic_at(code, &i, scope, depth, error, error_size)) return 0;
+    return 1;
+}
+
+int hyperian_execute_action(const Bytecode *code, const char *name, const char *input, HyperianState *state, char *error, size_t error_size) {
+    for (size_t action = 0; action < code->count; action++) if (code->items[action].opcode == OP_ACTION && !strcmp(code->items[action].args[0], name)) {
+        int accepts_input = code->items[action].argc > 1 && *code->items[action].args[1];
+        if (accepts_input && !input) { snprintf(error, error_size, "action %s needs an input", name); return 0; }
+        if (!accepts_input && input) { snprintf(error, error_size, "action %s does not accept an input", name); return 0; }
+        if (accepts_input) local_set(state, code->items[action].args[1], input);
+        Scope scope = {.locals = state}; size_t end = find_end(code, action, OP_ACTION, OP_END_ACTION);
+        return execute_logic_range(code, action + 1, end, &scope, 0, error, error_size);
+    }
+    snprintf(error, error_size, "action %s does not exist", name); return 0;
+}
+
+int hyperian_execute_event(const Bytecode *code, const char *event, HyperianState *state, char *error, size_t error_size) {
+    for (size_t at = 0; at < code->count; at++) if (code->items[at].opcode == OP_EVENT && !strcmp(code->items[at].args[0], event)) {
+        Scope scope = {.locals = state}; size_t end = find_end(code, at, OP_EVENT, OP_END_ROUTE);
+        return execute_logic_range(code, at + 1, end, &scope, 0, error, error_size);
+    }
     return 1;
 }
 
