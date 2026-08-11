@@ -69,6 +69,16 @@ build/hyperian check examples/tasks.hyp
 build/hyperian inspect build/tasks.hyc
 ```
 
+Trace an application in plain English and see every state change:
+
+```sh
+build/hyperian debug examples/blocks_game.hyp
+build/hyperian debug examples/blocks_game.hyp --event KEY:right
+build/hyperian debug examples/english_logic.hyp --action greet --input Kenneth
+```
+
+The debugger follows the same bytecode as the real application. It shows source line numbers, nested action calls, and the final state, so behavior does not need to be recreated in a separate interpreter.
+
 For a complete persistent CRUD example:
 
 ```sh
@@ -618,6 +628,6 @@ Quoted text may contain spaces. `#` starts a comment. Indentation is optional bu
 
 ## Project status
 
-Version 0.14 is a small but real MVC platform: custom bytecode, a native VM, standalone executable creation, six executable targets, interactive GTK controller buttons and reactive values, SDL2 keyboard/frame events and state-driven rendering, native lists and maps, selectable HDB or transactional SQLite storage, recoverable runtime errors, an HTTP/HTTPS client, local packages, reusable actions, native file access, foldered project generation, versioned migrations, persistent CRUD models, safe HTML and typed JSON, authentication and authorization, middleware, formatting, and English tests.
+Version 0.15 is a small but real MVC platform: custom bytecode, a native VM, standalone executable creation, six executable targets, an English source-line debugger, interactive GTK controller buttons and reactive values, SDL2 keyboard/frame events and state-driven rendering, native lists and maps, selectable HDB or transactional SQLite storage, recoverable runtime errors, an HTTP/HTTPS client, local packages, reusable actions, native file access, foldered project generation, versioned migrations, persistent CRUD models, safe HTML and typed JSON, authentication and authorization, middleware, formatting, and English tests.
 
 The next major layers are a source-level debugger, richer desktop window events, game animation/audio/physics, mobile backends, and cross-platform release packaging. Those are not claimed as complete yet.

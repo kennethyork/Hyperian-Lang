@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(Hyperian VERSION 0.14.0 LANGUAGES C)
+project(Hyperian VERSION 0.15.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -51,6 +51,9 @@ add_test(NAME compile_example
 add_test(NAME inspect_example
     COMMAND hyperian inspect ${CMAKE_BINARY_DIR}/tasks.hyc)
 set_tests_properties(inspect_example PROPERTIES DEPENDS compile_example)
+add_test(NAME debug_native_game
+    COMMAND hyperian debug ${CMAKE_SOURCE_DIR}/examples/blocks_game.hyp)
+set_tests_properties(debug_native_game PROPERTIES PASS_REGULAR_EXPRESSION "player_x = 100")
 add_test(NAME reject_missing_view
     COMMAND hyperian check ${CMAKE_SOURCE_DIR}/tests/bad_missing_view.hyp)
 set_tests_properties(reject_missing_view PROPERTIES WILL_FAIL TRUE)

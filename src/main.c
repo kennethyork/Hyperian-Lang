@@ -180,6 +180,9 @@ static void help(void) {
          "  hyperian check app.hyp                Check source for mistakes\n"
          "  hyperian run app.hyp                  Compile and run an app\n"
          "  hyperian run app.hyc [--port 9000]    Run compiled bytecode\n"
+         "  hyperian debug app.hyp                Trace its start event and state\n"
+         "  hyperian debug app.hyp --event NAME   Trace a particular event\n"
+         "  hyperian debug app.hyp --action NAME  Trace a particular action\n"
          "  hyperian inspect app.hyc              Show compiled instructions\n"
          "  hyperian format app.hyp               Print consistently indented source\n"
          "  hyperian test app.hyp                 Run English test blocks\n"
@@ -219,6 +222,23 @@ int main(int argc, char **argv) {
     if (!strcmp(argv[1], "inspect")) {
         if (argc != 3) { fprintf(stderr, "usage: hyperian inspect app.hyc\n"); return 2; }
         return inspect_bytecode(argv[2]);
+    }
+    if (!strcmp(argv[1], "debug")) {
+        if (argc < 3) { fprintf(stderr, "usage: hyperian debug app.hyp [--event NAME | --action NAME] [--input VALUE]\n"); return 2; }
+        const char *event = "START", *action = NULL, *input = NULL;
+        for (int i = 3; i < argc; i += 2) {
+            if (i + 1 >= argc) { fprintf(stderr, "error: %s needs a value\n", argv[i]); return 2; }
+            if (!strcmp(argv[i], "--event") && !action) event = argv[i + 1];
+            else if (!strcmp(argv[i], "--action") && event && !strcmp(event, "START")) { action = argv[i + 1]; event = NULL; }
+            else if (!strcmp(argv[i], "--input")) input = argv[i + 1];
+            else { fprintf(stderr, "error: use either --event NAME or --action NAME, with optional --input VALUE\n"); return 2; }
+        }
+        if (input && !action) { fprintf(stderr, "error: --input can only be used with --action\n"); return 2; }
+        if (ends_with(argv[2], ".hyc")) return debug_bytecode(argv[2], event, action, input);
+        char temporary[128]; snprintf(temporary, sizeof(temporary), "/tmp/hyperian-debug-%ld.hyc", (long)getpid());
+        int result = compile_file(argv[2], temporary);
+        if (!result) result = debug_bytecode(temporary, event, action, input);
+        unlink(temporary); return result;
     }
     if (!strcmp(argv[1], "format")) {
         if (argc != 3) { fprintf(stderr, "usage: hyperian format app.hyp\n"); return 2; }

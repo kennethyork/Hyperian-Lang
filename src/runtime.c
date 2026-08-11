@@ -348,9 +348,48 @@ static int is_logic_instruction(uint8_t opcode) {
 
 static int execute_logic_range(const Bytecode *code, size_t from, size_t to, Scope *scope, int depth, char *error, size_t error_size);
 
+static int debugger_active = 0;
+
+static void debug_instruction(const Instruction *in, int depth) {
+    printf("%*sLine %u: ", depth * 2, "", in->line);
+    switch (in->opcode) {
+        case OP_SET_VALUE: printf("set %s to %s", in->args[0], in->args[1]); break;
+        case OP_LOGIC_IF: printf("check whether %s", in->args[0]); break;
+        case OP_REPEAT: printf("repeat %s times", in->args[0]); break;
+        case OP_RUN_ACTION: printf("run action %s", in->args[0]); break;
+        case OP_RETURN_VALUE: printf("return %s", in->args[0]); break;
+        case OP_READ_FILE: printf("read file %s into %s", in->args[0], in->args[1]); break;
+        case OP_WRITE_FILE: printf("write %s to file %s", in->args[0], in->args[1]); break;
+        case OP_MAKE_LIST: printf("make list %s", in->args[0]); break;
+        case OP_LIST_ADD: printf("add %s to list %s", in->args[0], in->args[1]); break;
+        case OP_LIST_REMOVE: printf("remove %s from list %s", in->args[0], in->args[1]); break;
+        case OP_LIST_COUNT: printf("count list %s as %s", in->args[0], in->args[1]); break;
+        case OP_LIST_ITEM: printf("read item %s from list %s as %s", in->args[0], in->args[1], in->args[2]); break;
+        case OP_TRY: printf("try the following work"); break;
+        case OP_HTTP_GET: printf("get %s from the internet", in->args[0]); break;
+        case OP_MAKE_MAP: printf("make map %s", in->args[0]); break;
+        case OP_MAP_PUT: printf("put %s at %s in map %s", in->args[0], in->args[1], in->args[2]); break;
+        case OP_MAP_GET: printf("read %s from map %s as %s", in->args[0], in->args[1], in->args[2]); break;
+        case OP_MAP_REMOVE: printf("remove %s from map %s", in->args[0], in->args[1]); break;
+        case OP_MAP_COUNT: printf("count map %s as %s", in->args[0], in->args[1]); break;
+        default: printf("execute %s", opcode_name(in->opcode)); break;
+    }
+    putchar('\n');
+}
+
+static void debug_changes(const HyperianState *before, const HyperianState *after, int depth) {
+    for (int i = 0; i < after->count; i++) {
+        const char *old = hyperian_state_get(before, after->names[i]);
+        if (!old || strcmp(old, after->values[i]))
+            printf("%*s%s is now %s\n", depth * 2 + 2, "", after->names[i], *after->values[i] ? after->values[i] : "empty");
+    }
+}
+
 static int execute_logic_at(const Bytecode *code, size_t *position, Scope *scope, int depth, char *error, size_t error_size) {
     if (depth > 64) { snprintf(error, error_size, "actions are calling each other too deeply"); return 0; }
     Instruction *in = &code->items[*position];
+    HyperianState before;
+    if (debugger_active) { before = *scope->locals; debug_instruction(in, depth); }
     if (in->opcode == OP_SET_VALUE) {
         char value[2048]; evaluate(scope, in->args[1], value, sizeof(value)); local_set(scope->locals, in->args[0], value);
     } else if (in->opcode == OP_LOGIC_IF) {
@@ -468,6 +507,7 @@ static int execute_logic_at(const Bytecode *code, size_t *position, Scope *scope
         if (count < 0) { snprintf(error, error_size, "map %s does not exist or is damaged", in->args[0]); return 0; }
         snprintf(value, sizeof(value), "%d", count); local_set(scope->locals, in->args[1], value);
     }
+    if (debugger_active) debug_changes(&before, scope->locals, depth);
     return 1;
 }
 
@@ -496,6 +536,25 @@ int hyperian_execute_event(const Bytecode *code, const char *event, HyperianStat
         return execute_logic_range(code, at + 1, end, &scope, 0, error, error_size);
     }
     return 1;
+}
+
+int debug_bytecode(const char *path, const char *event, const char *action, const char *input) {
+    Bytecode code; bytecode_init(&code); char error[256] = {0}; HyperianState state;
+    if (!bytecode_read(&code, path, error, sizeof(error))) { fprintf(stderr, "error: %s\n", error); return 1; }
+    hyperian_state_init(&state);
+    if (event && strcmp(event, "START") && !hyperian_execute_event(&code, "START", &state, error, sizeof(error))) {
+        fprintf(stderr, "Debugger could not prepare the application: %s\n", error); bytecode_free(&code); return 1;
+    }
+    debugger_active = 1;
+    printf("Debugging %s %s\n", action ? "action" : "event", action ? action : event);
+    int okay = action ? hyperian_execute_action(&code, action, input, &state, error, sizeof(error))
+                      : hyperian_execute_event(&code, event, &state, error, sizeof(error));
+    debugger_active = 0;
+    if (!okay) fprintf(stderr, "Debugger stopped: %s\n", error);
+    printf("Final state:\n");
+    if (!state.count) printf("  no values were set\n");
+    for (int i = 0; i < state.count; i++) printf("  %s = %s\n", state.names[i], *state.values[i] ? state.values[i] : "empty");
+    bytecode_free(&code); return okay ? 0 : 1;
 }
 
 static int render_range(const Bytecode *code, size_t from, size_t to, Buffer *body, Scope *scope, Record *records) {
