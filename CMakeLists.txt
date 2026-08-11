@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(Hyperian VERSION 0.18.0 LANGUAGES C)
+project(Hyperian VERSION 0.19.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -46,6 +46,8 @@ install(TARGETS hyperian RUNTIME DESTINATION bin)
 
 enable_testing()
 add_test(NAME compiler_help COMMAND hyperian help)
+add_test(NAME toolchain_doctor COMMAND hyperian doctor)
+set_tests_properties(toolchain_doctor PROPERTIES PASS_REGULAR_EXPRESSION "compiler and bytecode VM: ready")
 add_test(NAME compile_example
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/tasks.hyp -o ${CMAKE_BINARY_DIR}/tasks.hyc)
 add_test(NAME inspect_example
@@ -88,6 +90,12 @@ add_test(NAME build_standalone_service
 add_test(NAME run_standalone_service
     COMMAND ${CMAKE_BINARY_DIR}/standalone_report)
 set_tests_properties(run_standalone_service PROPERTIES DEPENDS build_standalone_service)
+add_test(NAME clean_console_bundle COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}/BundleConsole)
+add_test(NAME build_console_bundle
+    COMMAND hyperian bundle ${CMAKE_SOURCE_DIR}/examples/bundle_console/app.hyp -o ${CMAKE_BINARY_DIR}/BundleConsole)
+set_tests_properties(build_console_bundle PROPERTIES DEPENDS clean_console_bundle)
+add_test(NAME run_console_bundle COMMAND ${CMAKE_BINARY_DIR}/BundleConsole/run)
+set_tests_properties(run_console_bundle PROPERTIES DEPENDS build_console_bundle WORKING_DIRECTORY ${CMAKE_SOURCE_DIR} PASS_REGULAR_EXPRESSION "Hello from a bundled asset")
 add_test(NAME format_source
     COMMAND hyperian format ${CMAKE_SOURCE_DIR}/examples/english_logic.hyp)
 add_test(NAME english_language_tests

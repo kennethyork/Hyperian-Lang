@@ -45,6 +45,21 @@ build/hyperian build examples/report_service.hyp -o MyReport
 
 The executable no longer needs the `.hyp` or `.hyc` file. Web and API executables accept `--port 9000`. Public assets and images remain beside it so they can be updated independently. Native GTK, SDL2, and other dynamically linked system libraries must be installed on the destination platform.
 
+Create a release folder containing the executable and its `assets/` and `public/` files:
+
+```sh
+build/hyperian bundle examples/bundle_console/app.hyp -o BundleReader
+./BundleReader/run
+```
+
+A bundle carries an `HYBN1` manifest. Its executable automatically uses the bundle folder as its working directory, so file access, game media, and public web assets work even when the program is launched elsewhere. Bundles target the operating system and CPU on which the compiler was built; native system libraries are still external dependencies.
+
+See which backends were compiled into the current toolchain:
+
+```sh
+build/hyperian doctor
+```
+
 Open <http://127.0.0.1:8080>. Stop it with Ctrl+C.
 
 The same compiler runs native console software:
@@ -645,6 +660,6 @@ Quoted text may contain spaces. `#` starts a comment. Indentation is optional bu
 
 ## Project status
 
-Version 0.18 is a small but real MVC platform: custom bytecode, a native VM, standalone executable creation, seven compiler targets, an English source-line debugger, interactive multi-view GTK desktop and phone-sized mobile preview interfaces with close events, SDL2 keyboard/frame events, frame timing, BMP sprites, WAV sound, and state-driven rendering, native lists and maps, selectable HDB or transactional SQLite storage, recoverable runtime errors, an HTTP/HTTPS client, local packages, reusable actions, native file access, foldered project generation, versioned migrations, persistent CRUD models, safe HTML and typed JSON, authentication and authorization, middleware, formatting, and English tests.
+Version 0.19 is a small but real MVC platform: custom bytecode, a native VM, standalone executable and asset-bundle creation, native backend diagnostics, seven compiler targets, an English source-line debugger, interactive multi-view GTK desktop and phone-sized mobile preview interfaces with close events, SDL2 keyboard/frame events, frame timing, BMP sprites, WAV sound, and state-driven rendering, native lists and maps, selectable HDB or transactional SQLite storage, recoverable runtime errors, an HTTP/HTTPS client, local packages, reusable actions, native file access, foldered project generation, versioned migrations, persistent CRUD models, safe HTML and typed JSON, authentication and authorization, middleware, formatting, and English tests.
 
-The next major layers are richer desktop and mobile events, Android/iOS export, game animation and physics helpers, more media formats, and cross-platform release packaging. Those are not claimed as complete yet.
+The next major layers are richer desktop and mobile events, Android/iOS export, game animation and physics helpers, more media formats, and automated cross-compilation. Those are not claimed as complete yet.

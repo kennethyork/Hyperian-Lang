@@ -1,6 +1,8 @@
 #include "hyperian.h"
 
 #include <errno.h>
+#include <dirent.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -24,11 +26,13 @@ static FILE *running_executable(const char *fallback) {
     FILE *file = fopen("/proc/self/exe", "rb"); return file ? file : fopen(fallback, "rb");
 }
 
-static int embedded_bytecode(FILE *executable, uint64_t *offset, uint64_t *length) {
+static int embedded_bytecode(FILE *executable, uint64_t *offset, uint64_t *length, int *bundled) {
     if (fseek(executable, 0, SEEK_END)) return 0;
     long end = ftell(executable);
     if (end < 12 || fseek(executable, end - 12, SEEK_SET)) return 0;
-    char magic[4]; if (fread(magic, 1, 4, executable) != 4 || memcmp(magic, "HYEX", 4) || !read_u64(executable, length)) return 0;
+    char magic[4]; if (fread(magic, 1, 4, executable) != 4 ||
+        (memcmp(magic, "HYEX", 4) && memcmp(magic, "HYBN", 4)) || !read_u64(executable, length)) return 0;
+    if (bundled) *bundled = !memcmp(magic, "HYBN", 4);
     if (*length > (uint64_t)end - 12) return 0;
     *offset = (uint64_t)end - 12 - *length; return 1;
 }
@@ -43,14 +47,14 @@ static int copy_bytes(FILE *from, FILE *to, uint64_t count) {
     return 1;
 }
 
-static int build_executable(const char *source, const char *output, const char *self_path) {
+static int build_executable(const char *source, const char *output, const char *self_path, int bundled) {
     char bytecode_path[128]; snprintf(bytecode_path, sizeof(bytecode_path), "/tmp/hyperian-build-%ld.hyc", (long)getpid());
     int result = compile_file(source, bytecode_path); if (result) return result;
     FILE *runtime = running_executable(self_path), *bytecode = fopen(bytecode_path, "rb");
     if (!runtime || !bytecode) { fprintf(stderr, "error: cannot read the runtime or compiled bytecode\n"); if (runtime) fclose(runtime); if (bytecode) fclose(bytecode); unlink(bytecode_path); return 1; }
     if (fseek(runtime, 0, SEEK_END) || fseek(bytecode, 0, SEEK_END)) { fclose(runtime); fclose(bytecode); unlink(bytecode_path); return 1; }
-    long runtime_size = ftell(runtime), bytecode_size = ftell(bytecode); uint64_t old_offset, old_length;
-    if (embedded_bytecode(runtime, &old_offset, &old_length)) runtime_size = (long)old_offset;
+    long runtime_size = ftell(runtime), bytecode_size = ftell(bytecode); uint64_t old_offset, old_length; int old_bundle;
+    if (embedded_bytecode(runtime, &old_offset, &old_length, &old_bundle)) runtime_size = (long)old_offset;
     rewind(runtime); rewind(bytecode);
     struct stat runtime_info, output_info;
     if (!fstat(fileno(runtime), &runtime_info) && !stat(output, &output_info) && runtime_info.st_dev == output_info.st_dev && runtime_info.st_ino == output_info.st_ino) {
@@ -58,16 +62,28 @@ static int build_executable(const char *source, const char *output, const char *
     }
     FILE *built = fopen(output, "wb");
     int okay = built && runtime_size >= 0 && bytecode_size >= 0 && copy_bytes(runtime, built, (uint64_t)runtime_size) &&
-        copy_bytes(bytecode, built, (uint64_t)bytecode_size) && fwrite("HYEX", 1, 4, built) == 4 && write_u64(built, (uint64_t)bytecode_size);
+        copy_bytes(bytecode, built, (uint64_t)bytecode_size) && fwrite(bundled ? "HYBN" : "HYEX", 1, 4, built) == 4 && write_u64(built, (uint64_t)bytecode_size);
     if (built && fclose(built)) okay = 0;
     fclose(runtime); fclose(bytecode); unlink(bytecode_path);
     if (!okay || chmod(output, 0755)) { fprintf(stderr, "error: could not create executable %s\n", output); return 1; }
     printf("Built standalone executable %s.\n", output); return 0;
 }
 
+static int enter_bundle_directory(const char *fallback) {
+    char path[PATH_MAX]; ssize_t length = readlink("/proc/self/exe", path, sizeof(path) - 1);
+    if (length < 0) {
+        if (!realpath(fallback, path)) { fprintf(stderr, "error: cannot locate this application bundle\n"); return 0; }
+    } else path[length] = 0;
+    char *slash = strrchr(path, '/');
+    if (!slash) return 1;
+    *slash = 0;
+    if (chdir(path)) { fprintf(stderr, "error: cannot enter application bundle %s: %s\n", path, strerror(errno)); return 0; }
+    return 1;
+}
+
 static int run_embedded_program(int argc, char **argv, int *found) {
     *found = 0; FILE *executable = running_executable(argv[0]); if (!executable) return 0;
-    uint64_t offset, length; if (!embedded_bytecode(executable, &offset, &length)) { fclose(executable); return 0; }
+    uint64_t offset, length; int bundled; if (!embedded_bytecode(executable, &offset, &length, &bundled)) { fclose(executable); return 0; }
     *found = 1; int port = 0;
     if (argc == 3 && !strcmp(argv[1], "--port")) port = atoi(argv[2]);
     else if (argc != 1) { fprintf(stderr, "usage: %s [--port 9000]\n", argv[0]); fclose(executable); return 2; }
@@ -77,6 +93,7 @@ static int run_embedded_program(int argc, char **argv, int *found) {
     if (bytecode && fclose(bytecode)) okay = 0;
     fclose(executable);
     if (!okay) { unlink(path); fprintf(stderr, "error: could not load embedded Hyperian bytecode\n"); return 1; }
+    if (bundled && !enter_bundle_directory(argv[0])) { unlink(path); return 1; }
     int result = run_bytecode(path, port); unlink(path); return result;
 }
 
@@ -99,6 +116,98 @@ static int write_project_file(const char *path, const char *contents) {
     if (fclose(file)) okay = 0;
     if (!okay) fprintf(stderr, "error: could not finish file %s\n", path);
     return okay;
+}
+
+static int copy_bundle_file(const char *source, const char *destination, mode_t mode) {
+    FILE *from = fopen(source, "rb"), *to = from ? fopen(destination, "wb") : NULL; int okay = 1;
+    if (!from || !to) okay = 0;
+    unsigned char data[65536]; size_t count;
+    while (okay && (count = fread(data, 1, sizeof(data), from)) != 0)
+        if (fwrite(data, 1, count, to) != count) okay = 0;
+    if (from && ferror(from)) okay = 0;
+    if (to && fclose(to)) okay = 0;
+    if (from) fclose(from);
+    if (okay && chmod(destination, mode & 0777)) okay = 0;
+    if (!okay) fprintf(stderr, "error: cannot copy bundle file %s\n", source);
+    return okay;
+}
+
+static int copy_bundle_tree(const char *source, const char *destination) {
+    struct stat info;
+    if (lstat(source, &info)) return errno == ENOENT;
+    if (!S_ISDIR(info.st_mode)) { fprintf(stderr, "error: bundle asset %s must be a folder\n", source); return 0; }
+    if (mkdir(destination, info.st_mode & 0777)) { fprintf(stderr, "error: cannot create bundle folder %s: %s\n", destination, strerror(errno)); return 0; }
+    DIR *directory = opendir(source); if (!directory) return 0; int okay = 1; struct dirent *entry;
+    while (okay && (entry = readdir(directory))) {
+        if (!strcmp(entry->d_name, ".") || !strcmp(entry->d_name, "..")) continue;
+        char from[PATH_MAX], to[PATH_MAX];
+        if (snprintf(from, sizeof(from), "%s/%s", source, entry->d_name) >= (int)sizeof(from) ||
+            snprintf(to, sizeof(to), "%s/%s", destination, entry->d_name) >= (int)sizeof(to)) { okay = 0; break; }
+        if (lstat(from, &info)) { okay = 0; break; }
+        if (S_ISLNK(info.st_mode)) { fprintf(stderr, "error: bundle assets cannot contain symbolic links: %s\n", from); okay = 0; }
+        else if (S_ISDIR(info.st_mode)) okay = copy_bundle_tree(from, to);
+        else if (S_ISREG(info.st_mode)) okay = copy_bundle_file(from, to, info.st_mode);
+        else { fprintf(stderr, "error: unsupported bundle asset %s\n", from); okay = 0; }
+    }
+    closedir(directory); return okay;
+}
+
+static void source_directory(const char *source, char *directory, size_t size) {
+    const char *slash = strrchr(source, '/');
+    if (!slash) snprintf(directory, size, ".");
+    else if (slash == source) snprintf(directory, size, "/");
+    else { size_t length = (size_t)(slash - source); if (length >= size) length = size - 1; memcpy(directory, source, length); directory[length] = 0; }
+}
+
+static int bundle_application(const char *source, const char *output, const char *self_path) {
+    struct stat existing;
+    if (!stat(output, &existing)) { fprintf(stderr, "error: bundle output %s already exists\n", output); return 1; }
+    if (errno != ENOENT || mkdir(output, 0755)) { fprintf(stderr, "error: cannot create bundle %s: %s\n", output, strerror(errno)); return 1; }
+    char executable[PATH_MAX], manifest[PATH_MAX], project[PATH_MAX], from[PATH_MAX], to[PATH_MAX];
+    if (snprintf(executable, sizeof(executable), "%s/run", output) >= (int)sizeof(executable) ||
+        snprintf(manifest, sizeof(manifest), "%s/hyperian.bundle", output) >= (int)sizeof(manifest)) {
+        fprintf(stderr, "error: bundle path is too long\n"); return 1;
+    }
+    if (build_executable(source, executable, self_path, 1)) return 1;
+    source_directory(source, project, sizeof(project));
+    const char *folders[] = {"assets", "public"};
+    for (size_t i = 0; i < sizeof(folders) / sizeof(folders[0]); i++) {
+        if (snprintf(from, sizeof(from), "%s/%s", project, folders[i]) >= (int)sizeof(from) ||
+            snprintf(to, sizeof(to), "%s/%s", output, folders[i]) >= (int)sizeof(to) || !copy_bundle_tree(from, to)) return 1;
+    }
+    char contents[512]; snprintf(contents, sizeof(contents),
+        "Hyperian application bundle\nformat: HYBN1\ntoolchain: %s\nexecutable: run\nassets: assets, public\n", HYPERIAN_VERSION);
+    if (!write_project_file(manifest, contents)) return 1;
+    printf("Bundled %s with its assets in %s.\n", source, output); return 0;
+}
+
+static int doctor(void) {
+    puts("Hyperian " HYPERIAN_VERSION " toolchain check\n"
+         "  compiler and bytecode VM: ready\n"
+         "  web, API, console, service: ready");
+#ifdef HYPERIAN_HAVE_GTK3
+    puts("  desktop and mobile preview (GTK3): ready");
+#else
+    puts("  desktop and mobile preview (GTK3): not included in this build");
+#endif
+#ifdef HYPERIAN_HAVE_SDL2
+    puts("  game runtime (SDL2): ready");
+#else
+    puts("  game runtime (SDL2): not included in this build");
+#endif
+#ifdef HYPERIAN_HAVE_SQLITE3
+    puts("  SQLite storage: ready");
+#else
+    puts("  SQLite storage: not included; native HDB storage is ready");
+#endif
+#ifdef HYPERIAN_HAVE_CURL
+    puts("  HTTP and HTTPS client: ready");
+#else
+    puts("  HTTP client: basic HTTP only; libcurl HTTPS is not included");
+#endif
+    puts("  standalone executables and asset bundles: ready\n"
+         "  Android and iOS deployment: not implemented yet");
+    return 0;
 }
 
 static int create_project(const char *name, const char *target) {
@@ -179,6 +288,7 @@ static void help(void) {
          "Usage:\n"
          "  hyperian compile app.hyp -o app.hyc   Compile source to bytecode\n"
          "  hyperian build app.hyp -o MyApp       Build one executable application\n"
+         "  hyperian bundle app.hyp -o App        Bundle an executable and assets\n"
          "  hyperian new MyApp [--target web]     Create a foldered MVC project\n"
          "  hyperian check app.hyp                Check source for mistakes\n"
          "  hyperian run app.hyp                  Compile and run an app\n"
@@ -190,6 +300,7 @@ static void help(void) {
          "  hyperian format app.hyp               Print consistently indented source\n"
          "  hyperian test app.hyp                 Run English test blocks\n"
          "  hyperian migrate app.hyp              Apply pending data migrations\n"
+         "  hyperian doctor                       Check available native backends\n"
          "  hyperian version                      Show the version\n");
 }
 
@@ -201,6 +312,10 @@ int main(int argc, char **argv) {
     int embedded = 0, embedded_result = run_embedded_program(argc, argv, &embedded); if (embedded) return embedded_result;
     if (argc < 2 || !strcmp(argv[1], "help") || !strcmp(argv[1], "--help") || !strcmp(argv[1], "-h")) { help(); return 0; }
     if (!strcmp(argv[1], "version") || !strcmp(argv[1], "--version")) { puts("Hyperian " HYPERIAN_VERSION); return 0; }
+    if (!strcmp(argv[1], "doctor")) {
+        if (argc != 2) { fprintf(stderr, "usage: hyperian doctor\n"); return 2; }
+        return doctor();
+    }
     if (!strcmp(argv[1], "new")) {
         if (argc != 3 && !(argc == 5 && !strcmp(argv[3], "--target"))) {
             fprintf(stderr, "usage: hyperian new MyApp [--target web]\n"); return 2;
@@ -213,7 +328,11 @@ int main(int argc, char **argv) {
     }
     if (!strcmp(argv[1], "build")) {
         if (argc != 5 || strcmp(argv[3], "-o")) { fprintf(stderr, "usage: hyperian build app.hyp -o MyApp\n"); return 2; }
-        return build_executable(argv[2], argv[4], argv[0]);
+        return build_executable(argv[2], argv[4], argv[0], 0);
+    }
+    if (!strcmp(argv[1], "bundle")) {
+        if (argc != 5 || strcmp(argv[3], "-o")) { fprintf(stderr, "usage: hyperian bundle app.hyp -o App\n"); return 2; }
+        return bundle_application(argv[2], argv[4], argv[0]);
     }
     if (!strcmp(argv[1], "check")) {
         if (argc != 3) { fprintf(stderr, "usage: hyperian check app.hyp\n"); return 2; }

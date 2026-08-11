@@ -1,0 +1,17 @@
+application "Bundle Reader" is console
+
+model Message
+    field text is text
+end
+
+controller Messages
+    when application starts
+        read file "assets/message.txt" as message
+        show view "main" with message
+    end
+end
+
+view "main"
+    heading "Bundle Reader"
+    show message
+end
