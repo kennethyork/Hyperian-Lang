@@ -228,7 +228,7 @@ static int export_mobile_application(const char *source, const char *platform, c
     }
     if (okay) {
         snprintf(contents, sizeof(contents),
-            "# %s\n\nThis is a Hyperian mobile deployment package for %s. It contains compiled MVC bytecode and application assets for a native phone runtime adapter.\n\nEnglish-like Hyperian source remains the application authority. This package is not yet a signed store-ready application; Android and iOS runtime adapters are the next deployment layer.\n",
+            "# %s\n\nThis is a Hyperian mobile deployment package for %s. It contains compiled MVC bytecode and application assets for Hyperian's native mobile runtime library.\n\nEnglish-like Hyperian source remains the application authority. This package is not yet a signed store-ready application; Android and iOS user-interface adapters are the next deployment layer.\n",
             name, !strcmp(platform, "ios") ? "iOS" : "Android");
         okay = write_project_file(readme, contents);
     }
@@ -263,6 +263,7 @@ static int doctor(void) {
 #endif
     puts("  standalone executables and asset bundles: ready\n"
          "  Android and iOS bytecode deployment packages: ready\n"
+         "  native mobile runtime bridge library: ready\n"
          "  signed Android and iOS applications: not implemented yet");
     return 0;
 }

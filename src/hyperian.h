@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#define HYPERIAN_VERSION "0.24.0"
+#define HYPERIAN_VERSION "0.25.0"
 #define HYC_MAGIC "HYC1"
 #define HYC_MAX_ARGS 9
 #define HYPERIAN_STATE_MAX 64
@@ -59,6 +59,7 @@ typedef struct {
 
 typedef int (*HyperianSoundHandler)(const char *path, char *error, size_t error_size);
 typedef struct HyperianData HyperianData;
+typedef struct HyperianMobile HyperianMobile;
 
 void bytecode_init(Bytecode *code);
 void bytecode_free(Bytecode *code);
@@ -88,5 +89,13 @@ HyperianData *hyperian_data_open(const Bytecode *code, char *error, size_t error
 void hyperian_data_close(HyperianData *data);
 int hyperian_execute_data_action(HyperianData *data, const char *name, const char *input, HyperianState *state, char *error, size_t error_size);
 int hyperian_execute_data_event(HyperianData *data, const char *event, HyperianState *state, char *error, size_t error_size);
+HyperianMobile *hyperian_mobile_open(const char *bytecode_path, char *error, size_t error_size);
+void hyperian_mobile_close(HyperianMobile *mobile);
+int hyperian_mobile_start(HyperianMobile *mobile, char *error, size_t error_size);
+int hyperian_mobile_set(HyperianMobile *mobile, const char *name, const char *value, char *error, size_t error_size);
+int hyperian_mobile_run_action(HyperianMobile *mobile, const char *action, const char *input, char *error, size_t error_size);
+int hyperian_mobile_send_event(HyperianMobile *mobile, const char *event, char *error, size_t error_size);
+int hyperian_mobile_render_json(HyperianMobile *mobile, char *output, size_t output_size, char *error, size_t error_size);
+const char *hyperian_mobile_value(const HyperianMobile *mobile, const char *name);
 
 #endif

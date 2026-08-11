@@ -8,7 +8,7 @@ Hyperian is an English-like, general-purpose language where every application is
 - a bytecode virtual machine;
 - separate native runtimes for different application targets.
 
-The goal is that a beginner can read the source aloud and understand it. Web, installable offline web application, console, API, one-shot service, native GTK desktop, phone-sized mobile preview, and native SDL2 game programs are executable today. Mobile programs can also be compiled into versioned Android or iOS deployment packages for the upcoming native phone adapters.
+The goal is that a beginner can read the source aloud and understand it. Web, installable offline web application, console, API, one-shot service, native GTK desktop, phone-sized mobile preview, and native SDL2 game programs are executable today. Mobile programs can also be compiled into versioned Android or iOS deployment packages and driven through the native mobile runtime library.
 
 ## Build the compiler
 
@@ -125,7 +125,7 @@ application "Worker" is service
 application "Adventure" is game
 ```
 
-The compiler recognizes all eight targets and records the target in bytecode. Its native HTTP runtime runs `web`, installable web applications, and `api`; the terminal runs `console` and `service`; GTK widgets run `desktop` and the phone-sized `mobile` preview; and SDL2 runs `game`. GTK3 and SDL2 are optional native build dependencies. The mobile preview validates interface behavior on a development computer. Android and iOS bytecode deployment packages are implemented; native phone runtime adapters and signed store-ready builds are not complete yet.
+The compiler recognizes all eight targets and records the target in bytecode. Its native HTTP runtime runs `web`, installable web applications, and `api`; the terminal runs `console` and `service`; GTK widgets run `desktop` and the phone-sized `mobile` preview; and SDL2 runs `game`. GTK3 and SDL2 are optional native build dependencies. The mobile preview validates interface behavior on a development computer. Android and iOS bytecode deployment packages and the portable native runtime bridge are implemented; platform user-interface adapters and signed store-ready builds are not complete yet.
 
 Create a complete foldered project for any target:
 
@@ -148,6 +148,19 @@ hyperian export MyPhoneApp/app.hyp for ios to IosPackage
 ```
 
 Each `HYMB1` package contains the compiled `application.hyc`, copied `assets/` and `public/` folders when present, the intended phone platform, the toolchain version, and a versioned runtime-interface number. Export rejects non-mobile applications and never needs Python. These are inputs for Hyperian’s native phone adapters, not APK or IPA files yet.
+
+## Native mobile runtime bridge
+
+The build also produces `libhyperian_mobile.a`, a portable C library for Android NDK, iOS, and other native interface adapters. Its opaque session API is declared in `src/hyperian.h`:
+
+- `hyperian_mobile_open` loads and verifies mobile bytecode and opens its persistent MVC data.
+- `hyperian_mobile_start` runs `when application starts`.
+- `hyperian_mobile_set` synchronizes a native input into controller state.
+- `hyperian_mobile_run_action` and `hyperian_mobile_send_event` execute controller behavior, CRUD, timers, and navigation.
+- `hyperian_mobile_render_json` returns the current view as ordered heading, text, value, input, text-area, checkbox, button, link, and image controls. It expands English `for each` and `if` view blocks.
+- `hyperian_mobile_close` releases the session.
+
+This API means platform code renders controls but does not reimplement Hyperian semantics. Models, actions, persistence, view selection, and expressions continue running in Hyperian’s native VM. CMake installs the library under `lib/` and its public header under `include/hyperian/`.
 
 ## Web example
 
@@ -723,6 +736,6 @@ Quoted text may contain spaces. `#` starts a comment. Indentation is optional bu
 
 ## Project status
 
-Version 0.24 is a small but real MVC platform: custom bytecode, a native VM, standalone executable and asset-bundle creation, versioned Android/iOS mobile deployment packages, native backend diagnostics, eight compiler targets including installable offline web applications, an English source-line debugger, persistent model CRUD and collection queries inside native controller actions, repeated native collection views, recurring service and native-interface timers, interactive multi-view GTK desktop and phone-sized mobile preview interfaces with close events, SDL2 keyboard/frame events, frame timing, BMP sprites, WAV sound, and state-driven rendering, native lists and maps, selectable HDB or transactional SQLite storage, recoverable runtime errors, an HTTP/HTTPS client, local packages, reusable actions, native file access, foldered project generation, versioned migrations, persistent CRUD models, safe HTML and typed JSON, authentication and authorization, middleware, formatting, and English tests.
+Version 0.25 is a small but real MVC platform: custom bytecode, a native VM, standalone executable and asset-bundle creation, versioned Android/iOS mobile deployment packages, a linkable native mobile runtime bridge, native backend diagnostics, eight compiler targets including installable offline web applications, an English source-line debugger, persistent model CRUD and collection queries inside native controller actions, repeated native collection views, recurring service and native-interface timers, interactive multi-view GTK desktop and phone-sized mobile preview interfaces with close events, SDL2 keyboard/frame events, frame timing, BMP sprites, WAV sound, and state-driven rendering, native lists and maps, selectable HDB or transactional SQLite storage, recoverable runtime errors, an HTTP/HTTPS client, local packages, reusable actions, native file access, foldered project generation, versioned migrations, persistent CRUD models, safe HTML and typed JSON, authentication and authorization, middleware, formatting, and English tests.
 
-The next major layers are native Android/iOS runtime adapters and signed builds, richer desktop and mobile events, game animation and physics helpers, more media formats, and automated cross-compilation. Those are not claimed as complete yet.
+The next major layers are Android/iOS user-interface adapters and signed builds, richer desktop and mobile events, game animation and physics helpers, more media formats, and automated cross-compilation. Those are not claimed as complete yet.

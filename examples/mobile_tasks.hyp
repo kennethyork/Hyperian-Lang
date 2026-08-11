@@ -8,9 +8,12 @@ controller Tasks
     action initialize
         set status to "Ready on mobile"
         set heartbeat to 0
+        collect every Task title as task_titles
     end
 
     action "add task"
+        create a Task using the current values as task_id
+        collect every Task title as task_titles
         set status to "Added: " plus title
     end
 
@@ -39,6 +42,9 @@ view "home"
     button "Add task" runs action "add task"
     button "Completed tasks" runs action "show completed"
     show status
+    for each task_title in task_titles show
+        show task_title
+    end
 end
 
 

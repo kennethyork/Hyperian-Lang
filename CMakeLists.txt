@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(Hyperian VERSION 0.24.0 LANGUAGES C)
+project(Hyperian VERSION 0.25.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -10,6 +10,7 @@ add_executable(hyperian
     src/compiler.c
     src/bytecode.c
     src/runtime.c
+    src/mobile.c
     src/desktop.c
     src/game.c
     src/network.c
@@ -43,6 +44,30 @@ if(SDL2_FOUND)
 endif()
 
 install(TARGETS hyperian RUNTIME DESTINATION bin)
+
+add_library(hyperian_mobile_runtime STATIC
+    src/mobile.c src/runtime.c src/bytecode.c src/network.c src/security.c src/desktop.c src/game.c)
+set_target_properties(hyperian_mobile_runtime PROPERTIES OUTPUT_NAME hyperian_mobile POSITION_INDEPENDENT_CODE ON)
+target_include_directories(hyperian_mobile_runtime PUBLIC src)
+target_compile_options(hyperian_mobile_runtime PRIVATE -Wall -Wextra -Wpedantic)
+if(SQLITE3_FOUND)
+    target_compile_definitions(hyperian_mobile_runtime PRIVATE HYPERIAN_HAVE_SQLITE3=1)
+    target_link_libraries(hyperian_mobile_runtime PRIVATE PkgConfig::SQLITE3)
+endif()
+if(CURL_FOUND)
+    target_compile_definitions(hyperian_mobile_runtime PRIVATE HYPERIAN_HAVE_CURL=1)
+    target_link_libraries(hyperian_mobile_runtime PRIVATE PkgConfig::CURL)
+endif()
+if(GTK3_FOUND)
+    target_compile_definitions(hyperian_mobile_runtime PRIVATE HYPERIAN_HAVE_GTK3=1)
+    target_link_libraries(hyperian_mobile_runtime PRIVATE PkgConfig::GTK3)
+endif()
+if(SDL2_FOUND)
+    target_compile_definitions(hyperian_mobile_runtime PRIVATE HYPERIAN_HAVE_SDL2=1)
+    target_link_libraries(hyperian_mobile_runtime PRIVATE PkgConfig::SDL2)
+endif()
+install(TARGETS hyperian_mobile_runtime ARCHIVE DESTINATION lib)
+install(FILES src/hyperian.h DESTINATION include/hyperian)
 
 enable_testing()
 add_test(NAME compiler_help COMMAND hyperian help)
@@ -154,6 +179,15 @@ add_test(NAME compile_native_desktop
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/desktop_notes.hyp -o ${CMAKE_BINARY_DIR}/desktop_notes.hyc)
 add_test(NAME compile_mobile_preview
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/mobile_tasks.hyp -o ${CMAKE_BINARY_DIR}/mobile_tasks.hyc)
+add_executable(hyperian_mobile_bridge_test tests/mobile_bridge_test.c)
+target_include_directories(hyperian_mobile_bridge_test PRIVATE src)
+target_compile_options(hyperian_mobile_bridge_test PRIVATE -Wall -Wextra -Wpedantic)
+target_link_libraries(hyperian_mobile_bridge_test PRIVATE hyperian_mobile_runtime)
+add_test(NAME clean_mobile_bridge_data COMMAND ${CMAKE_COMMAND} -E remove ${CMAKE_BINARY_DIR}/mobile_bridge.hdb)
+add_test(NAME run_mobile_bridge
+    COMMAND ${CMAKE_COMMAND} -E env HYPERIAN_DATA=${CMAKE_BINARY_DIR}/mobile_bridge.hdb
+        $<TARGET_FILE:hyperian_mobile_bridge_test> ${CMAKE_BINARY_DIR}/mobile_tasks.hyc)
+set_tests_properties(run_mobile_bridge PROPERTIES DEPENDS "compile_mobile_preview;clean_mobile_bridge_data")
 add_test(NAME clean_android_export COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}/AndroidExport)
 add_test(NAME build_android_export
     COMMAND hyperian export ${CMAKE_SOURCE_DIR}/examples/mobile_tasks.hyp for android to ${CMAKE_BINARY_DIR}/AndroidExport)
