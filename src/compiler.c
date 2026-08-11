@@ -521,6 +521,8 @@ int compile_file(const char *source_path, const char *output_path) {
                 char *args[2] = {w[2], w[4]}; okay = emit(&code, OP_READ_FILE, 2, args, number);
             } else if (n == 5 && !strcmp(w[0], "write") && !strcmp(w[2], "to") && !strcmp(w[3], "file")) {
                 char *args[2] = {w[1], w[4]}; okay = emit(&code, OP_WRITE_FILE, 2, args, number);
+            } else if (n == 3 && !strcmp(w[0], "play") && !strcmp(w[1], "sound")) {
+                okay = emit(&code, OP_PLAY_SOUND, 1, &w[2], number);
             } else if (n == 3 && !strcmp(w[0], "make") && !strcmp(w[1], "list") && is_name(w[2])) {
                 okay = emit(&code, OP_MAKE_LIST, 1, &w[2], number);
             } else if (n == 4 && !strcmp(w[0], "add") && !strcmp(w[2], "to") && is_name(w[3])) {
@@ -584,6 +586,10 @@ int compile_file(const char *source_path, const char *output_path) {
             else if (n == 14 && !strcmp(w[0], "draw") && !strcmp(w[1], "rectangle") && !strcmp(w[2], "at") &&
                 !strcmp(w[5], "sized") && !strcmp(w[7], "by") && !strcmp(w[9], "with") && !strcmp(w[10], "color")) {
                 char *args[7] = {w[3], w[4], w[6], w[8], w[11], w[12], w[13]}; okay = emit(&code, OP_RECTANGLE, 7, args, number);
+            }
+            else if (n == 10 && !strcmp(w[0], "draw") && !strcmp(w[1], "image") && !strcmp(w[3], "at") &&
+                !strcmp(w[6], "sized") && !strcmp(w[8], "by")) {
+                char *args[5] = {w[2], w[4], w[5], w[7], w[9]}; okay = emit(&code, OP_SPRITE, 5, args, number);
             }
             else if (n == 3 && !strcmp(w[0], "use") && !strcmp(w[1], "layout") && current == BLOCK_VIEW)
                 okay = emit(&code, OP_USE_LAYOUT, 1, &w[2], number);

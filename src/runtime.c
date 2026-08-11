@@ -343,8 +343,11 @@ static int is_logic_instruction(uint8_t opcode) {
         opcode == OP_RETURN_VALUE || opcode == OP_READ_FILE || opcode == OP_WRITE_FILE || opcode == OP_TRY ||
         opcode == OP_MAKE_LIST || opcode == OP_LIST_ADD || opcode == OP_LIST_REMOVE || opcode == OP_LIST_COUNT ||
         opcode == OP_LIST_ITEM || opcode == OP_HTTP_GET || opcode == OP_MAKE_MAP || opcode == OP_MAP_PUT ||
-        opcode == OP_MAP_GET || opcode == OP_MAP_REMOVE || opcode == OP_MAP_COUNT;
+        opcode == OP_MAP_GET || opcode == OP_MAP_REMOVE || opcode == OP_MAP_COUNT || opcode == OP_PLAY_SOUND;
 }
+
+static HyperianSoundHandler sound_handler = NULL;
+void hyperian_set_sound_handler(HyperianSoundHandler handler) { sound_handler = handler; }
 
 static int execute_logic_range(const Bytecode *code, size_t from, size_t to, Scope *scope, int depth, char *error, size_t error_size);
 
@@ -372,6 +375,7 @@ static void debug_instruction(const Instruction *in, int depth) {
         case OP_MAP_GET: printf("read %s from map %s as %s", in->args[0], in->args[1], in->args[2]); break;
         case OP_MAP_REMOVE: printf("remove %s from map %s", in->args[0], in->args[1]); break;
         case OP_MAP_COUNT: printf("count map %s as %s", in->args[0], in->args[1]); break;
+        case OP_PLAY_SOUND: printf("play sound %s", in->args[0]); break;
         default: printf("execute %s", opcode_name(in->opcode)); break;
     }
     putchar('\n');
@@ -506,6 +510,10 @@ static int execute_logic_at(const Bytecode *code, size_t *position, Scope *scope
         const char *current = local_value(scope->locals, in->args[0]); int count = current ? map_count_values(current) : -1; char value[32];
         if (count < 0) { snprintf(error, error_size, "map %s does not exist or is damaged", in->args[0]); return 0; }
         snprintf(value, sizeof(value), "%d", count); local_set(scope->locals, in->args[1], value);
+    } else if (in->opcode == OP_PLAY_SOUND) {
+        char path[2048]; evaluate(scope, in->args[0], path, sizeof(path));
+        if (!sound_handler) { snprintf(error, error_size, "this application target cannot play sounds"); return 0; }
+        if (!sound_handler(path, error, error_size)) return 0;
     }
     if (debugger_active) debug_changes(&before, scope->locals, depth);
     return 1;

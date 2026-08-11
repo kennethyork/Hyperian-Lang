@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#define HYPERIAN_VERSION "0.16.0"
+#define HYPERIAN_VERSION "0.17.0"
 #define HYC_MAGIC "HYC1"
 #define HYC_MAX_ARGS 9
 #define HYPERIAN_STATE_MAX 64
@@ -34,7 +34,7 @@ typedef enum {
     OP_MAKE_LIST, OP_LIST_ADD, OP_LIST_REMOVE, OP_LIST_COUNT, OP_LIST_ITEM,
     OP_TRY, OP_CATCH, OP_END_TRY, OP_HTTP_GET,
     OP_MAKE_MAP, OP_MAP_PUT, OP_MAP_GET, OP_MAP_REMOVE, OP_MAP_COUNT, OP_STORAGE,
-    OP_BUTTON_ACTION
+    OP_BUTTON_ACTION, OP_SPRITE, OP_PLAY_SOUND
 } OpCode;
 
 typedef struct {
@@ -55,6 +55,8 @@ typedef struct {
     char values[HYPERIAN_STATE_MAX][HYPERIAN_VALUE_SIZE];
     int count;
 } HyperianState;
+
+typedef int (*HyperianSoundHandler)(const char *path, char *error, size_t error_size);
 
 void bytecode_init(Bytecode *code);
 void bytecode_free(Bytecode *code);
@@ -77,6 +79,7 @@ void hyperian_state_init(HyperianState *state);
 const char *hyperian_state_get(const HyperianState *state, const char *name);
 void hyperian_state_set(HyperianState *state, const char *name, const char *value);
 void hyperian_state_evaluate(HyperianState *state, const char *expression, char *output, size_t output_size);
+void hyperian_set_sound_handler(HyperianSoundHandler handler);
 int hyperian_execute_action(const Bytecode *code, const char *name, const char *input, HyperianState *state, char *error, size_t error_size);
 int hyperian_execute_event(const Bytecode *code, const char *event, HyperianState *state, char *error, size_t error_size);
 

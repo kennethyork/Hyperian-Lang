@@ -503,10 +503,11 @@ end
 view "playfield"
     fill background with color 18 24 38
     draw rectangle at player_x player_y sized 180 by 80 with color 70 170 255
+    draw image "assets/player.bmp" at player_x player_y sized 64 by 64
 end
 ```
 
-The SDL2 backend dispatches arrow, space, and enter keys through `when player presses ...`, runs `when game updates` every frame, and evaluates drawing positions, sizes, and colors from controller state. The `mobile` target uses the same controls and actions in a narrow touch-friendly preview window. See [examples/desktop_notes.hyp](examples/desktop_notes.hyp), [examples/mobile_tasks.hyp](examples/mobile_tasks.hyp), and [examples/blocks_game.hyp](examples/blocks_game.hyp). Audio, sprites, physics, richer timing, and deployable phone packaging remain upcoming layers.
+The SDL2 backend dispatches arrow, space, and enter keys through `when player presses ...`, runs `when game updates` every frame, and exposes elapsed time as `seconds_since_last_frame`. Views can draw state-positioned BMP images, and actions can say `play sound "assets/jump.wav"` for WAV audio. The `mobile` target uses the same controls and actions in a narrow touch-friendly preview window. See [examples/desktop_notes.hyp](examples/desktop_notes.hyp), [examples/mobile_tasks.hyp](examples/mobile_tasks.hyp), [examples/blocks_game.hyp](examples/blocks_game.hyp), and [examples/game_media.hyp](examples/game_media.hyp). Physics, more image/audio formats, animation helpers, and deployable phone packaging remain upcoming layers.
 
 ## Programs split across files
 
@@ -630,6 +631,6 @@ Quoted text may contain spaces. `#` starts a comment. Indentation is optional bu
 
 ## Project status
 
-Version 0.16 is a small but real MVC platform: custom bytecode, a native VM, standalone executable creation, seven compiler targets, an English source-line debugger, interactive GTK desktop and phone-sized mobile preview interfaces, SDL2 keyboard/frame events and state-driven rendering, native lists and maps, selectable HDB or transactional SQLite storage, recoverable runtime errors, an HTTP/HTTPS client, local packages, reusable actions, native file access, foldered project generation, versioned migrations, persistent CRUD models, safe HTML and typed JSON, authentication and authorization, middleware, formatting, and English tests.
+Version 0.17 is a small but real MVC platform: custom bytecode, a native VM, standalone executable creation, seven compiler targets, an English source-line debugger, interactive GTK desktop and phone-sized mobile preview interfaces, SDL2 keyboard/frame events, frame timing, BMP sprites, WAV sound, and state-driven rendering, native lists and maps, selectable HDB or transactional SQLite storage, recoverable runtime errors, an HTTP/HTTPS client, local packages, reusable actions, native file access, foldered project generation, versioned migrations, persistent CRUD models, safe HTML and typed JSON, authentication and authorization, middleware, formatting, and English tests.
 
-The next major layers are richer desktop and mobile events, Android/iOS export, game animation/audio/physics, and cross-platform release packaging. Those are not claimed as complete yet.
+The next major layers are richer desktop and mobile events, Android/iOS export, game animation and physics helpers, more media formats, and cross-platform release packaging. Those are not claimed as complete yet.

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(Hyperian VERSION 0.16.0 LANGUAGES C)
+project(Hyperian VERSION 0.17.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -116,12 +116,24 @@ add_test(NAME reject_missing_desktop_action
 set_tests_properties(reject_missing_desktop_action PROPERTIES WILL_FAIL TRUE)
 add_test(NAME compile_native_game
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/blocks_game.hyp -o ${CMAKE_BINARY_DIR}/blocks_game.hyc)
+add_test(NAME compile_game_media
+    COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/game_media.hyp -o ${CMAKE_BINARY_DIR}/game_media.hyc)
 if(SDL2_FOUND)
     add_test(NAME run_native_game_headless
         COMMAND ${CMAKE_COMMAND} -E env SDL_VIDEODRIVER=dummy HYPERIAN_VISUAL_TEST=1 HYPERIAN_GAME_TEST_KEY=right HYPERIAN_VISUAL_TEST_STATE=player_x
             $<TARGET_FILE:hyperian> run ${CMAKE_BINARY_DIR}/blocks_game.hyc)
     set_tests_properties(run_native_game_headless PROPERTIES DEPENDS compile_native_game)
     set_tests_properties(run_native_game_headless PROPERTIES PASS_REGULAR_EXPRESSION "player_x=120")
+    add_test(NAME run_game_timing_headless
+        COMMAND ${CMAKE_COMMAND} -E env SDL_VIDEODRIVER=dummy HYPERIAN_VISUAL_TEST=1 HYPERIAN_VISUAL_TEST_STATE=seconds_since_last_frame
+            $<TARGET_FILE:hyperian> run ${CMAKE_BINARY_DIR}/blocks_game.hyc)
+    set_tests_properties(run_game_timing_headless PROPERTIES DEPENDS compile_native_game PASS_REGULAR_EXPRESSION "seconds_since_last_frame=0\\.")
+    add_test(NAME create_game_media_assets COMMAND hyperian_game_media_fixture)
+    add_test(NAME run_game_media_headless
+        COMMAND ${CMAKE_COMMAND} -E env SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy HYPERIAN_VISUAL_TEST=1
+            HYPERIAN_GAME_TEST_KEY=space HYPERIAN_VISUAL_TEST_STATE=player_y
+            $<TARGET_FILE:hyperian> run ${CMAKE_BINARY_DIR}/game_media.hyc)
+    set_tests_properties(run_game_media_headless PROPERTIES DEPENDS "compile_game_media;create_game_media_assets" PASS_REGULAR_EXPRESSION "player_y=80")
 endif()
 add_test(NAME compile_data_migrations
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/migrating_tasks.hyp -o ${CMAKE_BINARY_DIR}/migrating_tasks.hyc)
@@ -131,6 +143,8 @@ set_tests_properties(inspect_data_migrations PROPERTIES DEPENDS compile_data_mig
 
 add_executable(hyperian_migration_fixture tests/migration_fixture.c)
 target_compile_options(hyperian_migration_fixture PRIVATE -Wall -Wextra -Wpedantic)
+add_executable(hyperian_game_media_fixture tests/game_media_fixture.c)
+target_compile_options(hyperian_game_media_fixture PRIVATE -Wall -Wextra -Wpedantic)
 add_test(NAME create_legacy_data
     COMMAND hyperian_migration_fixture create ${CMAKE_BINARY_DIR}/legacy-migration.hdb)
 add_test(NAME migrate_legacy_data

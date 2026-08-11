@@ -1,0 +1,35 @@
+application "Media Game" is game
+
+model Player
+    field name is text
+end
+
+controller Game
+    action initialize
+        set player_x to 100
+        set player_y to 100
+    end
+
+    action jump
+        play sound "assets/jump.wav"
+        set player_y to player_y minus 20
+    end
+
+    when application starts
+        run action initialize
+        show view "world"
+    end
+
+    when player presses space
+        run action jump
+    end
+
+    when game updates
+        set last_frame_time to seconds_since_last_frame
+    end
+end
+
+view "world"
+    fill background with color 18 24 38
+    draw image "assets/player.bmp" at player_x player_y sized 64 by 64
+end
