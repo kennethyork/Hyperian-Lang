@@ -187,6 +187,17 @@ int hyperian_mobile_render_json(HyperianMobile *mobile, char *output, size_t out
     for (size_t i = 0; i < mobile->code.count; i++) if (mobile->code.items[i].opcode == OP_VIEW && !strcmp(mobile->code.items[i].args[0], mobile->view)) {
         found = 1; render_controls(mobile, &json, i + 1, matching_end(&mobile->code, i, OP_VIEW, OP_END_VIEW)); break;
     }
+    json_raw(&json, "],\"timers\":["); int first_timer = 1;
+    for (size_t i = 0; i < mobile->code.count; i++) if (mobile->code.items[i].opcode == OP_EVENT && !strncmp(mobile->code.items[i].args[0], "TIMER:", 6)) {
+        int duplicate = 0;
+        for (size_t before = 0; before < i; before++) if (mobile->code.items[before].opcode == OP_EVENT &&
+            !strcmp(mobile->code.items[before].args[0], mobile->code.items[i].args[0])) duplicate = 1;
+        if (!duplicate) {
+            if (!first_timer) json_raw(&json, ",");
+            first_timer = 0;
+            json_raw(&json, mobile->code.items[i].args[0] + 6);
+        }
+    }
     json_raw(&json, "]}");
     if (!found) { snprintf(error, error_size, "view %s does not exist", mobile->view); return 0; }
     if (!json.okay) { if (output_size) output[0] = 0; snprintf(error, error_size, "the rendered mobile interface needs a larger output buffer"); return 0; }

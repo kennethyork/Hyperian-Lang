@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(Hyperian VERSION 0.25.0 LANGUAGES C)
+project(Hyperian VERSION 0.26.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -18,6 +18,7 @@ add_executable(hyperian
 )
 target_include_directories(hyperian PRIVATE src)
 target_compile_options(hyperian PRIVATE -Wall -Wextra -Wpedantic)
+target_compile_definitions(hyperian PRIVATE HYPERIAN_SOURCE_ROOT="${CMAKE_SOURCE_DIR}")
 
 find_package(PkgConfig QUIET)
 if(PkgConfig_FOUND)
@@ -68,6 +69,9 @@ if(SDL2_FOUND)
 endif()
 install(TARGETS hyperian_mobile_runtime ARCHIVE DESTINATION lib)
 install(FILES src/hyperian.h DESTINATION include/hyperian)
+install(DIRECTORY platform/android DESTINATION share/hyperian/platform)
+install(FILES src/mobile.c src/runtime.c src/bytecode.c src/network.c src/security.c src/security.h src/desktop.c src/game.c src/hyperian.h
+    DESTINATION share/hyperian/runtime)
 
 enable_testing()
 add_test(NAME compiler_help COMMAND hyperian help)

@@ -21,7 +21,8 @@ int main(int argc, char **argv) {
         hyperian_mobile_run_action(mobile, "add task", NULL, error, sizeof(error)) &&
         hyperian_mobile_value(mobile, "status") && !strcmp(hyperian_mobile_value(mobile, "status"), "Added:Coffee \"and\" tea") &&
         hyperian_mobile_render_json(mobile, json, sizeof(json), error, sizeof(error)) &&
-        contains(json, "Coffee \\\"and\\\" tea") && hyperian_mobile_run_action(mobile, "show completed", NULL, error, sizeof(error)) &&
+        contains(json, "Coffee \\\"and\\\" tea") && contains(json, "\"timers\":[1000]") &&
+        hyperian_mobile_run_action(mobile, "show completed", NULL, error, sizeof(error)) &&
         hyperian_mobile_render_json(mobile, json, sizeof(json), error, sizeof(error)) && contains(json, "\"view\":\"completed\"") &&
         hyperian_mobile_send_event(mobile, "TIMER:1000", error, sizeof(error)) &&
         hyperian_mobile_value(mobile, "heartbeat") && !strcmp(hyperian_mobile_value(mobile, "heartbeat"), "1");

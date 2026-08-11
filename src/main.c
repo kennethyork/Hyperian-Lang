@@ -181,7 +181,67 @@ static int bundle_application(const char *source, const char *output, const char
     printf("Bundled %s with its assets in %s.\n", source, output); return 0;
 }
 
-static int export_mobile_application(const char *source, const char *platform, const char *output) {
+static int resource_folders(const char *self_path, char *android, size_t android_size, char *runtime, size_t runtime_size) {
+    char executable[PATH_MAX];
+    struct stat installed;
+    if (realpath(self_path, executable)) {
+        char *slash = strrchr(executable, '/'); if (slash) { *slash = 0; slash = strrchr(executable, '/'); }
+        if (slash) {
+            *slash = 0; snprintf(android, android_size, "%s/share/hyperian/platform/android", executable);
+            snprintf(runtime, runtime_size, "%s/share/hyperian/runtime", executable);
+            if (!stat(android, &installed) && S_ISDIR(installed.st_mode) && !stat(runtime, &installed) && S_ISDIR(installed.st_mode)) return 1;
+        }
+    }
+#ifdef HYPERIAN_SOURCE_ROOT
+    snprintf(android, android_size, "%s/platform/android", HYPERIAN_SOURCE_ROOT);
+    snprintf(runtime, runtime_size, "%s/src", HYPERIAN_SOURCE_ROOT);
+    if (!stat(android, &installed) && S_ISDIR(installed.st_mode) && !stat(runtime, &installed) && S_ISDIR(installed.st_mode)) return 1;
+#endif
+    return 0;
+}
+
+static void xml_text(const char *input, char *output, size_t output_size) {
+    size_t used = 0;
+    for (; *input && used + 1 < output_size; input++) {
+        const char *escaped = *input == '&' ? "&amp;" : *input == '<' ? "&lt;" : *input == '>' ? "&gt;" :
+            *input == '"' ? "&quot;" : *input == '\'' ? "&apos;" : NULL;
+        if (escaped) {
+            size_t length = strlen(escaped); if (length >= output_size - used) break;
+            memcpy(output + used, escaped, length); used += length;
+        } else output[used++] = *input;
+    }
+    output[used] = 0;
+}
+
+static int add_android_project(const char *output, const char *name, const char *self_path) {
+    char template[PATH_MAX], runtime[PATH_MAX], destination[PATH_MAX], from[PATH_MAX], to[PATH_MAX];
+    if (!resource_folders(self_path, template, sizeof(template), runtime, sizeof(runtime))) {
+        fprintf(stderr, "error: cannot find Hyperian's installed Android adapter resources\n"); return 0;
+    }
+    if (snprintf(destination, sizeof(destination), "%s/android", output) >= (int)sizeof(destination) ||
+        !copy_bundle_tree(template, destination)) return 0;
+    const char *sources[] = {"mobile.c", "runtime.c", "bytecode.c", "network.c", "security.c", "security.h", "desktop.c", "game.c", "hyperian.h"};
+    for (size_t i = 0; i < sizeof(sources) / sizeof(sources[0]); i++) {
+        if (snprintf(from, sizeof(from), "%s/%s", runtime, sources[i]) >= (int)sizeof(from) ||
+            snprintf(to, sizeof(to), "%s/android/app/src/main/cpp/hyperian/%s", output, sources[i]) >= (int)sizeof(to) ||
+            !copy_bundle_file(from, to, 0644)) return 0;
+    }
+    if (snprintf(from, sizeof(from), "%s/application.hyc", output) >= (int)sizeof(from) ||
+        snprintf(to, sizeof(to), "%s/android/app/src/main/assets/application.hyc", output) >= (int)sizeof(to) ||
+        !copy_bundle_file(from, to, 0644)) return 0;
+    const char *asset_folders[] = {"assets", "public"};
+    for (size_t i = 0; i < sizeof(asset_folders) / sizeof(asset_folders[0]); i++) {
+        if (snprintf(from, sizeof(from), "%s/%s", output, asset_folders[i]) >= (int)sizeof(from) ||
+            snprintf(to, sizeof(to), "%s/android/app/src/main/assets/%s", output, asset_folders[i]) >= (int)sizeof(to) ||
+            !copy_bundle_tree(from, to)) return 0;
+    }
+    char safe_name[512], strings[768]; xml_text(name, safe_name, sizeof(safe_name));
+    snprintf(strings, sizeof(strings), "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<resources><string name=\"app_name\">%s</string></resources>\n", safe_name);
+    if (snprintf(to, sizeof(to), "%s/android/app/src/main/res/values/strings.xml", output) >= (int)sizeof(to)) return 0;
+    unlink(to); return write_project_file(to, strings);
+}
+
+static int export_mobile_application(const char *source, const char *platform, const char *output, const char *self_path) {
     if (strcmp(platform, "android") && strcmp(platform, "ios")) {
         fprintf(stderr, "error: export for android or ios\n"); return 2;
     }
@@ -219,6 +279,7 @@ static int export_mobile_application(const char *source, const char *platform, c
         okay = snprintf(from, sizeof(from), "%s/%s", project, folders[i]) < (int)sizeof(from) &&
             snprintf(to, sizeof(to), "%s/%s", output, folders[i]) < (int)sizeof(to) && copy_bundle_tree(from, to);
     }
+    if (okay && !strcmp(platform, "android")) okay = add_android_project(output, name, self_path);
     char contents[1024];
     if (okay) {
         snprintf(contents, sizeof(contents),
@@ -228,8 +289,10 @@ static int export_mobile_application(const char *source, const char *platform, c
     }
     if (okay) {
         snprintf(contents, sizeof(contents),
-            "# %s\n\nThis is a Hyperian mobile deployment package for %s. It contains compiled MVC bytecode and application assets for Hyperian's native mobile runtime library.\n\nEnglish-like Hyperian source remains the application authority. This package is not yet a signed store-ready application; Android and iOS user-interface adapters are the next deployment layer.\n",
-            name, !strcmp(platform, "ios") ? "iOS" : "Android");
+            "# %s\n\nThis is a Hyperian mobile deployment package for %s. It contains compiled MVC bytecode and application assets for Hyperian's native mobile runtime library.\n\nEnglish-like Hyperian source remains the application authority. %s\n",
+            name, !strcmp(platform, "ios") ? "iOS" : "Android", !strcmp(platform, "android") ?
+            "A self-contained native Android Studio project is in the android folder. Build and sign it with your Android SDK, NDK, and signing key." :
+            "This package is not yet a signed store-ready application; the iOS user-interface adapter is the next deployment layer.");
         okay = write_project_file(readme, contents);
     }
     bytecode_free(&code);
@@ -264,7 +327,8 @@ static int doctor(void) {
     puts("  standalone executables and asset bundles: ready\n"
          "  Android and iOS bytecode deployment packages: ready\n"
          "  native mobile runtime bridge library: ready\n"
-         "  signed Android and iOS applications: not implemented yet");
+         "  generated native Android Studio projects: ready\n"
+         "  iOS interface projects and signed store applications: not implemented yet");
     return 0;
 }
 
@@ -416,7 +480,7 @@ int main(int argc, char **argv) {
         if (argc != 7 || strcmp(argv[3], "for") || strcmp(argv[5], "to")) {
             fprintf(stderr, "usage: hyperian export app.hyp for android to App\n"); return 2;
         }
-        return export_mobile_application(argv[2], argv[4], argv[6]);
+        return export_mobile_application(argv[2], argv[4], argv[6], argv[0]);
     }
     if (!strcmp(argv[1], "check")) {
         if (argc != 3) { fprintf(stderr, "usage: hyperian check app.hyp\n"); return 2; }
