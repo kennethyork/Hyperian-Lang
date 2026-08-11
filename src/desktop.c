@@ -14,10 +14,13 @@ typedef struct DesktopContext DesktopContext;
 typedef struct { DesktopContext *context; const char *action; } DesktopButton;
 struct DesktopContext {
     const Bytecode *code; HyperianState state;
+    GtkWidget *box;
     DesktopInput inputs[HYPERIAN_STATE_MAX]; int input_count;
     DesktopOutput outputs[HYPERIAN_STATE_MAX]; int output_count;
     DesktopButton buttons[HYPERIAN_STATE_MAX]; int button_count;
 };
+
+static int show_interface_view(DesktopContext *context, const char *name);
 
 static size_t desktop_end(const Bytecode *code, size_t start, uint8_t close) {
     for (size_t i = start + 1; i < code->count; i++) if (code->items[i].opcode == close) return i;
@@ -56,7 +59,11 @@ static void action_clicked(GtkButton *button, gpointer data) {
     (void)button; DesktopButton *binding = data; char error[256] = {0}; sync_inputs(binding->context);
     if (!hyperian_execute_action(binding->context->code, binding->action, NULL, &binding->context->state, error, sizeof(error)))
         hyperian_state_set(&binding->context->state, "error", error);
-    refresh_outputs(binding->context);
+    const char *next = hyperian_state_get(&binding->context->state, "__hyperian_open_view");
+    if (next && *next) {
+        char name[256]; snprintf(name, sizeof(name), "%s", next); hyperian_state_set(&binding->context->state, "__hyperian_open_view", "");
+        if (!show_interface_view(binding->context, name)) hyperian_state_set(&binding->context->state, "error", "the requested view could not be opened");
+    } else refresh_outputs(binding->context);
 }
 
 static void remember_input(DesktopContext *context, const char *name, GtkWidget *widget, DesktopInputKind kind) {
@@ -92,22 +99,39 @@ static void add_desktop_widgets(DesktopContext *context, GtkWidget *box, size_t 
     }
 }
 
+static int show_interface_view(DesktopContext *context, const char *name) {
+    GList *children = gtk_container_get_children(GTK_CONTAINER(context->box));
+    for (GList *at = children; at; at = at->next) gtk_widget_destroy(GTK_WIDGET(at->data));
+    g_list_free(children); context->input_count = context->output_count = context->button_count = 0;
+    for (size_t i = 0; i < context->code->count; i++) if (context->code->items[i].opcode == OP_VIEW && !strcmp(context->code->items[i].args[0], name)) {
+        add_desktop_widgets(context, context->box, i + 1, desktop_end(context->code, i, OP_END_VIEW));
+        hyperian_state_set(&context->state, "current_view", name); refresh_outputs(context); gtk_widget_show_all(context->box); return 1;
+    }
+    return 0;
+}
+
+static gboolean window_closing(GtkWidget *window, GdkEvent *event, gpointer data) {
+    (void)window; (void)event; DesktopContext *context = data; char error[256] = {0}; sync_inputs(context);
+    if (!hyperian_execute_event(context->code, "CLOSE", &context->state, error, sizeof(error))) fprintf(stderr, "error while closing: %s\n", error);
+    gtk_main_quit(); return FALSE;
+}
+
 static int run_interface_app(const Bytecode *code, const char *name, int mobile) {
     if (!gtk_init_check(NULL, NULL)) { fprintf(stderr, "error: cannot open a desktop display\n"); return 1; }
     const char *view_name = starting_view(code); if (!view_name) { fprintf(stderr, "error: desktop application needs a starting view\n"); return 1; }
     DesktopContext context = {.code = code}; hyperian_state_init(&context.state); char error[256] = {0};
     if (!hyperian_execute_event(code, "START", &context.state, error, sizeof(error))) { fprintf(stderr, "error: %s\n", error); return 1; }
-    GtkWidget *window = gtk_window_new(GTK_WINDOW_TOPLEVEL), *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
+    GtkWidget *window = gtk_window_new(GTK_WINDOW_TOPLEVEL), *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8); context.box = box;
     char title[256]; snprintf(title, sizeof(title), "%s%s", name, mobile ? " — mobile preview" : "");
     gtk_window_set_title(GTK_WINDOW(window), title); gtk_window_set_default_size(GTK_WINDOW(window), mobile ? 390 : 800, mobile ? 780 : 600);
     gtk_container_set_border_width(GTK_CONTAINER(window), mobile ? 16 : 20); gtk_box_set_spacing(GTK_BOX(box), mobile ? 12 : 8); gtk_container_add(GTK_CONTAINER(window), box);
-    g_signal_connect(window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
-    for (size_t i = 0; i < code->count; i++) if (code->items[i].opcode == OP_VIEW && !strcmp(code->items[i].args[0], view_name)) {
-        add_desktop_widgets(&context, box, i + 1, desktop_end(code, i, OP_END_VIEW)); break;
-    }
-    refresh_outputs(&context); gtk_widget_show_all(window);
+    g_signal_connect(window, "delete-event", G_CALLBACK(window_closing), &context);
+    if (!show_interface_view(&context, view_name)) { fprintf(stderr, "error: starting view does not exist\n"); gtk_widget_destroy(window); return 1; }
+    gtk_widget_show_all(window);
     if (getenv("HYPERIAN_VISUAL_TEST")) {
-        if (context.button_count) action_clicked(NULL, &context.buttons[0]);
+        const char *wanted_action = getenv("HYPERIAN_VISUAL_TEST_ACTION"); DesktopButton *chosen = context.button_count ? &context.buttons[0] : NULL;
+        for (int i = 0; wanted_action && i < context.button_count; i++) if (!strcmp(context.buttons[i].action, wanted_action)) chosen = &context.buttons[i];
+        if (chosen) action_clicked(NULL, chosen);
         const char *test_name = getenv("HYPERIAN_VISUAL_TEST_STATE");
         if (test_name) printf("%s=%s\n", test_name, hyperian_state_get(&context.state, test_name) ? hyperian_state_get(&context.state, test_name) : "");
         gtk_main_iteration_do(FALSE);

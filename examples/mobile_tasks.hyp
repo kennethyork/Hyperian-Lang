@@ -13,6 +13,14 @@ controller Tasks
         set status to "Added: " plus title
     end
 
+    action "show completed"
+        open view "completed"
+    end
+
+    action "show home"
+        open view "home"
+    end
+
     when application starts
         run action initialize
         show view "home"
@@ -24,5 +32,13 @@ view "home"
     text "The same English MVC code drives this phone-sized preview."
     input "Task title" as title
     button "Add task" runs action "add task"
+    button "Completed tasks" runs action "show completed"
     show status
+end
+
+
+view "completed"
+    heading "Completed tasks"
+    text "This is a second native mobile view."
+    button "Back" runs action "show home"
 end

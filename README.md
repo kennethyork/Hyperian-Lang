@@ -481,6 +481,20 @@ end
 
 GTK inputs synchronize into controller state before the action runs. Afterwards, `show` labels refresh from the updated state. Actions may use the same calculations, lists, maps, files, HTTP requests, and recoverable errors as every other target.
 
+Desktop and mobile actions can navigate between native MVC views in English:
+
+```hyperian
+action "show settings"
+    open view "settings"
+end
+
+when window closes
+    write settings to file "settings.txt"
+end
+```
+
+Opening a view rebuilds the native controls while keeping controller state. The close event can run ordinary action logic for cleanup or saving.
+
 Game views are rendered in a native SDL2 window and event loop:
 
 ```hyperian
@@ -631,6 +645,6 @@ Quoted text may contain spaces. `#` starts a comment. Indentation is optional bu
 
 ## Project status
 
-Version 0.17 is a small but real MVC platform: custom bytecode, a native VM, standalone executable creation, seven compiler targets, an English source-line debugger, interactive GTK desktop and phone-sized mobile preview interfaces, SDL2 keyboard/frame events, frame timing, BMP sprites, WAV sound, and state-driven rendering, native lists and maps, selectable HDB or transactional SQLite storage, recoverable runtime errors, an HTTP/HTTPS client, local packages, reusable actions, native file access, foldered project generation, versioned migrations, persistent CRUD models, safe HTML and typed JSON, authentication and authorization, middleware, formatting, and English tests.
+Version 0.18 is a small but real MVC platform: custom bytecode, a native VM, standalone executable creation, seven compiler targets, an English source-line debugger, interactive multi-view GTK desktop and phone-sized mobile preview interfaces with close events, SDL2 keyboard/frame events, frame timing, BMP sprites, WAV sound, and state-driven rendering, native lists and maps, selectable HDB or transactional SQLite storage, recoverable runtime errors, an HTTP/HTTPS client, local packages, reusable actions, native file access, foldered project generation, versioned migrations, persistent CRUD models, safe HTML and typed JSON, authentication and authorization, middleware, formatting, and English tests.
 
 The next major layers are richer desktop and mobile events, Android/iOS export, game animation and physics helpers, more media formats, and cross-platform release packaging. Those are not claimed as complete yet.

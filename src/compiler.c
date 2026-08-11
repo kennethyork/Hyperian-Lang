@@ -229,6 +229,9 @@ static int validate(Bytecode *code, const char *path) {
             char message[256]; snprintf(message, sizeof(message), "there is no view named %s", in->args[0]);
             source_error(path, in->line, message); return 0;
         }
+        if (in->opcode == OP_OPEN_VIEW && !known_name(code, OP_VIEW, in->args[0])) {
+            source_error(path, in->line, "the view to open does not exist"); return 0;
+        }
         if (in->opcode == OP_ROUTE) {
             for (size_t other = 0; other < i; other++) if (code->items[other].opcode == OP_ROUTE &&
                 !strcmp(code->items[other].args[0], in->args[0]) && !strcmp(code->items[other].args[1], in->args[1])) {
@@ -453,6 +456,9 @@ int compile_file(const char *source_path, const char *output_path) {
             if (n == 3 && !strcmp(w[0], "when") && !strcmp(w[1], "game") && !strcmp(w[2], "updates")) {
                 char *event = "FRAME"; okay = emit(&code, OP_EVENT, 1, &event, number); stack[depth++] = BLOCK_ROUTE; continue;
             }
+            if (n == 3 && !strcmp(w[0], "when") && !strcmp(w[1], "window") && !strcmp(w[2], "closes")) {
+                char *event = "CLOSE"; okay = emit(&code, OP_EVENT, 1, &event, number); stack[depth++] = BLOCK_ROUTE; continue;
+            }
             if (n == 4 && !strcmp(w[0], "when") && !strcmp(w[1], "someone")) {
                 if (!strcmp(w[2], "visits")) method = "GET";
                 else if (!strcmp(w[2], "submits")) method = "POST";
@@ -523,6 +529,8 @@ int compile_file(const char *source_path, const char *output_path) {
                 char *args[2] = {w[1], w[4]}; okay = emit(&code, OP_WRITE_FILE, 2, args, number);
             } else if (n == 3 && !strcmp(w[0], "play") && !strcmp(w[1], "sound")) {
                 okay = emit(&code, OP_PLAY_SOUND, 1, &w[2], number);
+            } else if (n == 3 && !strcmp(w[0], "open") && !strcmp(w[1], "view")) {
+                okay = emit(&code, OP_OPEN_VIEW, 1, &w[2], number);
             } else if (n == 3 && !strcmp(w[0], "make") && !strcmp(w[1], "list") && is_name(w[2])) {
                 okay = emit(&code, OP_MAKE_LIST, 1, &w[2], number);
             } else if (n == 4 && !strcmp(w[0], "add") && !strcmp(w[2], "to") && is_name(w[3])) {

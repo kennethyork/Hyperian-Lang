@@ -343,7 +343,7 @@ static int is_logic_instruction(uint8_t opcode) {
         opcode == OP_RETURN_VALUE || opcode == OP_READ_FILE || opcode == OP_WRITE_FILE || opcode == OP_TRY ||
         opcode == OP_MAKE_LIST || opcode == OP_LIST_ADD || opcode == OP_LIST_REMOVE || opcode == OP_LIST_COUNT ||
         opcode == OP_LIST_ITEM || opcode == OP_HTTP_GET || opcode == OP_MAKE_MAP || opcode == OP_MAP_PUT ||
-        opcode == OP_MAP_GET || opcode == OP_MAP_REMOVE || opcode == OP_MAP_COUNT || opcode == OP_PLAY_SOUND;
+        opcode == OP_MAP_GET || opcode == OP_MAP_REMOVE || opcode == OP_MAP_COUNT || opcode == OP_PLAY_SOUND || opcode == OP_OPEN_VIEW;
 }
 
 static HyperianSoundHandler sound_handler = NULL;
@@ -376,6 +376,7 @@ static void debug_instruction(const Instruction *in, int depth) {
         case OP_MAP_REMOVE: printf("remove %s from map %s", in->args[0], in->args[1]); break;
         case OP_MAP_COUNT: printf("count map %s as %s", in->args[0], in->args[1]); break;
         case OP_PLAY_SOUND: printf("play sound %s", in->args[0]); break;
+        case OP_OPEN_VIEW: printf("open view %s", in->args[0]); break;
         default: printf("execute %s", opcode_name(in->opcode)); break;
     }
     putchar('\n');
@@ -514,6 +515,8 @@ static int execute_logic_at(const Bytecode *code, size_t *position, Scope *scope
         char path[2048]; evaluate(scope, in->args[0], path, sizeof(path));
         if (!sound_handler) { snprintf(error, error_size, "this application target cannot play sounds"); return 0; }
         if (!sound_handler(path, error, error_size)) return 0;
+    } else if (in->opcode == OP_OPEN_VIEW) {
+        local_set(scope->locals, "__hyperian_open_view", in->args[0]);
     }
     if (debugger_active) debug_changes(&before, scope->locals, depth);
     return 1;

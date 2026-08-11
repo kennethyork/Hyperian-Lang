@@ -164,6 +164,7 @@ static int format_source(const char *path) {
             starts_with(start, "test ") ||
             starts_with(start, "when data changes from ") ||
             starts_with(start, "when someone ") || starts_with(start, "when player presses ") || !strcmp(start, "when game updates") ||
+            !strcmp(start, "when window closes") ||
             !strcmp(start, "when application starts") || starts_with(start, "form ") ||
             starts_with(start, "for each ") || starts_with(start, "if ") || starts_with(start, "repeat ") || !strcmp(start, "try") ||
             !strcmp(start, "otherwise") || starts_with(start, "when it fails as ");
