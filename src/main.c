@@ -181,6 +181,62 @@ static int bundle_application(const char *source, const char *output, const char
     printf("Bundled %s with its assets in %s.\n", source, output); return 0;
 }
 
+static int export_mobile_application(const char *source, const char *platform, const char *output) {
+    if (strcmp(platform, "android") && strcmp(platform, "ios")) {
+        fprintf(stderr, "error: export for android or ios\n"); return 2;
+    }
+    char temporary[128]; snprintf(temporary, sizeof(temporary), "/tmp/hyperian-mobile-%ld.hyc", (long)getpid());
+    int result = compile_file(source, temporary); if (result) return result;
+    Bytecode code; bytecode_init(&code); char error[256];
+    if (!bytecode_read(&code, temporary, error, sizeof(error))) {
+        unlink(temporary); fprintf(stderr, "error: %s\n", error); return 1;
+    }
+    const char *name = "Hyperian App", *target = "web";
+    for (size_t i = 0; i < code.count; i++) {
+        if (code.items[i].opcode == OP_APPLICATION) name = code.items[i].args[0];
+        if (code.items[i].opcode == OP_TARGET) target = code.items[i].args[0];
+    }
+    if (strcmp(target, "mobile")) {
+        bytecode_free(&code); unlink(temporary);
+        fprintf(stderr, "error: only an application declared as mobile can be exported for a phone\n"); return 1;
+    }
+    struct stat existing;
+    if (!stat(output, &existing)) {
+        bytecode_free(&code); unlink(temporary); fprintf(stderr, "error: mobile export %s already exists\n", output); return 1;
+    }
+    if (errno != ENOENT || mkdir(output, 0755)) {
+        bytecode_free(&code); unlink(temporary); fprintf(stderr, "error: cannot create mobile export %s: %s\n", output, strerror(errno)); return 1;
+    }
+    char bytecode_path[PATH_MAX], manifest[PATH_MAX], readme[PATH_MAX], project[PATH_MAX], from[PATH_MAX], to[PATH_MAX];
+    int okay = snprintf(bytecode_path, sizeof(bytecode_path), "%s/application.hyc", output) < (int)sizeof(bytecode_path) &&
+        snprintf(manifest, sizeof(manifest), "%s/hyperian.mobile", output) < (int)sizeof(manifest) &&
+        snprintf(readme, sizeof(readme), "%s/README.md", output) < (int)sizeof(readme) &&
+        copy_bundle_file(temporary, bytecode_path, 0644);
+    unlink(temporary);
+    source_directory(source, project, sizeof(project));
+    const char *folders[] = {"assets", "public"};
+    for (size_t i = 0; okay && i < sizeof(folders) / sizeof(folders[0]); i++) {
+        okay = snprintf(from, sizeof(from), "%s/%s", project, folders[i]) < (int)sizeof(from) &&
+            snprintf(to, sizeof(to), "%s/%s", output, folders[i]) < (int)sizeof(to) && copy_bundle_tree(from, to);
+    }
+    char contents[1024];
+    if (okay) {
+        snprintf(contents, sizeof(contents),
+            "Hyperian mobile deployment package\nformat: HYMB1\ntoolchain: %s\nruntime interface: 1\napplication: %s\ntarget: mobile\nplatform: %s\nbytecode: application.hyc\nassets: assets, public\n",
+            HYPERIAN_VERSION, name, platform);
+        okay = write_project_file(manifest, contents);
+    }
+    if (okay) {
+        snprintf(contents, sizeof(contents),
+            "# %s\n\nThis is a Hyperian mobile deployment package for %s. It contains compiled MVC bytecode and application assets for a native phone runtime adapter.\n\nEnglish-like Hyperian source remains the application authority. This package is not yet a signed store-ready application; Android and iOS runtime adapters are the next deployment layer.\n",
+            name, !strcmp(platform, "ios") ? "iOS" : "Android");
+        okay = write_project_file(readme, contents);
+    }
+    bytecode_free(&code);
+    if (!okay) { fprintf(stderr, "error: could not finish mobile export %s\n", output); return 1; }
+    printf("Exported %s for %s to %s.\n", source, !strcmp(platform, "ios") ? "iOS" : "Android", output); return 0;
+}
+
 static int doctor(void) {
     puts("Hyperian " HYPERIAN_VERSION " toolchain check\n"
          "  compiler and bytecode VM: ready\n"
@@ -206,7 +262,8 @@ static int doctor(void) {
     puts("  HTTP client: basic HTTP only; libcurl HTTPS is not included");
 #endif
     puts("  standalone executables and asset bundles: ready\n"
-         "  Android and iOS deployment: not implemented yet");
+         "  Android and iOS bytecode deployment packages: ready\n"
+         "  signed Android and iOS applications: not implemented yet");
     return 0;
 }
 
@@ -307,6 +364,8 @@ static void help(void) {
          "  hyperian compile app.hyp -o app.hyc   Compile source to bytecode\n"
          "  hyperian build app.hyp -o MyApp       Build one executable application\n"
          "  hyperian bundle app.hyp -o App        Bundle an executable and assets\n"
+         "  hyperian export app.hyp for android to App\n"
+         "                                          Export a phone deployment package\n"
          "  hyperian new MyApp [--target web]     Create a foldered MVC project\n"
          "  hyperian check app.hyp                Check source for mistakes\n"
          "  hyperian run app.hyp                  Compile and run an app\n"
@@ -351,6 +410,12 @@ int main(int argc, char **argv) {
     if (!strcmp(argv[1], "bundle")) {
         if (argc != 5 || strcmp(argv[3], "-o")) { fprintf(stderr, "usage: hyperian bundle app.hyp -o App\n"); return 2; }
         return bundle_application(argv[2], argv[4], argv[0]);
+    }
+    if (!strcmp(argv[1], "export")) {
+        if (argc != 7 || strcmp(argv[3], "for") || strcmp(argv[5], "to")) {
+            fprintf(stderr, "usage: hyperian export app.hyp for android to App\n"); return 2;
+        }
+        return export_mobile_application(argv[2], argv[4], argv[6]);
     }
     if (!strcmp(argv[1], "check")) {
         if (argc != 3) { fprintf(stderr, "usage: hyperian check app.hyp\n"); return 2; }

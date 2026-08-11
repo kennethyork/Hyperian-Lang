@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(Hyperian VERSION 0.23.0 LANGUAGES C)
+project(Hyperian VERSION 0.24.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -154,6 +154,23 @@ add_test(NAME compile_native_desktop
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/desktop_notes.hyp -o ${CMAKE_BINARY_DIR}/desktop_notes.hyc)
 add_test(NAME compile_mobile_preview
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/mobile_tasks.hyp -o ${CMAKE_BINARY_DIR}/mobile_tasks.hyc)
+add_test(NAME clean_android_export COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}/AndroidExport)
+add_test(NAME build_android_export
+    COMMAND hyperian export ${CMAKE_SOURCE_DIR}/examples/mobile_tasks.hyp for android to ${CMAKE_BINARY_DIR}/AndroidExport)
+set_tests_properties(build_android_export PROPERTIES DEPENDS clean_android_export)
+add_test(NAME verify_android_export
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/mobile_export_test.sh ${CMAKE_BINARY_DIR}/AndroidExport android)
+set_tests_properties(verify_android_export PROPERTIES DEPENDS build_android_export)
+add_test(NAME clean_ios_export COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}/IosExport)
+add_test(NAME build_ios_export
+    COMMAND hyperian export ${CMAKE_SOURCE_DIR}/examples/mobile_tasks.hyp for ios to ${CMAKE_BINARY_DIR}/IosExport)
+set_tests_properties(build_ios_export PROPERTIES DEPENDS clean_ios_export)
+add_test(NAME verify_ios_export
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/mobile_export_test.sh ${CMAKE_BINARY_DIR}/IosExport ios)
+set_tests_properties(verify_ios_export PROPERTIES DEPENDS build_ios_export)
+add_test(NAME reject_web_mobile_export
+    COMMAND hyperian export ${CMAKE_SOURCE_DIR}/examples/tasks.hyp for android to ${CMAKE_BINARY_DIR}/BadMobileExport)
+set_tests_properties(reject_web_mobile_export PROPERTIES WILL_FAIL TRUE)
 add_test(NAME debug_mobile_navigation
     COMMAND hyperian debug ${CMAKE_SOURCE_DIR}/examples/mobile_tasks.hyp --action "show completed")
 set_tests_properties(debug_mobile_navigation PROPERTIES PASS_REGULAR_EXPRESSION "__hyperian_open_view = completed")
