@@ -401,6 +401,17 @@ take item 2 from colors as second_color
 remove red from colors
 ```
 
+Maps keep values under readable keys:
+
+```hyperian
+make map settings
+put dark as theme in settings
+put 20 as page_size in settings
+take key theme from settings as selected_theme
+remove key page_size from settings
+count entries in settings as setting_count
+```
+
 Risky work can be recovered without stopping the application:
 
 ```hyperian
@@ -544,6 +555,14 @@ hyperian migrate app.hyp
 
 Every version must move forward one step. Hyperian refuses to open data created by a newer application version, writes migrations atomically, and automatically upgrades older `HDB1` files into versioned `HDB2` files.
 
+HDB remains the dependency-free default. Applications can select SQLite while keeping the same models, validation, CRUD routes, relationships, APIs, and English migrations:
+
+```hyperian
+store data in sqlite file "application.db"
+```
+
+SQLite writes use transactions, schema metadata tracks the data version, and `HYPERIAN_DATA` can override the declared path for tests or deployment. See [examples/sqlite_tasks.hyp](examples/sqlite_tasks.hyp).
+
 Static requests reject parent-directory traversal and are returned as binary-safe responses with appropriate CSS, JavaScript, SVG, PNG, JPEG, GIF, WebP, icon, HTML, JSON, and text content types.
 
 Views connect those assets and provide richer form controls in plain English:
@@ -571,6 +590,6 @@ Quoted text may contain spaces. `#` starts a comment. Indentation is optional bu
 
 ## Project status
 
-Version 0.12 is a small but real MVC platform: custom bytecode, a native VM, standalone executable creation, six executable targets, native lists, recoverable runtime errors, an HTTP/HTTPS client, local packages, GTK desktop widgets, SDL2 game rendering, reusable actions with inputs and results, native file access, foldered project generation, versioned migrations, persistent CRUD models, layouts/components, safe HTML and typed JSON, authentication and authorization, middleware, source formatting, and tests written in English.
+Version 0.13 is a small but real MVC platform: custom bytecode, a native VM, standalone executable creation, six executable targets, native lists and maps, selectable HDB or transactional SQLite storage, recoverable runtime errors, an HTTP/HTTPS client, local packages, GTK desktop widgets, SDL2 game rendering, reusable actions with inputs and results, native file access, foldered project generation, versioned migrations, persistent CRUD models, layouts/components, safe HTML and typed JSON, authentication and authorization, middleware, source formatting, and tests written in English.
 
-The next major layers are maps and richer collection operations, SQLite adapters, a debugger, richer desktop events, game input/animation/audio/physics, mobile backends, and cross-platform release packaging. Those are not claimed as complete yet.
+The next major layers are richer collection operations, a debugger, richer desktop events, game input/animation/audio/physics, mobile backends, and cross-platform release packaging. Those are not claimed as complete yet.

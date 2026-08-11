@@ -43,6 +43,22 @@ controller Core
         expect status_code to be 0
     end
 
+    test "maps store named values"
+        make map settings
+        put dark as theme in settings
+        put 20 as page_size in settings
+        take key theme from settings as selected_theme
+        count entries in settings as setting_count
+        expect selected_theme to be dark
+        expect setting_count to be 2
+        put light as theme in settings
+        take key theme from settings as changed_theme
+        expect changed_theme to be light
+        remove key page_size from settings
+        count entries in settings as remaining_settings
+        expect remaining_settings to be 1
+    end
+
     when application starts
         make list messages
         add "Lists are ready" to messages

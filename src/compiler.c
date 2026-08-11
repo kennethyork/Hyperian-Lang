@@ -107,6 +107,9 @@ static int validate(Bytecode *code, const char *path) {
         if (in->opcode == OP_MODEL) models++;
         if (in->opcode == OP_CONTROLLER) controllers++;
         if (in->opcode == OP_VIEW) views++;
+        if (in->opcode == OP_STORAGE && duplicate_name(code, OP_STORAGE, in->args[0])) {
+            source_error(path, in->line, "data storage can only be declared once"); return 0;
+        }
         if ((in->opcode == OP_MODEL || in->opcode == OP_CONTROLLER) && duplicate_name(code, in->opcode, in->args[0])) {
             source_error(path, in->line, "this name is declared twice"); return 0;
         }
@@ -339,6 +342,13 @@ int compile_file(const char *source_path, const char *output_path) {
                 char *end; long version = strtol(w[2], &end, 10);
                 if (*end || version < 1 || version > 1000000) { source_error(source_path, number, "data version must be a positive whole number"); okay = 0; }
                 else okay = emit(&code, OP_DATA_VERSION, 1, &w[2], number);
+            } else if (n == 6 && !strcmp(w[0], "store") && !strcmp(w[1], "data") && !strcmp(w[2], "in") &&
+                !strcmp(w[3], "sqlite") && !strcmp(w[4], "file")) {
+                char database[PATH_MAX];
+                if (w[5][0] == '/') snprintf(database, sizeof(database), "%s", w[5]);
+                else if (project_prefix + strlen(w[5]) + 1 > sizeof(database)) { source_error(source_path, number, "the SQLite path is too long"); okay = 0; }
+                else { if (project_prefix) memcpy(database, source_path, project_prefix); strcpy(database + project_prefix, w[5]); }
+                if (okay) { char *args[2] = {"sqlite", database}; okay = emit(&code, OP_STORAGE, 2, args, number); }
             } else if (n == 7 && !strcmp(w[0], "when") && !strcmp(w[1], "data") && !strcmp(w[2], "changes") &&
                 !strcmp(w[3], "from") && !strcmp(w[5], "to")) {
                 char *from_end, *to_end; long from = strtol(w[4], &from_end, 10), to = strtol(w[6], &to_end, 10);
@@ -516,6 +526,18 @@ int compile_file(const char *source_path, const char *output_path) {
                 !strcmp(w[4], "as") && !strcmp(w[6], "and") && !strcmp(w[7], "status") && !strcmp(w[8], "as") &&
                 is_name(w[5]) && is_name(w[9])) {
                 char *args[3] = {w[1], w[5], w[9]}; okay = emit(&code, OP_HTTP_GET, 3, args, number);
+            } else if (n == 3 && !strcmp(w[0], "make") && !strcmp(w[1], "map") && is_name(w[2])) {
+                okay = emit(&code, OP_MAKE_MAP, 1, &w[2], number);
+            } else if (n == 6 && !strcmp(w[0], "put") && !strcmp(w[2], "as") && !strcmp(w[4], "in") && is_name(w[5])) {
+                char *args[3] = {w[1], w[3], w[5]}; okay = emit(&code, OP_MAP_PUT, 3, args, number);
+            } else if (n == 7 && !strcmp(w[0], "take") && !strcmp(w[1], "key") && !strcmp(w[3], "from") &&
+                !strcmp(w[5], "as") && is_name(w[4]) && is_name(w[6])) {
+                char *args[3] = {w[2], w[4], w[6]}; okay = emit(&code, OP_MAP_GET, 3, args, number);
+            } else if (n == 5 && !strcmp(w[0], "remove") && !strcmp(w[1], "key") && !strcmp(w[3], "from") && is_name(w[4])) {
+                char *args[2] = {w[2], w[4]}; okay = emit(&code, OP_MAP_REMOVE, 2, args, number);
+            } else if (n == 6 && !strcmp(w[0], "count") && !strcmp(w[1], "entries") && !strcmp(w[2], "in") &&
+                !strcmp(w[4], "as") && is_name(w[3]) && is_name(w[5])) {
+                char *args[2] = {w[3], w[5]}; okay = emit(&code, OP_MAP_COUNT, 2, args, number);
             } else if (n >= 5 && !strcmp(w[0], "expect") && !strcmp(w[2], "to") && !strcmp(w[3], "be") && current == BLOCK_TEST) {
                 char expected[MAX_LINE], condition[MAX_LINE]; join_words(expected, sizeof(expected), w, 4, n);
                 if (strlen(w[1]) + strlen(expected) + 5 >= sizeof(condition)) {

@@ -11,6 +11,10 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#ifdef HYPERIAN_HAVE_SQLITE3
+#include <sqlite3.h>
+#endif
+
 #define REQUEST_MAX 65536
 #define FIELD_MAX 32
 
@@ -138,6 +142,49 @@ static int list_remove_value(const char *encoded, const char *removed, char *out
         snprintf(output, size, "%s", combined);
     }
     return result >= 0;
+}
+
+static int map_put_value(const char *encoded, const char *wanted_key, const char *wanted_value, char *output, size_t size) {
+    const char *cursor = encoded ? encoded : ""; char key[2048], value[2048]; int result, replaced = 0; output[0] = 0;
+    while ((result = list_next(&cursor, key, sizeof(key))) > 0) {
+        if (list_next(&cursor, value, sizeof(value)) <= 0) return 0;
+        if (!strcmp(key, wanted_key)) { snprintf(value, sizeof(value), "%s", wanted_value); replaced = 1; }
+        char with_key[2048], with_value[2048];
+        if (!list_add_value(output, key, with_key, sizeof(with_key)) || !list_add_value(with_key, value, with_value, sizeof(with_value))) return 0;
+        snprintf(output, size, "%s", with_value);
+    }
+    if (result < 0) return 0;
+    if (!replaced) {
+        char with_key[2048], with_value[2048];
+        if (!list_add_value(output, wanted_key, with_key, sizeof(with_key)) || !list_add_value(with_key, wanted_value, with_value, sizeof(with_value))) return 0;
+        snprintf(output, size, "%s", with_value);
+    }
+    return 1;
+}
+
+static int map_get_value(const char *encoded, const char *wanted_key, char *output, size_t size) {
+    const char *cursor = encoded ? encoded : ""; char key[2048], value[2048]; int result;
+    while ((result = list_next(&cursor, key, sizeof(key))) > 0) {
+        if (list_next(&cursor, value, sizeof(value)) <= 0) return 0;
+        if (!strcmp(key, wanted_key)) { snprintf(output, size, "%s", value); return 1; }
+    }
+    return 0;
+}
+
+static int map_remove_value(const char *encoded, const char *wanted_key, char *output, size_t size) {
+    const char *cursor = encoded ? encoded : ""; char key[2048], value[2048]; int result; output[0] = 0;
+    while ((result = list_next(&cursor, key, sizeof(key))) > 0) {
+        if (list_next(&cursor, value, sizeof(value)) <= 0) return 0;
+        if (!strcmp(key, wanted_key)) continue;
+        char with_key[2048], with_value[2048];
+        if (!list_add_value(output, key, with_key, sizeof(with_key)) || !list_add_value(with_key, value, with_value, sizeof(with_value))) return 0;
+        snprintf(output, size, "%s", with_value);
+    }
+    return result >= 0;
+}
+
+static int map_count_values(const char *encoded) {
+    int values = list_count_values(encoded); return values < 0 || values % 2 ? -1 : values / 2;
 }
 
 static void url_decode(char *text) {
@@ -283,7 +330,8 @@ static int is_logic_instruction(uint8_t opcode) {
     return opcode == OP_SET_VALUE || opcode == OP_LOGIC_IF || opcode == OP_REPEAT || opcode == OP_RUN_ACTION ||
         opcode == OP_RETURN_VALUE || opcode == OP_READ_FILE || opcode == OP_WRITE_FILE || opcode == OP_TRY ||
         opcode == OP_MAKE_LIST || opcode == OP_LIST_ADD || opcode == OP_LIST_REMOVE || opcode == OP_LIST_COUNT ||
-        opcode == OP_LIST_ITEM || opcode == OP_HTTP_GET;
+        opcode == OP_LIST_ITEM || opcode == OP_HTTP_GET || opcode == OP_MAKE_MAP || opcode == OP_MAP_PUT ||
+        opcode == OP_MAP_GET || opcode == OP_MAP_REMOVE || opcode == OP_MAP_COUNT;
 }
 
 static int execute_logic_range(const Bytecode *code, size_t from, size_t to, Scope *scope, int depth, char *error, size_t error_size);
@@ -386,6 +434,27 @@ static int execute_logic_at(const Bytecode *code, size_t *position, Scope *scope
         char url[2048], body[2048], status_text[32]; long status = 0; evaluate(scope, in->args[0], url, sizeof(url));
         if (!hyperian_http_get(url, body, sizeof(body), &status, error, error_size)) return 0;
         snprintf(status_text, sizeof(status_text), "%ld", status); local_set(scope->locals, in->args[1], body); local_set(scope->locals, in->args[2], status_text);
+    } else if (in->opcode == OP_MAKE_MAP) {
+        local_set(scope->locals, in->args[0], "");
+    } else if (in->opcode == OP_MAP_PUT) {
+        char value[2048], key[2048], encoded[2048]; evaluate(scope, in->args[0], value, sizeof(value)); evaluate(scope, in->args[1], key, sizeof(key));
+        const char *current = local_value(scope->locals, in->args[2]);
+        if (!current) { snprintf(error, error_size, "map %s does not exist", in->args[2]); return 0; }
+        if (!map_put_value(current, key, value, encoded, sizeof(encoded))) { snprintf(error, error_size, "map %s is full or damaged", in->args[2]); return 0; }
+        local_set(scope->locals, in->args[2], encoded);
+    } else if (in->opcode == OP_MAP_GET) {
+        char key[2048], value[2048]; evaluate(scope, in->args[0], key, sizeof(key)); const char *current = local_value(scope->locals, in->args[1]);
+        if (!current) { snprintf(error, error_size, "map %s does not exist", in->args[1]); return 0; }
+        if (!map_get_value(current, key, value, sizeof(value))) { snprintf(error, error_size, "map %s has no key %s", in->args[1], key); return 0; }
+        local_set(scope->locals, in->args[2], value);
+    } else if (in->opcode == OP_MAP_REMOVE) {
+        char key[2048], encoded[2048]; evaluate(scope, in->args[0], key, sizeof(key)); const char *current = local_value(scope->locals, in->args[1]);
+        if (!current || !map_remove_value(current, key, encoded, sizeof(encoded))) { snprintf(error, error_size, "map %s does not exist or is damaged", in->args[1]); return 0; }
+        local_set(scope->locals, in->args[1], encoded);
+    } else if (in->opcode == OP_MAP_COUNT) {
+        const char *current = local_value(scope->locals, in->args[0]); int count = current ? map_count_values(current) : -1; char value[32];
+        if (count < 0) { snprintf(error, error_size, "map %s does not exist or is damaged", in->args[0]); return 0; }
+        snprintf(value, sizeof(value), "%d", count); local_set(scope->locals, in->args[1], value);
     }
     return 1;
 }
@@ -921,6 +990,13 @@ static const char *data_path(void) {
     const char *configured = getenv("HYPERIAN_DATA"); return configured && *configured ? configured : "hyperian-data.hdb";
 }
 
+static const char *sqlite_data_path(const Bytecode *code) {
+    const char *declared = NULL;
+    for (size_t i = 0; i < code->count; i++) if (code->items[i].opcode == OP_STORAGE && !strcmp(code->items[i].args[0], "sqlite")) declared = code->items[i].args[1];
+    if (!declared) return NULL;
+    const char *configured = getenv("HYPERIAN_DATA"); return configured && *configured ? configured : declared;
+}
+
 static int file_write_u32(FILE *file, uint32_t value) {
     unsigned char b[4] = {(unsigned char)value, (unsigned char)(value >> 8), (unsigned char)(value >> 16), (unsigned char)(value >> 24)};
     return fwrite(b, 1, 4, file) == 4;
@@ -941,7 +1017,7 @@ static char *file_read_text(FILE *file) {
     text[length] = 0; return text;
 }
 
-static int save_records(Record *records, const Bytecode *code) {
+static int save_hdb_records(Record *records, const Bytecode *code) {
     char temporary[4096]; snprintf(temporary, sizeof(temporary), "%s.tmp", data_path());
     FILE *file = fopen(temporary, "wb"); if (!file) return 0;
     uint32_t count = 0; for (Record *record = records; record; record = record->next) count++;
@@ -955,6 +1031,49 @@ static int save_records(Record *records, const Bytecode *code) {
     if (okay) okay = rename(temporary, data_path()) == 0;
     if (!okay) remove(temporary);
     return okay;
+}
+
+#ifdef HYPERIAN_HAVE_SQLITE3
+static int sqlite_schema(sqlite3 *database) {
+    const char *sql = "CREATE TABLE IF NOT EXISTS hyperian_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);"
+        "CREATE TABLE IF NOT EXISTS hyperian_records (model TEXT NOT NULL, record_id TEXT NOT NULL, field_name TEXT NOT NULL, field_value TEXT NOT NULL, field_order INTEGER NOT NULL, PRIMARY KEY(model, record_id, field_name));";
+    return sqlite3_exec(database, sql, NULL, NULL, NULL) == SQLITE_OK;
+}
+
+static int save_sqlite_records(Record *records, const Bytecode *code, const char *path) {
+    sqlite3 *database = NULL; sqlite3_stmt *insert = NULL, *meta = NULL; int okay = sqlite3_open(path, &database) == SQLITE_OK;
+    if (okay) okay = sqlite_schema(database) && sqlite3_exec(database, "BEGIN IMMEDIATE; DELETE FROM hyperian_records;", NULL, NULL, NULL) == SQLITE_OK;
+    if (okay) okay = sqlite3_prepare_v2(database, "INSERT INTO hyperian_records(model,record_id,field_name,field_value,field_order) VALUES(?,?,?,?,?);", -1, &insert, NULL) == SQLITE_OK;
+    for (Record *record = records; okay && record; record = record->next) {
+        const char *id = record_value(record, "id"); if (!id) id = "";
+        for (int field = 0; okay && field < record->field_count; field++) {
+            sqlite3_bind_text(insert, 1, record->model, -1, SQLITE_TRANSIENT); sqlite3_bind_text(insert, 2, id, -1, SQLITE_TRANSIENT);
+            sqlite3_bind_text(insert, 3, record->fields[field].key, -1, SQLITE_TRANSIENT); sqlite3_bind_text(insert, 4, record->fields[field].value, -1, SQLITE_TRANSIENT);
+            sqlite3_bind_int(insert, 5, field); okay = sqlite3_step(insert) == SQLITE_DONE; sqlite3_reset(insert); sqlite3_clear_bindings(insert);
+        }
+    }
+    if (insert) sqlite3_finalize(insert);
+    if (okay) okay = sqlite3_prepare_v2(database, "INSERT OR REPLACE INTO hyperian_meta(key,value) VALUES('data_version',?);", -1, &meta, NULL) == SQLITE_OK;
+    if (okay) { char version[32]; snprintf(version, sizeof(version), "%u", program_data_version(code)); sqlite3_bind_text(meta, 1, version, -1, SQLITE_TRANSIENT); okay = sqlite3_step(meta) == SQLITE_DONE; }
+    if (meta) sqlite3_finalize(meta);
+    if (database) {
+        if (okay) okay = sqlite3_exec(database, "COMMIT;", NULL, NULL, NULL) == SQLITE_OK;
+        else sqlite3_exec(database, "ROLLBACK;", NULL, NULL, NULL);
+        if (!okay) fprintf(stderr, "error: SQLite could not save %s: %s\n", path, sqlite3_errmsg(database));
+        sqlite3_close(database);
+    }
+    return okay;
+}
+#endif
+
+static int save_records(Record *records, const Bytecode *code) {
+    const char *sqlite_path = sqlite_data_path(code);
+    if (!sqlite_path) return save_hdb_records(records, code);
+#ifdef HYPERIAN_HAVE_SQLITE3
+    return save_sqlite_records(records, code, sqlite_path);
+#else
+    fprintf(stderr, "error: this Hyperian build does not include SQLite support\n"); return 0;
+#endif
 }
 
 static int rename_record_field(Record *record, const char *old_name, const char *new_name) {
@@ -998,8 +1117,67 @@ static int apply_data_migrations(const Bytecode *code, Record *records, uint32_t
     return 1;
 }
 
+#ifdef HYPERIAN_HAVE_SQLITE3
+static Record *load_sqlite_records(const Bytecode *code, const char *path, int *okay) {
+    sqlite3 *database = NULL; sqlite3_stmt *statement = NULL; Record *records = NULL, **tail = &records, *current = NULL;
+    char *last_model = NULL, *last_id = NULL; uint32_t stored_version = program_data_version(code); int has_version = 0;
+    *okay = sqlite3_open(path, &database) == SQLITE_OK && sqlite_schema(database);
+    if (*okay) *okay = sqlite3_prepare_v2(database, "SELECT value FROM hyperian_meta WHERE key='data_version';", -1, &statement, NULL) == SQLITE_OK;
+    if (*okay && sqlite3_step(statement) == SQLITE_ROW) {
+        const unsigned char *value = sqlite3_column_text(statement, 0); stored_version = value ? (uint32_t)strtoul((const char *)value, NULL, 10) : 0; has_version = 1;
+        if (!stored_version) *okay = 0;
+    }
+    if (statement) { sqlite3_finalize(statement); statement = NULL; }
+    if (*okay && !has_version) {
+        char sql[160]; snprintf(sql, sizeof(sql), "INSERT OR REPLACE INTO hyperian_meta(key,value) VALUES('data_version','%u');", stored_version);
+        *okay = sqlite3_exec(database, sql, NULL, NULL, NULL) == SQLITE_OK;
+    }
+    if (*okay) *okay = sqlite3_prepare_v2(database,
+        "SELECT model,record_id,field_name,field_value FROM hyperian_records ORDER BY model,record_id,field_order;", -1, &statement, NULL) == SQLITE_OK;
+    int step_result = SQLITE_DONE;
+    while (*okay && (step_result = sqlite3_step(statement)) == SQLITE_ROW) {
+        const char *model = (const char *)sqlite3_column_text(statement, 0), *id = (const char *)sqlite3_column_text(statement, 1);
+        const char *field = (const char *)sqlite3_column_text(statement, 2), *value = (const char *)sqlite3_column_text(statement, 3);
+        if (!model || !id || !field || !value) { *okay = 0; break; }
+        if (!last_model || strcmp(last_model, model) || strcmp(last_id, id)) {
+            current = calloc(1, sizeof(*current)); char *model_copy = copy_string(model), *id_copy = copy_string(id);
+            if (!current || !model_copy || !id_copy) { free(current); free(model_copy); free(id_copy); *okay = 0; break; }
+            current->model = model_copy; *tail = current; tail = &current->next;
+            free(last_model); free(last_id); last_model = copy_string(model); last_id = id_copy;
+            if (!last_model) { *okay = 0; break; }
+        }
+        if (current->field_count >= FIELD_MAX) { *okay = 0; break; }
+        char *field_copy = copy_string(field), *value_copy = copy_string(value);
+        if (!field_copy || !value_copy) { free(field_copy); free(value_copy); *okay = 0; break; }
+        current->fields[current->field_count++] = (Pair){field_copy, value_copy};
+    }
+    if (*okay && step_result != SQLITE_DONE) *okay = 0;
+    free(last_model); free(last_id); if (statement) sqlite3_finalize(statement);
+    if (!*okay) {
+        if (database) fprintf(stderr, "error: SQLite could not load %s: %s\n", path, sqlite3_errmsg(database));
+        records_free(records); records = NULL;
+    }
+    if (database) sqlite3_close(database);
+    if (!*okay) return NULL;
+    for (Record **at = &records; *at;) {
+        if (model_instruction(code, (*at)->model, NULL)) { at = &(*at)->next; continue; }
+        Record *removed = *at; *at = removed->next; removed->next = NULL; records_free(removed);
+    }
+    if (!apply_data_migrations(code, records, stored_version)) { *okay = 0; records_free(records); return NULL; }
+    return records;
+}
+#endif
+
 static Record *load_records(const Bytecode *code, int *okay) {
     *okay = 1;
+    const char *sqlite_path = sqlite_data_path(code);
+    if (sqlite_path) {
+#ifdef HYPERIAN_HAVE_SQLITE3
+        return load_sqlite_records(code, sqlite_path, okay);
+#else
+        fprintf(stderr, "error: this Hyperian build does not include SQLite support\n"); *okay = 0; return NULL;
+#endif
+    }
     FILE *file = fopen(data_path(), "rb"); if (!file) return NULL;
     char magic[4]; uint32_t stored_version = 1, count;
     if (fread(magic, 1, 4, file) != 4) goto damaged;

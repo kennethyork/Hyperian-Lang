@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(Hyperian VERSION 0.12.0 LANGUAGES C)
+project(Hyperian VERSION 0.13.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -23,6 +23,11 @@ if(PkgConfig_FOUND)
     pkg_check_modules(GTK3 QUIET IMPORTED_TARGET gtk+-3.0)
     pkg_check_modules(SDL2 QUIET IMPORTED_TARGET sdl2)
     pkg_check_modules(CURL QUIET IMPORTED_TARGET libcurl)
+    pkg_check_modules(SQLITE3 QUIET IMPORTED_TARGET sqlite3)
+endif()
+if(SQLITE3_FOUND)
+    target_compile_definitions(hyperian PRIVATE HYPERIAN_HAVE_SQLITE3=1)
+    target_link_libraries(hyperian PRIVATE PkgConfig::SQLITE3)
 endif()
 if(CURL_FOUND)
     target_compile_definitions(hyperian PRIVATE HYPERIAN_HAVE_CURL=1)
@@ -126,3 +131,20 @@ set_tests_properties(migrate_legacy_data PROPERTIES DEPENDS create_legacy_data)
 add_test(NAME verify_migrated_data
     COMMAND hyperian_migration_fixture verify ${CMAKE_BINARY_DIR}/legacy-migration.hdb)
 set_tests_properties(verify_migrated_data PROPERTIES DEPENDS migrate_legacy_data)
+
+if(SQLITE3_FOUND)
+    add_executable(hyperian_sqlite_fixture tests/sqlite_fixture.c)
+    target_link_libraries(hyperian_sqlite_fixture PRIVATE PkgConfig::SQLITE3)
+    target_compile_options(hyperian_sqlite_fixture PRIVATE -Wall -Wextra -Wpedantic)
+    add_test(NAME compile_sqlite_storage
+        COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/sqlite_tasks.hyp -o ${CMAKE_BINARY_DIR}/sqlite_tasks.hyc)
+    add_test(NAME create_legacy_sqlite_data
+        COMMAND hyperian_sqlite_fixture create ${CMAKE_BINARY_DIR}/legacy-migration.sqlite)
+    add_test(NAME migrate_sqlite_data
+        COMMAND ${CMAKE_COMMAND} -E env HYPERIAN_DATA=${CMAKE_BINARY_DIR}/legacy-migration.sqlite
+            $<TARGET_FILE:hyperian> migrate ${CMAKE_SOURCE_DIR}/examples/sqlite_tasks.hyp)
+    set_tests_properties(migrate_sqlite_data PROPERTIES DEPENDS create_legacy_sqlite_data)
+    add_test(NAME verify_migrated_sqlite_data
+        COMMAND hyperian_sqlite_fixture verify ${CMAKE_BINARY_DIR}/legacy-migration.sqlite)
+    set_tests_properties(verify_migrated_sqlite_data PROPERTIES DEPENDS migrate_sqlite_data)
+endif()
