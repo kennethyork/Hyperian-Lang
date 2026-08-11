@@ -1,0 +1,4 @@
+layout "application"
+    heading "My Hyperian project"
+    content
+end

@@ -1,0 +1,7 @@
+application "Foldered Tasks" is web
+listen on 8085
+serve files from "public" at "/assets"
+
+include "models/task.hyp"
+include "controllers/tasks.hyp"
+include "views/task-list.hyp"

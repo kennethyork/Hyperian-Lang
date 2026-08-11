@@ -1,0 +1,4 @@
+model Task
+    field name is text required
+    field finished is boolean default false
+end

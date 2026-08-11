@@ -325,7 +325,16 @@ int compile_file(const char *source_path, const char *output_path) {
                 char *args[2] = {w[2], w[5]}; okay = emit(&code, OP_ERROR_VIEW, 2, args, number);
             } else if (n == 6 && !strcmp(w[0], "serve") && !strcmp(w[1], "files") && !strcmp(w[2], "from") && !strcmp(w[4], "at")) {
                 if (w[5][0] != '/') { source_error(source_path, number, "the public file address must start with /"); okay = 0; }
-                else { char *args[2] = {w[3], w[5]}; okay = emit(&code, OP_STATIC_FILES, 2, args, number); }
+                else {
+                    char directory[PATH_MAX];
+                    if (w[3][0] == '/') snprintf(directory, sizeof(directory), "%s", w[3]);
+                    else {
+                        const char *slash = strrchr(source_path, '/'); size_t prefix = slash ? (size_t)(slash - source_path + 1) : 0;
+                        if (prefix + strlen(w[3]) + 1 > sizeof(directory)) { source_error(source_path, number, "the public folder path is too long"); okay = 0; }
+                        else { if (prefix) memcpy(directory, source_path, prefix); strcpy(directory + prefix, w[3]); }
+                    }
+                    if (okay) { char *args[2] = {directory, w[5]}; okay = emit(&code, OP_STATIC_FILES, 2, args, number); }
+                }
             } else { source_error(source_path, number, "expected application, data version, data migration, listen on, model, controller, view, layout, or component"); okay = 0; }
         } else if (current == BLOCK_MIGRATION) {
             if (n == 8 && !strcmp(w[0], "rename") && !strcmp(w[1], "field") && !strcmp(w[3], "to") &&

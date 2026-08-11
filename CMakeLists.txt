@@ -59,6 +59,8 @@ add_test(NAME english_language_tests
     COMMAND hyperian test ${CMAKE_SOURCE_DIR}/examples/english_logic.hyp)
 add_test(NAME compile_multi_file_program
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/modular/app.hyp -o ${CMAKE_BINARY_DIR}/modular.hyc)
+add_test(NAME compile_foldered_mvc_program
+    COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/foldered_app/app.hyp -o ${CMAKE_BINARY_DIR}/foldered_app.hyc)
 add_test(NAME compile_data_migrations
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/migrating_tasks.hyp -o ${CMAKE_BINARY_DIR}/migrating_tasks.hyc)
 add_test(NAME inspect_data_migrations

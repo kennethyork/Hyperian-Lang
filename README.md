@@ -374,6 +374,36 @@ include "views.hyp"
 
 Included paths are resolved relative to the file containing the `include`. Includes may be nested up to 32 levels. See [examples/modular/app.hyp](examples/modular/app.hyp).
 
+A project can use as many folders and files as it needs:
+
+```text
+my_app/
+├── app.hyp
+├── models/
+│   └── task.hyp
+├── controllers/
+│   └── tasks.hyp
+├── views/
+│   ├── task-list.hyp
+│   └── shared/
+│       └── layouts.hyp
+└── public/
+    └── app.css
+```
+
+The main file stays simple:
+
+```hyperian
+application "Foldered Tasks" is web
+serve files from "public" at "/assets"
+
+include "models/task.hyp"
+include "controllers/tasks.hyp"
+include "views/task-list.hyp"
+```
+
+An included file can include another nearby file, such as `include "shared/layouts.hyp"`. The compiler combines the whole project into one self-contained `.hyc` program. Public folders are resolved beside the main source file. See [examples/foldered_app/app.hyp](examples/foldered_app/app.hyp).
+
 ## Static files and richer views
 
 An application can expose a public directory without another web server:

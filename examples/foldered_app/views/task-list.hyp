@@ -1,0 +1,15 @@
+include "shared/layouts.hyp"
+
+view "task-list"
+    use layout "application"
+    style "/assets/app.css"
+    heading "Foldered tasks"
+    form posts to "/tasks"
+        input "Task name" as name required
+        checkbox "Already finished" as finished
+        button "Add task"
+    end
+    for each task in tasks show
+        show task.name
+    end
+end
