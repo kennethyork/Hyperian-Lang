@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#define HYPERIAN_VERSION "0.35.0"
+#define HYPERIAN_VERSION "0.36.0"
 #define HYC_MAGIC "HYC1"
 #define HYC_MAX_ARGS 9
 #define HYPERIAN_STATE_MAX 64
@@ -60,6 +60,7 @@ typedef struct {
 } HyperianState;
 
 typedef int (*HyperianSoundHandler)(const char *path, char *error, size_t error_size);
+typedef int (*HyperianHttpHandler)(const char *url, char *body, size_t body_size, long *status, char *error, size_t error_size);
 typedef struct HyperianData HyperianData;
 typedef struct HyperianMobile HyperianMobile;
 
@@ -80,6 +81,7 @@ int run_desktop_app(const Bytecode *code, const char *name);
 int run_mobile_app(const Bytecode *code, const char *name);
 int run_game_app(const Bytecode *code, const char *name);
 int hyperian_http_get(const char *url, char *body, size_t body_size, long *status, char *error, size_t error_size);
+void hyperian_set_http_handler(HyperianHttpHandler handler);
 void hyperian_state_init(HyperianState *state);
 const char *hyperian_state_get(const HyperianState *state, const char *name);
 void hyperian_state_set(HyperianState *state, const char *name, const char *value);

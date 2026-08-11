@@ -36,7 +36,7 @@ struct HyperianControl: Decodable {
             message = "The compiled Hyperian application is missing."; return
         }
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let error = bridge.openBytecode(bytecode, dataPath: documents.appendingPathComponent("hyperian-data.hdb").path)
+        let error = bridge.openBytecode(bytecode, dataPath: documents.appendingPathComponent("hyperian-data.db").path)
         if !error.isEmpty { message = error } else { refresh() }
     }
 

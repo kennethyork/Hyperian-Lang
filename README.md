@@ -165,7 +165,9 @@ Hyperian first compiles and exports the application into a private temporary fol
 
 The generated Android project uses Android Gradle Plugin 9.3, API level 37, CMake, JNI, and the Android NDK. It contains the Hyperian C runtime sources and compiled application bytecode, so it does not depend on Python, JavaScript, a web server, or the desktop compiler at runtime.
 
-Its Java Activity turns the bridge’s current view into native Android headings, text, inputs, text areas, checkboxes, buttons, links, and images. It synchronizes native input values into Hyperian state before button actions, change events, keyboard submission events, lifecycle events, taps, holds, and swipes; the native VM then executes the English controller behavior, persistent HDB model work, expressions, and view navigation. Repeating Hyperian timers, pause/resume, focus/unfocus, taps, holds, and four-direction fling gestures are dispatched on Android’s main event loop.
+Its Java Activity turns the bridge’s current view into native Android headings, text, inputs, text areas, checkboxes, buttons, links, and images. It synchronizes native input values into Hyperian state before button actions, change events, keyboard submission events, lifecycle events, taps, holds, and swipes; the native VM then executes the English controller behavior, persistent model work, expressions, and view navigation. Repeating Hyperian timers, pause/resume, focus/unfocus, taps, holds, and four-direction fling gestures are dispatched on Android’s main event loop.
+
+English `get "https://..." from web` statements use Android's native HTTPS connection support with the operating system's certificate and hostname checks. `store data in sqlite file` uses the official SQLite engine compiled into the generated native application. Both HDB and SQLite data live in the application's private `hyperian-data.db` file, and the Android manifest includes internet permission.
 
 Open the exported `android/` folder in Android Studio and run its `app` configuration, or let Hyperian create a signed release artifact. A local Android SDK, NDK, Gradle, and JDK 17 or newer are required. Configure signing without putting secrets in source code:
 
@@ -178,11 +180,13 @@ export HYPERIAN_ANDROID_KEY_PASSWORD='your key password'
 hyperian build MyPhoneApp/app.hyp for android as MyPhoneApp.aab
 ```
 
-Set `HYPERIAN_GRADLE` to an executable path if `gradle` is not on `PATH`. `.apk` runs Gradle's release APK task; `.aab` runs its release bundle task. Hyperian validates the application identifier, keystore, alias, and passwords before starting Gradle. HTTPS/SQLite integration in the Android runtime remains a future layer.
+Set `HYPERIAN_GRADLE` to an executable path if `gradle` is not on `PATH`. `.apk` runs Gradle's release APK task; `.aab` runs its release bundle task. Hyperian validates the application identifier, keystore, alias, and passwords before starting Gradle.
 
 ### Native iOS project
 
 The generated iOS project embeds the same C runtime and `.hyc` bytecode. An Objective-C class owns the native Hyperian session and exposes it to Swift through a bridging header. SwiftUI supplies the app entry point and native headings, text, values, fields, text editors, toggles, buttons, links, images, navigation, repeating timers, live input changes, keyboard submission, scene lifecycle events, and simultaneous tap, hold, and swipe recognition.
+
+On iPhone and iPad, English web requests use URLSession and the operating system's normal TLS checks. The generated Xcode project links SQLite, so the same English storage declaration persists models in the application's private `hyperian-data.db` file.
 
 Open `ios/HyperianIOS.xcodeproj` in Xcode, choose a development team and unique bundle identifier, and run the shared `HyperianIOS` scheme, or let Hyperian archive and export a signed IPA:
 
@@ -838,6 +842,26 @@ store data in sqlite file "application.db"
 
 SQLite writes use transactions, schema metadata tracks the data version, and `HYPERIAN_DATA` can override the declared path for tests or deployment. See [examples/sqlite_tasks.hyp](examples/sqlite_tasks.hyp).
 
+The same English works in a native phone application, including SQLite models and HTTPS together:
+
+```hyperian
+application "Connected Tasks" is mobile
+store data in sqlite file "connected-tasks.db"
+
+controller Tasks
+    action "refresh status"
+        try
+            get "https://example.com/status" from web as response and status as code
+            set message to "Internet status:" joined with code joined with response
+        when it fails as problem
+            set message to problem
+        end
+    end
+end
+```
+
+See [examples/mobile_connected.hyp](examples/mobile_connected.hyp) for the complete MVC application.
+
 Static requests reject parent-directory traversal and are returned as binary-safe responses with appropriate CSS, JavaScript, SVG, PNG, JPEG, GIF, WebP, icon, HTML, JSON, and text content types.
 
 Views connect those assets and provide richer form controls in plain English:
@@ -865,6 +889,6 @@ Quoted text may contain spaces. `#` starts a comment. Indentation is optional bu
 
 ## Project status
 
-Version 0.35 is a small but real MVC platform: custom bytecode, a native VM, standalone executable and asset-bundle creation, versioned Android/iOS mobile deployment packages, automated signed APK/AAB/IPA orchestration, a linkable native mobile runtime bridge, self-contained native Android Studio and SwiftUI Xcode project generation, native backend diagnostics, eight compiler targets including installable offline web applications, parallel-safe compiler tooling, an English source-line debugger, persistent model CRUD plus filtered and ordered collection queries inside native controller actions, repeated native collection views, recurring service and native-interface timers, interactive multi-view GTK desktop and phone-sized mobile preview interfaces with close, live-input-change, keyboard-submission, focus, pause, resume, tap, press-and-hold, and four-direction swipe events, matching generated Android/iOS lifecycle and gesture events, SDL2 keyboard/frame events, frame-rate-independent movement, gravity, smooth value transitions, timed animation frames, boundaries, rectangle collision detection, BMP sprites, WAV sound, and state-driven rendering, native lists and maps, selectable HDB or transactional SQLite storage, recoverable runtime errors, an HTTP/HTTPS client, local packages, reusable actions, native file access, foldered project generation, versioned migrations, persistent CRUD models, safe HTML and typed JSON, authentication and authorization, middleware, formatting, and English tests.
+Version 0.36 is a small but real MVC platform: custom bytecode, a native VM, standalone executable and asset-bundle creation, versioned Android/iOS mobile deployment packages, automated signed APK/AAB/IPA orchestration, a linkable native mobile runtime bridge, self-contained native Android Studio and SwiftUI Xcode project generation, native phone HTTPS and SQLite integration, native backend diagnostics, eight compiler targets including installable offline web applications, parallel-safe compiler tooling, an English source-line debugger, persistent model CRUD plus filtered and ordered collection queries inside native controller actions, repeated native collection views, recurring service and native-interface timers, interactive multi-view GTK desktop and phone-sized mobile preview interfaces with close, live-input-change, keyboard-submission, focus, pause, resume, tap, press-and-hold, and four-direction swipe events, matching generated Android/iOS lifecycle and gesture events, SDL2 keyboard/frame events, frame-rate-independent movement, gravity, smooth value transitions, timed animation frames, boundaries, rectangle collision detection, BMP sprites, WAV sound, and state-driven rendering, native lists and maps, selectable HDB or transactional SQLite storage, recoverable runtime errors, an HTTP/HTTPS client, local packages, reusable actions, native file access, foldered project generation, versioned migrations, persistent CRUD models, safe HTML and typed JSON, authentication and authorization, middleware, formatting, and English tests.
 
-The next major layers are HTTPS/SQLite phone integration, more collision shapes, more media formats, and broader cross-compilation. Those are not claimed as complete yet.
+The next major layers are more collision shapes, more media formats, and broader cross-compilation. Those are not claimed as complete yet.

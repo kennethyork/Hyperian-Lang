@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(Hyperian VERSION 0.35.0 LANGUAGES C)
+project(Hyperian VERSION 0.36.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -71,6 +71,7 @@ install(TARGETS hyperian_mobile_runtime ARCHIVE DESTINATION lib)
 install(FILES src/hyperian.h DESTINATION include/hyperian)
 install(DIRECTORY platform/android DESTINATION share/hyperian/platform)
 install(DIRECTORY platform/ios DESTINATION share/hyperian/platform)
+install(DIRECTORY platform/sqlite DESTINATION share/hyperian/platform)
 install(FILES src/mobile.c src/runtime.c src/bytecode.c src/network.c src/security.c src/security.h src/desktop.c src/game.c src/hyperian.h
     DESTINATION share/hyperian/runtime)
 
@@ -245,6 +246,8 @@ if(GTK3_FOUND AND XVFB_RUN)
 endif()
 add_test(NAME compile_mobile_preview
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/mobile_tasks.hyp -o ${CMAKE_BINARY_DIR}/mobile_tasks.hyc)
+add_test(NAME compile_mobile_connected
+    COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/mobile_connected.hyp -o ${CMAKE_BINARY_DIR}/mobile_connected.hyc)
 add_executable(hyperian_mobile_bridge_test tests/mobile_bridge_test.c)
 target_include_directories(hyperian_mobile_bridge_test PRIVATE src)
 target_compile_options(hyperian_mobile_bridge_test PRIVATE -Wall -Wextra -Wpedantic)
@@ -254,6 +257,17 @@ add_test(NAME run_mobile_bridge
     COMMAND ${CMAKE_COMMAND} -E env HYPERIAN_DATA=${CMAKE_BINARY_DIR}/mobile_bridge.hdb
         $<TARGET_FILE:hyperian_mobile_bridge_test> ${CMAKE_BINARY_DIR}/mobile_tasks.hyc)
 set_tests_properties(run_mobile_bridge PROPERTIES DEPENDS "compile_mobile_preview;clean_mobile_bridge_data")
+if(SQLITE3_FOUND)
+    add_executable(hyperian_mobile_connected_test tests/mobile_connected_test.c)
+    target_include_directories(hyperian_mobile_connected_test PRIVATE src)
+    target_compile_options(hyperian_mobile_connected_test PRIVATE -Wall -Wextra -Wpedantic)
+    target_link_libraries(hyperian_mobile_connected_test PRIVATE hyperian_mobile_runtime)
+    add_test(NAME clean_mobile_connected_data COMMAND ${CMAKE_COMMAND} -E remove ${CMAKE_BINARY_DIR}/mobile_connected.sqlite)
+    add_test(NAME run_mobile_connected
+        COMMAND ${CMAKE_COMMAND} -E env HYPERIAN_DATA=${CMAKE_BINARY_DIR}/mobile_connected.sqlite
+            $<TARGET_FILE:hyperian_mobile_connected_test> ${CMAKE_BINARY_DIR}/mobile_connected.hyc ${CMAKE_BINARY_DIR}/mobile_connected.sqlite)
+    set_tests_properties(run_mobile_connected PROPERTIES DEPENDS "compile_mobile_connected;clean_mobile_connected_data")
+endif()
 add_test(NAME clean_android_export COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}/AndroidExport)
 add_test(NAME build_android_export
     COMMAND hyperian export ${CMAKE_SOURCE_DIR}/examples/mobile_tasks.hyp for android to ${CMAKE_BINARY_DIR}/AndroidExport)
@@ -282,7 +296,7 @@ add_test(NAME build_signed_android_apk
         HYPERIAN_GRADLE=${CMAKE_SOURCE_DIR}/tests/fake_mobile_builder.sh
         HYPERIAN_FAKE_PLATFORM=android-apk
         HYPERIAN_FAKE_LOG=${CMAKE_BINARY_DIR}/MobileTasks-apk.log
-        $<TARGET_FILE:hyperian> build ${CMAKE_SOURCE_DIR}/examples/mobile_tasks.hyp for android as ${CMAKE_BINARY_DIR}/MobileTasks.apk)
+        $<TARGET_FILE:hyperian> build ${CMAKE_SOURCE_DIR}/examples/mobile_connected.hyp for android as ${CMAKE_BINARY_DIR}/MobileTasks.apk)
 set_tests_properties(build_signed_android_apk PROPERTIES DEPENDS "prepare_mobile_build_tests;clean_android_apk_build")
 add_test(NAME verify_signed_android_apk
     COMMAND sh ${CMAKE_SOURCE_DIR}/tests/mobile_build_test.sh ${CMAKE_BINARY_DIR}/MobileTasks.apk apk ${CMAKE_BINARY_DIR}/MobileTasks-apk.log)
@@ -299,7 +313,7 @@ add_test(NAME build_signed_android_aab
         HYPERIAN_GRADLE=${CMAKE_SOURCE_DIR}/tests/fake_mobile_builder.sh
         HYPERIAN_FAKE_PLATFORM=android-aab
         HYPERIAN_FAKE_LOG=${CMAKE_BINARY_DIR}/MobileTasks-aab.log
-        $<TARGET_FILE:hyperian> build ${CMAKE_SOURCE_DIR}/examples/mobile_tasks.hyp for android as ${CMAKE_BINARY_DIR}/MobileTasks.aab)
+        $<TARGET_FILE:hyperian> build ${CMAKE_SOURCE_DIR}/examples/mobile_connected.hyp for android as ${CMAKE_BINARY_DIR}/MobileTasks.aab)
 set_tests_properties(build_signed_android_aab PROPERTIES DEPENDS "prepare_mobile_build_tests;clean_android_aab_build")
 add_test(NAME verify_signed_android_aab
     COMMAND sh ${CMAKE_SOURCE_DIR}/tests/mobile_build_test.sh ${CMAKE_BINARY_DIR}/MobileTasks.aab aab ${CMAKE_BINARY_DIR}/MobileTasks-aab.log)
@@ -314,7 +328,7 @@ add_test(NAME build_signed_ios_ipa
         HYPERIAN_XCODEBUILD=${CMAKE_SOURCE_DIR}/tests/fake_mobile_builder.sh
         HYPERIAN_FAKE_PLATFORM=ios
         HYPERIAN_FAKE_LOG=${CMAKE_BINARY_DIR}/MobileTasks-ipa.log
-        $<TARGET_FILE:hyperian> build ${CMAKE_SOURCE_DIR}/examples/mobile_tasks.hyp for ios as ${CMAKE_BINARY_DIR}/MobileTasks.ipa)
+        $<TARGET_FILE:hyperian> build ${CMAKE_SOURCE_DIR}/examples/mobile_connected.hyp for ios as ${CMAKE_BINARY_DIR}/MobileTasks.ipa)
 set_tests_properties(build_signed_ios_ipa PROPERTIES DEPENDS clean_ios_ipa_build)
 add_test(NAME verify_signed_ios_ipa
     COMMAND sh ${CMAKE_SOURCE_DIR}/tests/mobile_build_test.sh ${CMAKE_BINARY_DIR}/MobileTasks.ipa ipa ${CMAKE_BINARY_DIR}/MobileTasks-ipa.log)
@@ -460,6 +474,12 @@ add_executable(hyperian_migration_fixture tests/migration_fixture.c)
 target_compile_options(hyperian_migration_fixture PRIVATE -Wall -Wextra -Wpedantic)
 add_executable(hyperian_game_media_fixture tests/game_media_fixture.c)
 target_compile_options(hyperian_game_media_fixture PRIVATE -Wall -Wextra -Wpedantic)
+add_executable(hyperian_embedded_sqlite_test tests/embedded_sqlite_test.c platform/sqlite/sqlite3.c)
+target_include_directories(hyperian_embedded_sqlite_test PRIVATE platform/sqlite)
+target_compile_definitions(hyperian_embedded_sqlite_test PRIVATE SQLITE_THREADSAFE=1 SQLITE_OMIT_LOAD_EXTENSION=1 SQLITE_DEFAULT_FOREIGN_KEYS=1)
+target_compile_options(hyperian_embedded_sqlite_test PRIVATE -Wall -Wextra -Wpedantic)
+set_source_files_properties(platform/sqlite/sqlite3.c PROPERTIES COMPILE_OPTIONS "-w")
+add_test(NAME embedded_android_sqlite COMMAND hyperian_embedded_sqlite_test)
 add_test(NAME create_legacy_data
     COMMAND hyperian_migration_fixture create ${CMAKE_BINARY_DIR}/legacy-migration.hdb)
 add_test(NAME migrate_legacy_data

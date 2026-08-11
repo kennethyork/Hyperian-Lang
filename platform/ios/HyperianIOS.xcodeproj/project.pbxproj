@@ -17,6 +17,7 @@
 		420000000000000000000009 /* desktop.c in Sources */ = {isa = PBXBuildFile; fileRef = 460000000000000000000015; };
 		420000000000000000000010 /* game.c in Sources */ = {isa = PBXBuildFile; fileRef = 460000000000000000000016; };
 		420000000000000000000011 /* Resources in Resources */ = {isa = PBXBuildFile; fileRef = 460000000000000000000020; };
+		420000000000000000000012 /* libsqlite3.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 460000000000000000000021; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -36,15 +37,16 @@
 		460000000000000000000017 /* hyperian.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = hyperian.h; sourceTree = "<group>"; };
 		460000000000000000000018 /* security.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = security.h; sourceTree = "<group>"; };
 		460000000000000000000020 /* Resources */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Resources; sourceTree = "<group>"; };
+		460000000000000000000021 /* libsqlite3.tbd */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.text-based-dylib-definition; name = libsqlite3.tbd; path = usr/lib/libsqlite3.tbd; sourceTree = SDKROOT; };
 		460000000000000000000100 /* HyperianIOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HyperianIOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		450000000000000000000001 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		450000000000000000000001 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (420000000000000000000012); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		470000000000000000000001 = {isa = PBXGroup; children = (470000000000000000000002, 470000000000000000000003); sourceTree = "<group>"; };
+		470000000000000000000001 = {isa = PBXGroup; children = (470000000000000000000002, 470000000000000000000003, 460000000000000000000021); sourceTree = "<group>"; };
 		470000000000000000000002 /* HyperianIOS */ = {isa = PBXGroup; children = (460000000000000000000001, 460000000000000000000002, 460000000000000000000003, 460000000000000000000004, 460000000000000000000005, 460000000000000000000006, 470000000000000000000004, 460000000000000000000020); path = HyperianIOS; sourceTree = "<group>"; };
 		470000000000000000000003 /* Products */ = {isa = PBXGroup; children = (460000000000000000000100); name = Products; sourceTree = "<group>"; };
 		470000000000000000000004 /* Runtime */ = {isa = PBXGroup; children = (460000000000000000000010, 460000000000000000000011, 460000000000000000000012, 460000000000000000000013, 460000000000000000000014, 460000000000000000000015, 460000000000000000000016, 460000000000000000000017, 460000000000000000000018); path = Runtime; sourceTree = "<group>"; };
@@ -93,14 +95,14 @@
 		430000000000000000000001 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {CLANG_ENABLE_MODULES = YES; GCC_C_LANGUAGE_STANDARD = c11; IPHONEOS_DEPLOYMENT_TARGET = 16.0; SDKROOT = iphoneos;}; name = Debug; };
 		430000000000000000000002 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {CLANG_ENABLE_MODULES = YES; GCC_C_LANGUAGE_STANDARD = c11; IPHONEOS_DEPLOYMENT_TARGET = 16.0; SDKROOT = iphoneos;}; name = Release; };
 		430000000000000000000003 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {
-			CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; ENABLE_PREVIEWS = YES; GENERATE_INFOPLIST_FILE = NO;
-			INFOPLIST_FILE = HyperianIOS/Info.plist; IPHONEOS_DEPLOYMENT_TARGET = 16.0; LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+			CLANG_ENABLE_OBJC_ARC = YES; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; ENABLE_PREVIEWS = YES; GENERATE_INFOPLIST_FILE = NO;
+			GCC_PREPROCESSOR_DEFINITIONS = "$(inherited) HYPERIAN_HAVE_SQLITE3=1"; INFOPLIST_FILE = HyperianIOS/Info.plist; IPHONEOS_DEPLOYMENT_TARGET = 16.0; LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 			MARKETING_VERSION = 1.0; PRODUCT_BUNDLE_IDENTIFIER = com.hyperian.generated; PRODUCT_NAME = "$(TARGET_NAME)";
 			SWIFT_OBJC_BRIDGING_HEADER = "HyperianIOS/HyperianIOS-Bridging-Header.h"; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2";
 		}; name = Debug; };
 		430000000000000000000004 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {
-			CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; GENERATE_INFOPLIST_FILE = NO;
-			INFOPLIST_FILE = HyperianIOS/Info.plist; IPHONEOS_DEPLOYMENT_TARGET = 16.0; LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+			CLANG_ENABLE_OBJC_ARC = YES; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; GENERATE_INFOPLIST_FILE = NO;
+			GCC_PREPROCESSOR_DEFINITIONS = "$(inherited) HYPERIAN_HAVE_SQLITE3=1"; INFOPLIST_FILE = HyperianIOS/Info.plist; IPHONEOS_DEPLOYMENT_TARGET = 16.0; LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 			MARKETING_VERSION = 1.0; PRODUCT_BUNDLE_IDENTIFIER = com.hyperian.generated; PRODUCT_NAME = "$(TARGET_NAME)";
 			SWIFT_OBJC_BRIDGING_HEADER = "HyperianIOS/HyperianIOS-Bridging-Header.h"; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2";
 		}; name = Release; };

@@ -1,0 +1,46 @@
+application "Connected Tasks" is mobile
+store data in sqlite file "connected-tasks.db"
+
+model Task
+    field title is text required
+end
+
+controller Tasks
+    action initialize
+        set message to "Not checked yet"
+        collect every Task title ordered by title as titles
+    end
+
+    action "save task"
+        create a Task using the current values as number
+        collect every Task title ordered by title as titles
+        set saved to "Saved task:" joined with number
+    end
+
+    action "refresh status"
+        try
+            get "https://example.com/hyperian-status" from web as response and status as code
+            set message to "Internet status:" joined with code joined with ":" joined with response
+        when it fails as problem
+            set message to "Internet problem:" joined with problem
+        end
+    end
+
+    when application starts
+        run action initialize
+        show view "home"
+    end
+end
+
+view "home"
+    heading "Connected mobile tasks"
+    text "SQLite keeps tasks on the phone and HTTPS loads remote information."
+    input "Task title" as title required
+    button "Save task" runs action "save task"
+    button "Refresh internet status" runs action "refresh status"
+    show saved
+    show message
+    for each title in titles show
+        show title
+    end
+end

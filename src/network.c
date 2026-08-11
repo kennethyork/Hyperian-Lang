@@ -3,6 +3,10 @@
 #include <stdio.h>
 #include <string.h>
 
+static HyperianHttpHandler platform_http_handler;
+
+void hyperian_set_http_handler(HyperianHttpHandler handler) { platform_http_handler = handler; }
+
 #ifdef HYPERIAN_HAVE_CURL
 #include <curl/curl.h>
 
@@ -14,7 +18,7 @@ static size_t receive_body(char *data, size_t size, size_t count, void *context)
     memcpy(buffer->body + buffer->used, data, bytes); buffer->used += bytes; buffer->body[buffer->used] = 0; return bytes;
 }
 
-int hyperian_http_get(const char *url, char *body, size_t body_size, long *status, char *error, size_t error_size) {
+static int curl_http_get(const char *url, char *body, size_t body_size, long *status, char *error, size_t error_size) {
     CURL *curl = curl_easy_init(); if (!curl) { snprintf(error, error_size, "could not initialize the HTTP client"); return 0; }
     HttpBuffer buffer = {body, body_size, 0, 0}; body[0] = 0;
     curl_easy_setopt(curl, CURLOPT_URL, url); curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
@@ -26,9 +30,14 @@ int hyperian_http_get(const char *url, char *body, size_t body_size, long *statu
     if (result != CURLE_OK) { snprintf(error, error_size, "web request failed: %s", curl_easy_strerror(result)); return 0; }
     return 1;
 }
-#else
+#endif
+
 int hyperian_http_get(const char *url, char *body, size_t body_size, long *status, char *error, size_t error_size) {
+    if (platform_http_handler) return platform_http_handler(url, body, body_size, status, error, error_size);
+#ifdef HYPERIAN_HAVE_CURL
+    return curl_http_get(url, body, body_size, status, error, error_size);
+#else
     (void)url; (void)body; (void)body_size; (void)status;
     snprintf(error, error_size, "this Hyperian build does not include the HTTP backend"); return 0;
-}
 #endif
+}

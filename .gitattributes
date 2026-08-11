@@ -1,0 +1,2 @@
+# Preserve the official generated SQLite amalgamation byte-for-byte.
+platform/sqlite/sqlite3.c -whitespace

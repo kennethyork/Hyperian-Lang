@@ -258,16 +258,25 @@ static void xml_text(const char *input, char *output, size_t output_size) {
 }
 
 static int add_android_project(const char *output, const char *name, const char *self_path) {
-    char template[PATH_MAX], runtime[PATH_MAX], destination[PATH_MAX], from[PATH_MAX], to[PATH_MAX];
+    char template[PATH_MAX], runtime[PATH_MAX], sqlite[PATH_MAX], ignored[PATH_MAX], destination[PATH_MAX], from[PATH_MAX], to[PATH_MAX];
     if (!resource_folders(self_path, "android", template, sizeof(template), runtime, sizeof(runtime))) {
         fprintf(stderr, "error: cannot find Hyperian's installed Android adapter resources\n"); return 0;
     }
     if (snprintf(destination, sizeof(destination), "%s/android", output) >= (int)sizeof(destination) ||
         !copy_bundle_tree(template, destination)) return 0;
+    if (!resource_folders(self_path, "sqlite", sqlite, sizeof(sqlite), ignored, sizeof(ignored))) {
+        fprintf(stderr, "error: cannot find Hyperian's embedded SQLite resources\n"); return 0;
+    }
     const char *sources[] = {"mobile.c", "runtime.c", "bytecode.c", "network.c", "security.c", "security.h", "desktop.c", "game.c", "hyperian.h"};
     for (size_t i = 0; i < sizeof(sources) / sizeof(sources[0]); i++) {
         if (snprintf(from, sizeof(from), "%s/%s", runtime, sources[i]) >= (int)sizeof(from) ||
             snprintf(to, sizeof(to), "%s/android/app/src/main/cpp/hyperian/%s", output, sources[i]) >= (int)sizeof(to) ||
+            !copy_bundle_file(from, to, 0644)) return 0;
+    }
+    const char *sqlite_sources[] = {"sqlite3.c", "sqlite3.h"};
+    for (size_t i = 0; i < sizeof(sqlite_sources) / sizeof(sqlite_sources[0]); i++) {
+        if (snprintf(from, sizeof(from), "%s/%s", sqlite, sqlite_sources[i]) >= (int)sizeof(from) ||
+            snprintf(to, sizeof(to), "%s/android/app/src/main/cpp/sqlite/%s", output, sqlite_sources[i]) >= (int)sizeof(to) ||
             !copy_bundle_file(from, to, 0644)) return 0;
     }
     if (snprintf(from, sizeof(from), "%s/application.hyc", output) >= (int)sizeof(from) ||

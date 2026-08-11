@@ -24,9 +24,13 @@ import android.widget.TextView;
 import android.widget.Toast;
 import org.json.JSONArray;
 import org.json.JSONObject;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -67,7 +71,7 @@ public final class MainActivity extends Activity {
         scroll.setOnTouchListener((view, event) -> { gestures.onTouchEvent(event); return false; });
         try {
             File bytecode = copyAsset("application.hyc");
-            String error = openMobile(bytecode.getAbsolutePath(), new File(getFilesDir(), "hyperian-data.hdb").getAbsolutePath());
+            String error = openMobile(bytecode.getAbsolutePath(), new File(getFilesDir(), "hyperian-data.db").getAbsolutePath());
             if (!error.isEmpty()) throw new Exception(error);
             mobileReady = true; render();
         } catch (Exception error) { showError(error.getMessage()); }
@@ -80,6 +84,40 @@ public final class MainActivity extends Activity {
             while ((count = input.read(buffer)) != -1) file.write(buffer, 0, count);
         }
         return output;
+    }
+
+    private static String[] fetchFromInternet(String address, int limit) {
+        final String[][] completed = {null};
+        Thread worker = new Thread(() -> completed[0] = fetchOnWorker(address, limit), "Hyperian HTTPS");
+        worker.start();
+        try { worker.join(); }
+        catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); return new String[] {"0", "", "the HTTPS request was interrupted"}; }
+        return completed[0] == null ? new String[] {"0", "", "Android could not finish its HTTPS request"} : completed[0];
+    }
+
+    private static String[] fetchOnWorker(String address, int limit) {
+        HttpURLConnection connection = null;
+        try {
+            URL url = new URL(address);
+            if (!url.getProtocol().equals("https") && !url.getProtocol().equals("http"))
+                return new String[] {"0", "", "phone requests require an http or https address"};
+            connection = (HttpURLConnection)url.openConnection();
+            connection.setConnectTimeout(10000); connection.setReadTimeout(30000); connection.setInstanceFollowRedirects(true);
+            connection.setRequestProperty("User-Agent", "Hyperian Mobile");
+            int status = connection.getResponseCode();
+            InputStream stream = status >= 400 ? connection.getErrorStream() : connection.getInputStream();
+            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+            if (stream != null) try (InputStream input = stream) {
+                byte[] buffer = new byte[4096]; int count;
+                while ((count = input.read(buffer)) != -1) {
+                    if (bytes.size() + count >= limit) return new String[] {"0", "", "the web response is larger than " + (limit - 1) + " characters"};
+                    bytes.write(buffer, 0, count);
+                }
+            }
+            return new String[] {Integer.toString(status), new String(bytes.toByteArray(), StandardCharsets.UTF_8), ""};
+        } catch (Exception problem) {
+            return new String[] {"0", "", "web request failed: " + problem.getMessage()};
+        } finally { if (connection != null) connection.disconnect(); }
     }
 
     private void render() {
