@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#define HYPERIAN_VERSION "0.8.0"
+#define HYPERIAN_VERSION "0.9.0"
 #define HYC_MAGIC "HYC1"
 #define HYC_MAX_ARGS 9
 
@@ -26,7 +26,8 @@ typedef enum {
     OP_ACTION, OP_END_ACTION, OP_SET_VALUE, OP_LOGIC_IF, OP_OTHERWISE,
     OP_END_LOGIC_IF, OP_REPEAT, OP_END_REPEAT, OP_RUN_ACTION, OP_READ_FORM,
     OP_TEST, OP_EXPECT, OP_END_TEST, OP_BEFORE_ACTION, OP_ERROR_VIEW,
-    OP_STATIC_FILES, OP_STYLE, OP_SCRIPT, OP_IMAGE, OP_TEXTAREA, OP_CHECKBOX
+    OP_STATIC_FILES, OP_STYLE, OP_SCRIPT, OP_IMAGE, OP_TEXTAREA, OP_CHECKBOX,
+    OP_DATA_VERSION, OP_MIGRATION, OP_RENAME_FIELD, OP_END_MIGRATION
 } OpCode;
 
 typedef struct {
@@ -53,5 +54,6 @@ int compile_file(const char *source_path, const char *output_path);
 int run_bytecode(const char *path, int port_override);
 int inspect_bytecode(const char *path);
 int test_bytecode(const char *path);
+int migrate_bytecode(const char *path);
 
 #endif

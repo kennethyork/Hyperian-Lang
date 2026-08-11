@@ -379,6 +379,30 @@ An application can expose a public directory without another web server:
 serve files from "public" at "/assets"
 ```
 
+## Data migrations
+
+Hyperian stores a version inside its native data file. Describe model changes in English and Hyperian upgrades old data automatically before the application starts:
+
+```hyperian
+data version 2
+
+when data changes from 1 to 2
+    rename field title to name in model Task
+end
+
+model Task
+    field name is text required
+end
+```
+
+Apply migrations without starting the application:
+
+```sh
+hyperian migrate app.hyp
+```
+
+Every version must move forward one step. Hyperian refuses to open data created by a newer application version, writes migrations atomically, and automatically upgrades older `HDB1` files into versioned `HDB2` files.
+
 Static requests reject parent-directory traversal and are returned as binary-safe responses with appropriate CSS, JavaScript, SVG, PNG, JPEG, GIF, WebP, icon, HTML, JSON, and text content types.
 
 Views connect those assets and provide richer form controls in plain English:
@@ -406,6 +430,6 @@ Quoted text may contain spaces. `#` starts a comment. Indentation is optional bu
 
 ## Project status
 
-Version 0.8 is a small but real MVC platform: custom bytecode, a native VM, target-aware compilation, working web/console/API/service runtimes, persistent models, complete CRUD, reusable layouts/components, static assets and richer controls, safe HTML and typed JSON, authentication and authorization, English controller logic, multi-file programs, middleware, custom error views, source formatting, and tests written in English.
+Version 0.9 is a small but real MVC platform: custom bytecode, a native VM, target-aware compilation, working web/console/API/service runtimes, versioned data migrations, persistent models, complete CRUD, reusable layouts/components, static assets and richer controls, safe HTML and typed JSON, authentication and authorization, English controller logic, multi-file programs, middleware, custom error views, source formatting, and tests written in English.
 
-The next major layers are explicit migrations, general middleware and error handlers, assets and richer controls, packages/modules, an integrated test language and debugger, then native desktop and game runtimes. Those are not claimed as complete yet.
+The next major layers are broader middleware and error handlers, packages, a debugger, then native desktop and game runtimes. Those are not claimed as complete yet.

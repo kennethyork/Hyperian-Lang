@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(Hyperian VERSION 0.8.0 LANGUAGES C)
+project(Hyperian VERSION 0.9.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -59,3 +59,20 @@ add_test(NAME english_language_tests
     COMMAND hyperian test ${CMAKE_SOURCE_DIR}/examples/english_logic.hyp)
 add_test(NAME compile_multi_file_program
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/modular/app.hyp -o ${CMAKE_BINARY_DIR}/modular.hyc)
+add_test(NAME compile_data_migrations
+    COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/migrating_tasks.hyp -o ${CMAKE_BINARY_DIR}/migrating_tasks.hyc)
+add_test(NAME inspect_data_migrations
+    COMMAND hyperian inspect ${CMAKE_BINARY_DIR}/migrating_tasks.hyc)
+set_tests_properties(inspect_data_migrations PROPERTIES DEPENDS compile_data_migrations)
+
+add_executable(hyperian_migration_fixture tests/migration_fixture.c)
+target_compile_options(hyperian_migration_fixture PRIVATE -Wall -Wextra -Wpedantic)
+add_test(NAME create_legacy_data
+    COMMAND hyperian_migration_fixture create ${CMAKE_BINARY_DIR}/legacy-migration.hdb)
+add_test(NAME migrate_legacy_data
+    COMMAND ${CMAKE_COMMAND} -E env HYPERIAN_DATA=${CMAKE_BINARY_DIR}/legacy-migration.hdb
+        $<TARGET_FILE:hyperian> migrate ${CMAKE_SOURCE_DIR}/examples/migrating_tasks.hyp)
+set_tests_properties(migrate_legacy_data PROPERTIES DEPENDS create_legacy_data)
+add_test(NAME verify_migrated_data
+    COMMAND hyperian_migration_fixture verify ${CMAKE_BINARY_DIR}/legacy-migration.hdb)
+set_tests_properties(verify_migrated_data PROPERTIES DEPENDS migrate_legacy_data)

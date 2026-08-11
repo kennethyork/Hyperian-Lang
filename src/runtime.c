@@ -501,7 +501,13 @@ static int delete_record(Record **records, const char *model, const char *id) {
     return 0;
 }
 
-static int save_records(Record *records);
+static int save_records(Record *records, const Bytecode *code);
+
+static uint32_t program_data_version(const Bytecode *code) {
+    for (size_t i = 0; i < code->count; i++)
+        if (code->items[i].opcode == OP_DATA_VERSION) return (uint32_t)strtoul(code->items[i].args[0], NULL, 10);
+    return 1;
+}
 
 static char *error_page(const char *message) {
     Buffer b; buffer_init(&b); buffer_add(&b, "<!doctype html><html><body><h1>Something needs attention</h1><p>");
@@ -675,14 +681,14 @@ static Response execute_route(const Bytecode *code, size_t route_at, Form *form,
         else if (in->opcode == OP_CREATE) {
             if (!create_record(code, in->args[0], form, records, error, sizeof(error)))
                 return (Response){400, error_page(*error ? error : "Could not create the record"), NULL, "text/html; charset=utf-8", NULL, 0};
-            if (!save_records(*records)) return (Response){500, error_page("Could not save the data file"), NULL, "text/html; charset=utf-8", NULL, 0};
+            if (!save_records(*records, code)) return (Response){500, error_page("Could not save the data file"), NULL, "text/html; charset=utf-8", NULL, 0};
         } else if (in->opcode == OP_UPDATE) {
             if (!update_record(code, in->args[0], route_id, form, *records, error, sizeof(error)))
                 return (Response){strstr(error, "not found") ? 404 : 400, error_page(error), NULL, "text/html; charset=utf-8", NULL, 0};
-            if (!save_records(*records)) return (Response){500, error_page("Could not save the data file"), NULL, "text/html; charset=utf-8", NULL, 0};
+            if (!save_records(*records, code)) return (Response){500, error_page("Could not save the data file"), NULL, "text/html; charset=utf-8", NULL, 0};
         } else if (in->opcode == OP_DELETE) {
             if (!delete_record(records, in->args[0], route_id)) return (Response){404, error_page("Record not found"), NULL, "text/html; charset=utf-8", NULL, 0};
-            if (!save_records(*records)) return (Response){500, error_page("Could not save the data file"), NULL, "text/html; charset=utf-8", NULL, 0};
+            if (!save_records(*records, code)) return (Response){500, error_page("Could not save the data file"), NULL, "text/html; charset=utf-8", NULL, 0};
         } else if (in->opcode == OP_SHOW_VIEW) {
             return (Response){200, render_view(code, in->args[0], &scope, *records, app_name), NULL, "text/html; charset=utf-8", response_cookie, 0};
         } else if (in->opcode == OP_SHOW_JSON) {
@@ -791,11 +797,11 @@ static char *file_read_text(FILE *file) {
     text[length] = 0; return text;
 }
 
-static int save_records(Record *records) {
+static int save_records(Record *records, const Bytecode *code) {
     char temporary[4096]; snprintf(temporary, sizeof(temporary), "%s.tmp", data_path());
     FILE *file = fopen(temporary, "wb"); if (!file) return 0;
     uint32_t count = 0; for (Record *record = records; record; record = record->next) count++;
-    int okay = fwrite("HDB1", 1, 4, file) == 4 && file_write_u32(file, count);
+    int okay = fwrite("HDB2", 1, 4, file) == 4 && file_write_u32(file, program_data_version(code)) && file_write_u32(file, count);
     for (Record *record = records; okay && record; record = record->next) {
         okay = file_write_text(file, record->model) && file_write_u32(file, (uint32_t)record->field_count);
         for (int i = 0; okay && i < record->field_count; i++)
@@ -807,10 +813,58 @@ static int save_records(Record *records) {
     return okay;
 }
 
-static Record *load_records(const Bytecode *code) {
+static int rename_record_field(Record *record, const char *old_name, const char *new_name) {
+    int old_at = -1, new_at = -1;
+    for (int i = 0; i < record->field_count; i++) {
+        if (!strcmp(record->fields[i].key, old_name)) old_at = i;
+        if (!strcmp(record->fields[i].key, new_name)) new_at = i;
+    }
+    if (old_at < 0) return 1;
+    if (new_at >= 0) {
+        free(record->fields[old_at].key); free(record->fields[old_at].value);
+        for (int i = old_at; i + 1 < record->field_count; i++) record->fields[i] = record->fields[i + 1];
+        record->field_count--; return 1;
+    }
+    char *renamed = copy_string(new_name);
+    if (!renamed) return 0;
+    free(record->fields[old_at].key); record->fields[old_at].key = renamed; return 1;
+}
+
+static int apply_data_migrations(const Bytecode *code, Record *records, uint32_t stored_version) {
+    uint32_t wanted = program_data_version(code);
+    if (stored_version > wanted) {
+        fprintf(stderr, "error: data file is version %u, but this application only understands version %u\n", stored_version, wanted);
+        return 0;
+    }
+    for (uint32_t version = stored_version; version < wanted; version++) {
+        size_t migration = code->count;
+        for (size_t i = 0; i < code->count; i++) if (code->items[i].opcode == OP_MIGRATION &&
+            (uint32_t)strtoul(code->items[i].args[0], NULL, 10) == version) { migration = i; break; }
+        if (migration == code->count) { fprintf(stderr, "error: no data migration starts at version %u\n", version); return 0; }
+        for (size_t i = migration + 1; i < code->count && code->items[i].opcode != OP_END_MIGRATION; i++)
+            if (code->items[i].opcode == OP_RENAME_FIELD)
+                for (Record *record = records; record; record = record->next)
+                    if (!strcmp(record->model, code->items[i].args[0]) &&
+                        !rename_record_field(record, code->items[i].args[1], code->items[i].args[2])) return 0;
+    }
+    if (stored_version < wanted) {
+        if (!save_records(records, code)) { fprintf(stderr, "error: could not save migrated data\n"); return 0; }
+        printf("Migrated data from version %u to version %u.\n", stored_version, wanted);
+    }
+    return 1;
+}
+
+static Record *load_records(const Bytecode *code, int *okay) {
+    *okay = 1;
     FILE *file = fopen(data_path(), "rb"); if (!file) return NULL;
-    char magic[4]; uint32_t count;
-    if (fread(magic, 1, 4, file) != 4 || memcmp(magic, "HDB1", 4) || !file_read_u32(file, &count) || count > 100000) goto damaged;
+    char magic[4]; uint32_t stored_version = 1, count;
+    if (fread(magic, 1, 4, file) != 4) goto damaged;
+    if (!memcmp(magic, "HDB1", 4)) {
+        if (!file_read_u32(file, &count)) goto damaged;
+    } else if (!memcmp(magic, "HDB2", 4)) {
+        if (!file_read_u32(file, &stored_version) || !file_read_u32(file, &count) || stored_version < 1) goto damaged;
+    } else goto damaged;
+    if (count > 100000) goto damaged;
     Record *records = NULL, **tail = &records;
     for (uint32_t r = 0; r < count; r++) {
         Record *record = calloc(1, sizeof(*record)); uint32_t fields;
@@ -823,11 +877,13 @@ static Record *load_records(const Bytecode *code) {
         if (model_instruction(code, record->model, NULL)) { *tail = record; tail = &record->next; }
         else { free(record->model); for (int f = 0; f < record->field_count; f++) { free(record->fields[f].key); free(record->fields[f].value); } free(record); }
     }
-    fclose(file); return records;
+    fclose(file);
+    if (!apply_data_migrations(code, records, stored_version)) { *okay = 0; records_free(records); return NULL; }
+    return records;
 damaged_records:
     records_free(records);
 damaged:
-    fclose(file); fprintf(stderr, "warning: ignored damaged data file %s\n", data_path()); return NULL;
+    fclose(file); *okay = 0; fprintf(stderr, "error: data file %s is damaged\n", data_path()); return NULL;
 }
 
 static int console_render_range(const Bytecode *code, size_t from, size_t to, Scope *scope, Record *records) {
@@ -863,7 +919,8 @@ static int console_render_range(const Bytecode *code, size_t from, size_t to, Sc
 static int run_console(const Bytecode *code, const char *app_name) {
     VariableSet locals = {0};
     Scope scope = {.locals = &locals};
-    Record *records = load_records(code);
+    int data_okay; Record *records = load_records(code, &data_okay);
+    if (!data_okay) return 1;
     printf("%s\n", app_name);
     for (size_t i = 0; i < code->count; i++) if (code->items[i].opcode == OP_EVENT && !strcmp(code->items[i].args[0], "START")) {
         for (i++; i < code->count && code->items[i].opcode != OP_END_ROUTE; i++) {
@@ -917,7 +974,8 @@ int run_bytecode(const char *path, int port_override) {
     struct sigaction action; memset(&action, 0, sizeof(action)); action.sa_handler = stop_server; sigemptyset(&action.sa_mask);
     sigaction(SIGINT, &action, NULL); sigaction(SIGTERM, &action, NULL);
     printf("%s is running at http://127.0.0.1:%d\n", name, port); fflush(stdout);
-    Record *records = load_records(&code); Session *sessions = NULL;
+    int data_okay; Record *records = load_records(&code, &data_okay); Session *sessions = NULL;
+    if (!data_okay) { close(server); bytecode_free(&code); return 1; }
     while (keep_running) {
         int client = accept(server, NULL, NULL);
         if (client < 0) { if (errno == EINTR) continue; break; }
@@ -960,4 +1018,13 @@ int test_bytecode(const char *path) {
     if (!tests) { fprintf(stderr, "error: this program has no test blocks\n"); failures = 1; }
     printf("%d test%s, %d failure%s\n", tests, tests == 1 ? "" : "s", failures, failures == 1 ? "" : "s");
     bytecode_free(&code); return failures ? 1 : 0;
+}
+
+int migrate_bytecode(const char *path) {
+    Bytecode code; bytecode_init(&code); char error[256];
+    if (!bytecode_read(&code, path, error, sizeof(error))) { fprintf(stderr, "error: %s\n", error); return 1; }
+    int data_okay; Record *records = load_records(&code, &data_okay);
+    if (!data_okay) { bytecode_free(&code); return 1; }
+    printf("Data is ready at version %u.\n", program_data_version(&code));
+    records_free(records); bytecode_free(&code); return 0;
 }

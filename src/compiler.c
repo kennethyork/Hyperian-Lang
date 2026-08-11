@@ -11,7 +11,7 @@
 #define MAX_DEPTH 64
 
 typedef enum { BLOCK_ROOT, BLOCK_MODEL, BLOCK_CONTROLLER, BLOCK_ROUTE, BLOCK_VIEW, BLOCK_FORM, BLOCK_EACH, BLOCK_IF,
-    BLOCK_LAYOUT, BLOCK_COMPONENT, BLOCK_ACTION, BLOCK_LOGIC_IF, BLOCK_REPEAT, BLOCK_TEST } Block;
+    BLOCK_LAYOUT, BLOCK_COMPONENT, BLOCK_ACTION, BLOCK_LOGIC_IF, BLOCK_REPEAT, BLOCK_TEST, BLOCK_MIGRATION } Block;
 
 static void source_error(const char *path, unsigned line, const char *message) {
     fprintf(stderr, "%s:%u: error: %s\n", path, line, message);
@@ -95,7 +95,12 @@ static const char *model_field_kind(const Bytecode *code, const char *model, con
 
 static int validate(Bytecode *code, const char *path) {
     int models = 0, controllers = 0, views = 0;
+    int data_version = 1, version_declarations = 0;
     const char *target = "web";
+    for (size_t i = 0; i < code->count; i++) if (code->items[i].opcode == OP_DATA_VERSION) {
+        data_version = atoi(code->items[i].args[0]); version_declarations++;
+        if (version_declarations > 1) { source_error(path, code->items[i].line, "data version can only be declared once"); return 0; }
+    }
     for (size_t i = 0; i < code->count; i++) {
         Instruction *in = &code->items[i];
         if (in->opcode == OP_TARGET) target = in->args[0];
@@ -134,6 +139,19 @@ static int validate(Bytecode *code, const char *path) {
         }
         if (in->opcode == OP_USE_COMPONENT && !known_name(code, OP_COMPONENT, in->args[0])) {
             source_error(path, in->line, "this component does not exist"); return 0;
+        }
+        if (in->opcode == OP_MIGRATION) {
+            int from = atoi(in->args[0]), to = atoi(in->args[1]);
+            if (to != from + 1) { source_error(path, in->line, "a data migration must move forward by one version"); return 0; }
+            if (to > data_version) { source_error(path, in->line, "this migration goes beyond the declared data version"); return 0; }
+            for (size_t other = 0; other < i; other++) if (code->items[other].opcode == OP_MIGRATION && atoi(code->items[other].args[0]) == from) {
+                source_error(path, in->line, "this starting data version already has a migration"); return 0;
+            }
+        }
+        if (in->opcode == OP_RENAME_FIELD) {
+            if (!known_name(code, OP_MODEL, in->args[0])) { source_error(path, in->line, "the migration model does not exist"); return 0; }
+            if (!strcmp(in->args[1], "id") || !strcmp(in->args[2], "id")) { source_error(path, in->line, "automatic id fields cannot be renamed"); return 0; }
+            if (!model_has_field(code, in->args[0], in->args[2])) { source_error(path, in->line, "the renamed field must exist in the current model"); return 0; }
         }
         if ((in->opcode == OP_FIND_ALL || in->opcode == OP_FIND_ONE || in->opcode == OP_FIND_WHERE || in->opcode == OP_FIND_ORDERED || in->opcode == OP_FIND_SIGNED_IN || in->opcode == OP_SIGN_IN || in->opcode == OP_CREATE ||
             in->opcode == OP_UPDATE || in->opcode == OP_DELETE) && !known_name(code, OP_MODEL, in->args[0])) {
@@ -190,6 +208,11 @@ static int validate(Bytecode *code, const char *path) {
                 source_error(path, in->line, "a start event must finish by showing a view"); return 0;
             }
         }
+    }
+    for (int version = 1; version < data_version; version++) {
+        int found = 0;
+        for (size_t i = 0; i < code->count; i++) if (code->items[i].opcode == OP_MIGRATION && atoi(code->items[i].args[0]) == version) found = 1;
+        if (!found) { source_error(path, 1, "every data version needs a migration to the next version"); return 0; }
     }
     if (!models || !controllers || (!views && strcmp(target, "api"))) {
         source_error(path, 1, "an MVC program needs at least one model, controller, and view"); return 0;
@@ -252,7 +275,7 @@ int compile_file(const char *source_path, const char *output_path) {
                 current == BLOCK_FORM ? OP_END_FORM : current == BLOCK_EACH ? OP_END_EACH : current == BLOCK_IF ? OP_END_IF :
                 current == BLOCK_LAYOUT ? OP_END_LAYOUT : current == BLOCK_COMPONENT ? OP_END_COMPONENT :
                 current == BLOCK_ACTION ? OP_END_ACTION : current == BLOCK_LOGIC_IF ? OP_END_LOGIC_IF :
-                current == BLOCK_REPEAT ? OP_END_REPEAT : OP_END_TEST;
+                current == BLOCK_REPEAT ? OP_END_REPEAT : current == BLOCK_MIGRATION ? OP_END_MIGRATION : OP_END_TEST;
             okay = emit(&code, op, 0, NULL, number); depth--; continue;
         }
         if (current == BLOCK_ROOT) {
@@ -267,6 +290,15 @@ int compile_file(const char *source_path, const char *output_path) {
                 char *end; long port = strtol(w[2], &end, 10);
                 if (*end || port < 1 || port > 65535) { source_error(source_path, number, "the port must be between 1 and 65535"); okay = 0; }
                 else okay = emit(&code, OP_PORT, 1, &w[2], number);
+            } else if (n == 3 && !strcmp(w[0], "data") && !strcmp(w[1], "version")) {
+                char *end; long version = strtol(w[2], &end, 10);
+                if (*end || version < 1 || version > 1000000) { source_error(source_path, number, "data version must be a positive whole number"); okay = 0; }
+                else okay = emit(&code, OP_DATA_VERSION, 1, &w[2], number);
+            } else if (n == 7 && !strcmp(w[0], "when") && !strcmp(w[1], "data") && !strcmp(w[2], "changes") &&
+                !strcmp(w[3], "from") && !strcmp(w[5], "to")) {
+                char *from_end, *to_end; long from = strtol(w[4], &from_end, 10), to = strtol(w[6], &to_end, 10);
+                if (*from_end || *to_end || from < 1 || to < 2) { source_error(source_path, number, "data migration versions must be positive whole numbers"); okay = 0; }
+                else { char *args[2] = {w[4], w[6]}; okay = emit(&code, OP_MIGRATION, 2, args, number); stack[depth++] = BLOCK_MIGRATION; }
             } else if (n == 2 && !strcmp(w[0], "model") && is_name(w[1])) {
                 okay = emit(&code, OP_MODEL, 1, &w[1], number); stack[depth++] = BLOCK_MODEL;
             } else if (n == 2 && !strcmp(w[0], "controller") && is_name(w[1])) {
@@ -282,7 +314,12 @@ int compile_file(const char *source_path, const char *output_path) {
             } else if (n == 6 && !strcmp(w[0], "serve") && !strcmp(w[1], "files") && !strcmp(w[2], "from") && !strcmp(w[4], "at")) {
                 if (w[5][0] != '/') { source_error(source_path, number, "the public file address must start with /"); okay = 0; }
                 else { char *args[2] = {w[3], w[5]}; okay = emit(&code, OP_STATIC_FILES, 2, args, number); }
-            } else { source_error(source_path, number, "expected application, listen on, model, controller, view, layout, or component"); okay = 0; }
+            } else { source_error(source_path, number, "expected application, data version, data migration, listen on, model, controller, view, layout, or component"); okay = 0; }
+        } else if (current == BLOCK_MIGRATION) {
+            if (n == 8 && !strcmp(w[0], "rename") && !strcmp(w[1], "field") && !strcmp(w[3], "to") &&
+                !strcmp(w[5], "in") && !strcmp(w[6], "model") && is_name(w[2]) && is_name(w[4]) && is_name(w[7])) {
+                char *args[3] = {w[7], w[2], w[4]}; okay = emit(&code, OP_RENAME_FIELD, 3, args, number);
+            } else { source_error(source_path, number, "say: rename field old_name to new_name in model ModelName"); okay = 0; }
         } else if (current == BLOCK_MODEL) {
             if (n >= 4 && n <= 13 && !strcmp(w[0], "field") && !strcmp(w[2], "is") &&
                 (!strcmp(w[3], "text") || !strcmp(w[3], "number") || !strcmp(w[3], "boolean") || !strcmp(w[3], "secret") || !strcmp(w[3], "reference")) && is_name(w[1])) {

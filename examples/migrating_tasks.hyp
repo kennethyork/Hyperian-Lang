@@ -1,0 +1,26 @@
+application MigratingTasks is web
+data version 2
+listen on 8000
+
+when data changes from 1 to 2
+    rename field title to name in model Task
+end
+
+model Task
+    field name is text required
+end
+
+controller Tasks
+    when someone visits "/"
+        find all Task as tasks
+        show view "TaskList" with tasks
+    end
+end
+
+view TaskList
+    title "Migrating tasks"
+    heading "Tasks"
+    for each task in tasks show
+        show task.name
+    end
+end

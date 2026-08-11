@@ -20,6 +20,7 @@ static int format_source(const char *path) {
         puts(start);
         int opening = starts_with(start, "model ") || starts_with(start, "controller ") || starts_with(start, "view ") ||
             starts_with(start, "layout ") || starts_with(start, "component ") || starts_with(start, "action ") ||
+            starts_with(start, "when data changes from ") ||
             starts_with(start, "when someone ") || !strcmp(start, "when application starts") || starts_with(start, "form ") ||
             starts_with(start, "for each ") || starts_with(start, "if ") || starts_with(start, "repeat ") || !strcmp(start, "otherwise");
         if (opening) indentation++;
@@ -38,6 +39,7 @@ static void help(void) {
          "  hyperian inspect app.hyc              Show compiled instructions\n"
          "  hyperian format app.hyp               Print consistently indented source\n"
          "  hyperian test app.hyp                 Run English test blocks\n"
+         "  hyperian migrate app.hyp              Apply pending data migrations\n"
          "  hyperian version                      Show the version\n");
 }
 
@@ -73,6 +75,14 @@ int main(int argc, char **argv) {
         char temporary[128]; snprintf(temporary, sizeof(temporary), "/tmp/hyperian-test-%ld.hyc", (long)getpid());
         int result = compile_file(argv[2], temporary);
         if (!result) result = test_bytecode(temporary);
+        unlink(temporary); return result;
+    }
+    if (!strcmp(argv[1], "migrate")) {
+        if (argc != 3) { fprintf(stderr, "usage: hyperian migrate app.hyp\n"); return 2; }
+        if (ends_with(argv[2], ".hyc")) return migrate_bytecode(argv[2]);
+        char temporary[128]; snprintf(temporary, sizeof(temporary), "/tmp/hyperian-migrate-%ld.hyc", (long)getpid());
+        int result = compile_file(argv[2], temporary);
+        if (!result) result = migrate_bytecode(temporary);
         unlink(temporary); return result;
     }
     if (!strcmp(argv[1], "run")) {
