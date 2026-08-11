@@ -22,6 +22,7 @@ struct DesktopContext {
     DesktopButton buttons[HYPERIAN_STATE_MAX]; int button_count;
     DesktopTimer timers[HYPERIAN_STATE_MAX]; int timer_count;
     int handling_event;
+    double swipe_x, swipe_y; int tracking_swipe;
 };
 
 static int show_interface_view(DesktopContext *context, const char *name);
@@ -210,6 +211,28 @@ static gboolean window_blurred(GtkWidget *window, GdkEventFocus *event, gpointer
     (void)window; (void)event; return dispatch_window_event((DesktopContext *)data, "BLUR");
 }
 
+static void recognize_swipe(DesktopContext *context, double horizontal, double vertical) {
+    if (horizontal > -50 && horizontal < 50 && vertical > -50 && vertical < 50) return;
+    const char *direction;
+    if (horizontal * horizontal >= vertical * vertical) direction = horizontal < 0 ? "left" : "right";
+    else direction = vertical < 0 ? "up" : "down";
+    char event[32]; snprintf(event, sizeof(event), "SWIPE:%s", direction); dispatch_window_event(context, event);
+}
+
+static gboolean swipe_started(GtkWidget *window, GdkEventButton *event, gpointer data) {
+    (void)window; DesktopContext *context = data;
+    if (event->button == 1) { context->swipe_x = event->x_root; context->swipe_y = event->y_root; context->tracking_swipe = 1; }
+    return FALSE;
+}
+
+static gboolean swipe_finished(GtkWidget *window, GdkEventButton *event, gpointer data) {
+    (void)window; DesktopContext *context = data;
+    if (event->button == 1 && context->tracking_swipe) {
+        context->tracking_swipe = 0; recognize_swipe(context, event->x_root - context->swipe_x, event->y_root - context->swipe_y);
+    }
+    return FALSE;
+}
+
 static int run_interface_app(const Bytecode *code, const char *name, int mobile) {
     if (!gtk_init_check(NULL, NULL)) { fprintf(stderr, "error: cannot open a desktop display\n"); return 1; }
     const char *view_name = starting_view(code); if (!view_name) { fprintf(stderr, "error: desktop application needs a starting view\n"); return 1; }
@@ -226,6 +249,11 @@ static int run_interface_app(const Bytecode *code, const char *name, int mobile)
     g_signal_connect(window, "delete-event", G_CALLBACK(window_closing), &context);
     g_signal_connect(window, "focus-in-event", G_CALLBACK(window_focused), &context);
     g_signal_connect(window, "focus-out-event", G_CALLBACK(window_blurred), &context);
+    if (mobile) {
+        gtk_widget_add_events(window, GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK);
+        g_signal_connect(window, "button-press-event", G_CALLBACK(swipe_started), &context);
+        g_signal_connect(window, "button-release-event", G_CALLBACK(swipe_finished), &context);
+    }
     if (!show_interface_view(&context, view_name)) { fprintf(stderr, "error: starting view does not exist\n"); gtk_widget_destroy(window); hyperian_data_close(context.data); return 1; }
     for (size_t i = 0; i < code->count && context.timer_count < HYPERIAN_STATE_MAX; i++)
         if (code->items[i].opcode == OP_EVENT && !strncmp(code->items[i].args[0], "TIMER:", 6)) {
@@ -257,6 +285,13 @@ static int run_interface_app(const Bytecode *code, const char *name, int mobile)
         for (int i = 0; test_timer && i < context.timer_count; i++) if (!strcmp(context.timers[i].event, test_timer)) timer_fired(&context.timers[i]);
         const char *test_event = getenv("HYPERIAN_VISUAL_TEST_EVENT");
         if (test_event) dispatch_window_event(&context, test_event);
+        const char *test_swipe = getenv("HYPERIAN_VISUAL_TEST_SWIPE");
+        if (test_swipe) {
+            if (!strcmp(test_swipe, "left")) recognize_swipe(&context, -100, 0);
+            else if (!strcmp(test_swipe, "right")) recognize_swipe(&context, 100, 0);
+            else if (!strcmp(test_swipe, "up")) recognize_swipe(&context, 0, -100);
+            else if (!strcmp(test_swipe, "down")) recognize_swipe(&context, 0, 100);
+        }
         const char *test_name = getenv("HYPERIAN_VISUAL_TEST_STATE");
         if (test_name) printf("%s=%s\n", test_name, hyperian_state_get(&context.state, test_name) ? hyperian_state_get(&context.state, test_name) : "");
         if (getenv("HYPERIAN_VISUAL_TEST_LABELS")) {

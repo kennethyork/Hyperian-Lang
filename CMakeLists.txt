@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(Hyperian VERSION 0.32.0 LANGUAGES C)
+project(Hyperian VERSION 0.33.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -230,6 +230,10 @@ if(GTK3_FOUND AND XVFB_RUN)
         COMMAND ${XVFB_RUN} -a ${CMAKE_COMMAND} -E env HYPERIAN_VISUAL_TEST=1 HYPERIAN_VISUAL_TEST_EVENT=BLUR HYPERIAN_VISUAL_TEST_STATE=window_status
             $<TARGET_FILE:hyperian> run ${CMAKE_SOURCE_DIR}/examples/desktop_notes.hyp)
     set_tests_properties(run_desktop_blur_event PROPERTIES DEPENDS compile_native_desktop PASS_REGULAR_EXPRESSION "window_status=Window unfocused")
+    add_test(NAME run_mobile_preview_swipe
+        COMMAND ${XVFB_RUN} -a ${CMAKE_COMMAND} -E env HYPERIAN_VISUAL_TEST=1 HYPERIAN_VISUAL_TEST_SWIPE=left HYPERIAN_VISUAL_TEST_STATE=gesture_status
+            $<TARGET_FILE:hyperian> run ${CMAKE_SOURCE_DIR}/examples/mobile_tasks.hyp)
+    set_tests_properties(run_mobile_preview_swipe PROPERTIES DEPENDS compile_mobile_preview PASS_REGULAR_EXPRESSION "gesture_status=Swiped left")
 endif()
 add_test(NAME compile_mobile_preview
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/mobile_tasks.hyp -o ${CMAKE_BINARY_DIR}/mobile_tasks.hyc)
@@ -268,6 +272,9 @@ set_tests_properties(debug_english_input_event PROPERTIES PASS_REGULAR_EXPRESSIO
 add_test(NAME debug_english_lifecycle_event
     COMMAND hyperian debug ${CMAKE_SOURCE_DIR}/examples/mobile_tasks.hyp --event "application resumes")
 set_tests_properties(debug_english_lifecycle_event PROPERTIES PASS_REGULAR_EXPRESSION "lifecycle_status is now Application resumed")
+add_test(NAME debug_english_swipe_event
+    COMMAND hyperian debug ${CMAKE_SOURCE_DIR}/examples/mobile_tasks.hyp --event "someone swipes right")
+set_tests_properties(debug_english_swipe_event PROPERTIES PASS_REGULAR_EXPRESSION "gesture_status is now Swiped right")
 add_test(NAME reject_missing_desktop_action
     COMMAND hyperian check ${CMAKE_SOURCE_DIR}/tests/bad_desktop_action.hyp)
 set_tests_properties(reject_missing_desktop_action PROPERTIES WILL_FAIL TRUE)
@@ -289,6 +296,12 @@ set_tests_properties(reject_focus_event_outside_native_interface PROPERTIES WILL
 add_test(NAME format_native_events
     COMMAND hyperian format ${CMAKE_SOURCE_DIR}/examples/mobile_tasks.hyp)
 set_tests_properties(format_native_events PROPERTIES PASS_REGULAR_EXPRESSION "    when application pauses")
+add_test(NAME reject_swipe_outside_mobile
+    COMMAND hyperian check ${CMAKE_SOURCE_DIR}/tests/bad_swipe_target.hyp)
+set_tests_properties(reject_swipe_outside_mobile PROPERTIES WILL_FAIL TRUE)
+add_test(NAME reject_bad_swipe_direction
+    COMMAND hyperian check ${CMAKE_SOURCE_DIR}/tests/bad_swipe_direction.hyp)
+set_tests_properties(reject_bad_swipe_direction PROPERTIES WILL_FAIL TRUE)
 add_test(NAME compile_native_game
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/blocks_game.hyp -o ${CMAKE_BINARY_DIR}/blocks_game.hyc)
 add_test(NAME compile_game_physics

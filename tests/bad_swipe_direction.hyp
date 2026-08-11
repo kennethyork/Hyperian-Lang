@@ -1,0 +1,19 @@
+application "Wrong Swipe Direction" is mobile
+
+model Setting
+    field name is text
+end
+
+controller Main
+    when application starts
+        show view "main"
+    end
+
+    when someone swipes diagonally
+        set status to swiped
+    end
+end
+
+view "main"
+    show status
+end

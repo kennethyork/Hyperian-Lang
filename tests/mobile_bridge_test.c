@@ -23,6 +23,14 @@ int main(int argc, char **argv) {
         hyperian_mobile_value(mobile, "lifecycle_status") && !strcmp(hyperian_mobile_value(mobile, "lifecycle_status"), "Application resumed") &&
         hyperian_mobile_send_event(mobile, "FOCUS", error, sizeof(error)) &&
         !strcmp(hyperian_mobile_value(mobile, "lifecycle_status"), "Window focused");
+    if (okay) okay = hyperian_mobile_send_event(mobile, "SWIPE:left", error, sizeof(error)) &&
+        hyperian_mobile_value(mobile, "gesture_status") && !strcmp(hyperian_mobile_value(mobile, "gesture_status"), "Swiped left") &&
+        hyperian_mobile_send_event(mobile, "SWIPE:right", error, sizeof(error)) &&
+        !strcmp(hyperian_mobile_value(mobile, "gesture_status"), "Swiped right") &&
+        hyperian_mobile_send_event(mobile, "SWIPE:up", error, sizeof(error)) &&
+        !strcmp(hyperian_mobile_value(mobile, "gesture_status"), "Swiped up") &&
+        hyperian_mobile_send_event(mobile, "SWIPE:down", error, sizeof(error)) &&
+        !strcmp(hyperian_mobile_value(mobile, "gesture_status"), "Swiped down");
     if (okay) okay = hyperian_mobile_set(mobile, "title", "Coffee \"and\" tea", error, sizeof(error)) &&
         hyperian_mobile_send_event(mobile, "CHANGE:title", error, sizeof(error)) &&
         hyperian_mobile_value(mobile, "live_preview") && !strcmp(hyperian_mobile_value(mobile, "live_preview"), "Typing:Coffee \"and\" tea") &&
@@ -45,8 +53,9 @@ int main(int argc, char **argv) {
         hyperian_mobile_send_event(mobile, "PAUSE", error, sizeof(error)) &&
         !strcmp(hyperian_mobile_value(mobile, "lifecycle_status"), "Application paused");
     if (!okay && !*error) {
-        fprintf(stderr, "status=%s lifecycle=%s preview=%s details=%s urgency=%s heartbeat=%s json=%s\n", hyperian_mobile_value(mobile, "status"),
+        fprintf(stderr, "status=%s lifecycle=%s gesture=%s preview=%s details=%s urgency=%s heartbeat=%s json=%s\n", hyperian_mobile_value(mobile, "status"),
             hyperian_mobile_value(mobile, "lifecycle_status"),
+            hyperian_mobile_value(mobile, "gesture_status"),
             hyperian_mobile_value(mobile, "live_preview"), hyperian_mobile_value(mobile, "details_preview"),
             hyperian_mobile_value(mobile, "urgency_preview"), hyperian_mobile_value(mobile, "heartbeat"), json);
         snprintf(error, sizeof(error), "a rendered mobile value was incorrect");

@@ -11,6 +11,8 @@ import android.os.Looper;
 import android.text.Editable;
 import android.text.InputType;
 import android.text.TextWatcher;
+import android.view.GestureDetector;
+import android.view.MotionEvent;
 import android.view.View;
 import android.widget.Button;
 import android.widget.CheckBox;
@@ -42,12 +44,25 @@ public final class MainActivity extends Activity {
     private final Handler timers = new Handler(Looper.getMainLooper());
     private boolean timersStarted;
     private boolean mobileReady;
+    private GestureDetector gestures;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         ScrollView scroll = new ScrollView(this); content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL); int space = pixels(16); content.setPadding(space, space, space, space);
         scroll.addView(content); setContentView(scroll);
+        gestures = new GestureDetector(this, new GestureDetector.SimpleOnGestureListener() {
+            @Override public boolean onDown(MotionEvent event) { return true; }
+            @Override public boolean onFling(MotionEvent first, MotionEvent last, float velocityX, float velocityY) {
+                if (first == null || last == null) return false;
+                float horizontal = last.getX() - first.getX(), vertical = last.getY() - first.getY();
+                if (Math.max(Math.abs(horizontal), Math.abs(vertical)) < pixels(50) ||
+                    Math.max(Math.abs(velocityX), Math.abs(velocityY)) < pixels(100)) return false;
+                String direction = Math.abs(horizontal) >= Math.abs(vertical) ? (horizontal < 0 ? "left" : "right") : (vertical < 0 ? "up" : "down");
+                sendSwipeEvent(direction); return true;
+            }
+        });
+        scroll.setOnTouchListener((view, event) -> { gestures.onTouchEvent(event); return false; });
         try {
             File bytecode = copyAsset("application.hyc");
             String error = openMobile(bytecode.getAbsolutePath(), new File(getFilesDir(), "hyperian-data.hdb").getAbsolutePath());
@@ -138,6 +153,10 @@ public final class MainActivity extends Activity {
         syncInputs(); String error = sendMobileEvent(event);
         if (!error.isEmpty()) Toast.makeText(this, error, Toast.LENGTH_LONG).show();
         if (renderAfterward) render();
+    }
+
+    private void sendSwipeEvent(String direction) {
+        content.post(() -> sendLifecycleEvent("SWIPE:" + direction, true));
     }
 
     private void scheduleTimer(long interval) {

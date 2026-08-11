@@ -301,8 +301,9 @@ static int validate(Bytecode *code, const char *path) {
             source_error(path, code->items[i].line, "input and window-focus events require a desktop or mobile application"); return 0;
         }
     if (strcmp(target, "mobile")) for (size_t i = 0; i < code->count; i++)
-        if (code->items[i].opcode == OP_EVENT && (!strcmp(code->items[i].args[0], "PAUSE") || !strcmp(code->items[i].args[0], "RESUME"))) {
-            source_error(path, code->items[i].line, "application pause and resume events require a mobile application"); return 0;
+        if (code->items[i].opcode == OP_EVENT && (!strcmp(code->items[i].args[0], "PAUSE") || !strcmp(code->items[i].args[0], "RESUME") ||
+            !strncmp(code->items[i].args[0], "SWIPE:", 6))) {
+            source_error(path, code->items[i].line, "application pause, resume, and swipe events require a mobile application"); return 0;
         }
     if (!strcmp(target, "web") || !strcmp(target, "pwa")) {
         int routes = 0;
@@ -527,6 +528,13 @@ int compile_file(const char *source_path, const char *output_path) {
             }
             if (n == 4 && !strcmp(w[0], "when") && !strcmp(w[1], "window") && !strcmp(w[2], "loses") && !strcmp(w[3], "focus")) {
                 char *event = "BLUR"; okay = emit(&code, OP_EVENT, 1, &event, number); stack[depth++] = BLOCK_ROUTE; continue;
+            }
+            if (n == 4 && !strcmp(w[0], "when") && !strcmp(w[1], "someone") && !strcmp(w[2], "swipes")) {
+                if (strcmp(w[3], "left") && strcmp(w[3], "right") && strcmp(w[3], "up") && strcmp(w[3], "down")) {
+                    source_error(source_path, number, "a swipe direction must be left, right, up, or down"); okay = 0; continue;
+                }
+                char event[32]; snprintf(event, sizeof(event), "SWIPE:%s", w[3]); char *arg = event;
+                okay = emit(&code, OP_EVENT, 1, &arg, number); stack[depth++] = BLOCK_ROUTE; continue;
             }
             if (n == 3 && !strcmp(w[0], "every")) {
                 char *end; long amount = strtol(w[1], &end, 10), multiplier = 0;

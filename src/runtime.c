@@ -802,6 +802,10 @@ static const char *english_debug_event(const char *event, char *translated, size
     if (sscanf(event, "input %63s is submitted%c", name, &extra) == 1) {
         snprintf(translated, size, "SUBMIT:%s", name); return translated;
     }
+    if (sscanf(event, "someone swipes %63s%c", name, &extra) == 1 &&
+        (!strcmp(name, "left") || !strcmp(name, "right") || !strcmp(name, "up") || !strcmp(name, "down"))) {
+        snprintf(translated, size, "SWIPE:%s", name); return translated;
+    }
     return event;
 }
 

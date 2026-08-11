@@ -11,6 +11,7 @@ controller Tasks
         set details_preview to "No details yet"
         set urgency_preview to "Urgent:false"
         set lifecycle_status to "Application started"
+        set gesture_status to "No swipe yet"
         set heartbeat to 0
         collect every Task title as task_titles
     end
@@ -66,6 +67,22 @@ controller Tasks
         set lifecycle_status to "Window unfocused"
     end
 
+    when someone swipes left
+        set gesture_status to "Swiped left"
+    end
+
+    when someone swipes right
+        set gesture_status to "Swiped right"
+    end
+
+    when someone swipes up
+        set gesture_status to "Swiped up"
+    end
+
+    when someone swipes down
+        set gesture_status to "Swiped down"
+    end
+
     every 1 second
         set heartbeat to heartbeat plus 1
     end
@@ -81,6 +98,7 @@ view "home"
     show details_preview
     show urgency_preview
     show lifecycle_status
+    show gesture_status
     button "Add task" runs action "add task"
     button "Completed tasks" runs action "show completed"
     show status

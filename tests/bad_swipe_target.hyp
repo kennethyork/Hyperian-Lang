@@ -1,0 +1,19 @@
+application "Wrong Swipe Target" is desktop
+
+model Setting
+    field name is text
+end
+
+controller Main
+    when application starts
+        show view "main"
+    end
+
+    when someone swipes left
+        set status to swiped
+    end
+end
+
+view "main"
+    show status
+end
