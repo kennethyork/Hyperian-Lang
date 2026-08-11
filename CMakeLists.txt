@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(Hyperian VERSION 0.22.0 LANGUAGES C)
+project(Hyperian VERSION 0.23.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -53,6 +53,23 @@ add_test(NAME compile_example
 add_test(NAME inspect_example
     COMMAND hyperian inspect ${CMAKE_BINARY_DIR}/tasks.hyc)
 set_tests_properties(inspect_example PROPERTIES DEPENDS compile_example)
+add_test(NAME compile_pwa
+    COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/pwa_tasks/app.hyp -o ${CMAKE_BINARY_DIR}/pwa_tasks.hyc)
+add_test(NAME reject_pwa_without_route
+    COMMAND hyperian check ${CMAKE_SOURCE_DIR}/tests/bad_pwa_route.hyp)
+set_tests_properties(reject_pwa_without_route PROPERTIES WILL_FAIL TRUE)
+find_program(CURL_EXECUTABLE curl)
+if(CURL_EXECUTABLE)
+    add_test(NAME run_pwa_runtime
+        COMMAND sh ${CMAKE_SOURCE_DIR}/tests/pwa_runtime_test.sh $<TARGET_FILE:hyperian> ${CMAKE_SOURCE_DIR}/examples/pwa_tasks/app.hyp ${CMAKE_BINARY_DIR})
+endif()
+add_test(NAME clean_pwa_bundle COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}/PwaBundle)
+add_test(NAME build_pwa_bundle
+    COMMAND hyperian bundle ${CMAKE_SOURCE_DIR}/examples/pwa_tasks/app.hyp -o ${CMAKE_BINARY_DIR}/PwaBundle)
+set_tests_properties(build_pwa_bundle PROPERTIES DEPENDS clean_pwa_bundle)
+add_test(NAME verify_pwa_bundle_worker
+    COMMAND ${CMAKE_COMMAND} -E compare_files ${CMAKE_SOURCE_DIR}/examples/pwa_tasks/public/service-worker.js ${CMAKE_BINARY_DIR}/PwaBundle/public/service-worker.js)
+set_tests_properties(verify_pwa_bundle_worker PROPERTIES DEPENDS build_pwa_bundle)
 add_test(NAME debug_native_game
     COMMAND hyperian debug ${CMAKE_SOURCE_DIR}/examples/blocks_game.hyp)
 set_tests_properties(debug_native_game PROPERTIES PASS_REGULAR_EXPRESSION "player_x = 100")

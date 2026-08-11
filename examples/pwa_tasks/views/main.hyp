@@ -1,0 +1,15 @@
+view "main"
+    title "Pocket Tasks"
+    style "/assets/app.css"
+    heading "Pocket Tasks"
+    text "An installable application written in English-like Hyperian."
+
+    form posts to "/tasks"
+        input "What needs doing?" as title required
+        button "Add task"
+    end
+
+    for each task in tasks show
+        show task.title
+    end
+end

@@ -760,7 +760,8 @@ static int render_range(const Bytecode *code, size_t from, size_t to, Buffer *bo
 }
 
 static char *render_view(const Bytecode *code, const char *view, Scope *scope, Record *records, const char *app_name) {
-    size_t start = code->count, end = code->count; const char *title = app_name, *layout = NULL;
+    size_t start = code->count, end = code->count; const char *title = app_name, *layout = NULL; int pwa = 0;
+    for (size_t i = 0; i < code->count; i++) if (code->items[i].opcode == OP_TARGET && !strcmp(code->items[i].args[0], "pwa")) pwa = 1;
     for (size_t i = 0; i < code->count; i++) if (code->items[i].opcode == OP_VIEW && !strcmp(code->items[i].args[0], view)) {
         start = i + 1; end = find_end(code, i, OP_VIEW, OP_END_VIEW); break;
     }
@@ -777,7 +778,9 @@ static char *render_view(const Bytecode *code, const char *view, Scope *scope, R
     Buffer result; buffer_init(&result);
     buffer_add(&result, "<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width\"><title>");
     buffer_html(&result, title);
-    buffer_add(&result, "</title><style>:root{font:17px/1.5 system-ui,sans-serif;color-scheme:light dark}body{width:min(44rem,calc(100% - 2rem));margin:3rem auto}h1{line-height:1.1}form{display:flex;gap:.6rem;margin:1rem 0}input,button,textarea{font:inherit;padding:.65rem .8rem}input,textarea{flex:1}button{cursor:pointer}li{margin:.45rem 0}img{max-width:100%;height:auto}</style>");
+    buffer_add(&result, "</title>");
+    if (pwa) buffer_add(&result, "<meta name=\"theme-color\" content=\"#2563eb\"><meta name=\"apple-mobile-web-app-capable\" content=\"yes\"><link rel=\"manifest\" href=\"/assets/manifest.webmanifest\"><link rel=\"icon\" href=\"/assets/icon.svg\"><script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js'))}</script>");
+    buffer_add(&result, "<style>:root{font:17px/1.5 system-ui,sans-serif;color-scheme:light dark}body{width:min(44rem,calc(100% - 2rem));margin:3rem auto}h1{line-height:1.1}form{display:flex;gap:.6rem;margin:1rem 0}input,button,textarea{font:inherit;padding:.65rem .8rem}input,textarea{flex:1}button{cursor:pointer}li{margin:.45rem 0}img{max-width:100%;height:auto}</style>");
     for (size_t i = start; i < end; i++) if (code->items[i].opcode == OP_STYLE) {
         buffer_add(&result, "<link rel=\"stylesheet\" href=\""); buffer_dynamic_html(&result, code->items[i].args[0], scope); buffer_add(&result, "\">");
     }
@@ -932,6 +935,7 @@ static const char *asset_type(const char *path) {
     if (!strcmp(extension, ".ico")) return "image/x-icon";
     if (!strcmp(extension, ".html")) return "text/html; charset=utf-8";
     if (!strcmp(extension, ".json")) return "application/json; charset=utf-8";
+    if (!strcmp(extension, ".webmanifest")) return "application/manifest+json; charset=utf-8";
     if (!strcmp(extension, ".txt")) return "text/plain; charset=utf-8";
     return "application/octet-stream";
 }
@@ -939,8 +943,14 @@ static const char *asset_type(const char *path) {
 static int load_static_response(const Bytecode *code, const char *request_path, Response *response) {
     for (size_t i = 0; i < code->count; i++) if (code->items[i].opcode == OP_STATIC_FILES) {
         const char *directory = code->items[i].args[0], *address = code->items[i].args[1]; size_t prefix = strlen(address);
-        if (strncmp(request_path, address, prefix) || (request_path[prefix] && request_path[prefix] != '/')) continue;
-        const char *relative = request_path + prefix; while (*relative == '/') relative++;
+        const char *relative;
+        if (!strcmp(address, "/")) {
+            if (*request_path != '/') continue;
+            relative = request_path + 1;
+        } else {
+            if (strncmp(request_path, address, prefix) || (request_path[prefix] && request_path[prefix] != '/')) continue;
+            relative = request_path + prefix; while (*relative == '/') relative++;
+        }
         if (!*relative || strstr(relative, "..") || strchr(relative, '\\')) return 0;
         char path[4096]; if (snprintf(path, sizeof(path), "%s/%s", directory, relative) >= (int)sizeof(path)) return 0;
         FILE *file = fopen(path, "rb"); if (!file) return 0;
@@ -1557,7 +1567,7 @@ int run_bytecode(const char *path, int port_override) {
     if (!strcmp(target, "desktop")) { int result = run_desktop_app(&code, name); bytecode_free(&code); return result; }
     if (!strcmp(target, "mobile")) { int result = run_mobile_app(&code, name); bytecode_free(&code); return result; }
     if (!strcmp(target, "game")) { int result = run_game_app(&code, name); bytecode_free(&code); return result; }
-    if (strcmp(target, "web") && strcmp(target, "api")) {
+    if (strcmp(target, "web") && strcmp(target, "pwa") && strcmp(target, "api")) {
         fprintf(stderr, "error: the %s backend is declared but is not implemented yet\n", target);
         bytecode_free(&code); return 1;
     }

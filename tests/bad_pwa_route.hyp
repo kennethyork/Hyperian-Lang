@@ -1,0 +1,5 @@
+application "Incomplete Pocket App" is installable web application
+
+view "main"
+    heading "This application has no route"
+end

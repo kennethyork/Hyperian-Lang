@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#define HYPERIAN_VERSION "0.22.0"
+#define HYPERIAN_VERSION "0.23.0"
 #define HYC_MAGIC "HYC1"
 #define HYC_MAX_ARGS 9
 #define HYPERIAN_STATE_MAX 64

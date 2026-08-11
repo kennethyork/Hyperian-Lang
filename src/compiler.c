@@ -266,7 +266,7 @@ static int validate(Bytecode *code, const char *path) {
     if (!models || !controllers || (!views && strcmp(target, "api"))) {
         source_error(path, 1, "an MVC program needs at least one model, controller, and view"); return 0;
     }
-    if (!strcmp(target, "web")) {
+    if (!strcmp(target, "web") || !strcmp(target, "pwa")) {
         int routes = 0;
         for (size_t i = 0; i < code->count; i++) routes += code->items[i].opcode == OP_ROUTE;
         if (!routes) { source_error(path, 1, "a web application needs at least one route"); return 0; }
@@ -340,11 +340,13 @@ int compile_file(const char *source_path, const char *output_path) {
             okay = emit(&code, op, 0, NULL, number); depth--; continue;
         }
         if (current == BLOCK_ROOT) {
-            if ((n == 2 || n == 4) && !strcmp(w[0], "application") &&
-                (n == 2 || (!strcmp(w[2], "is") && (!strcmp(w[3], "web") || !strcmp(w[3], "console") ||
-                !strcmp(w[3], "desktop") || !strcmp(w[3], "mobile") || !strcmp(w[3], "api") || !strcmp(w[3], "service") || !strcmp(w[3], "game"))))) {
+            int installable_web = n == 6 && !strcmp(w[2], "is") && !strcmp(w[3], "installable") &&
+                !strcmp(w[4], "web") && !strcmp(w[5], "application");
+            if ((n == 2 || n == 4 || installable_web) && !strcmp(w[0], "application") &&
+                (n == 2 || installable_web || (!strcmp(w[2], "is") && (!strcmp(w[3], "web") || !strcmp(w[3], "console") ||
+                !strcmp(w[3], "desktop") || !strcmp(w[3], "mobile") || !strcmp(w[3], "pwa") || !strcmp(w[3], "api") || !strcmp(w[3], "service") || !strcmp(w[3], "game"))))) {
                 okay = emit(&code, OP_APPLICATION, 1, &w[1], number);
-                if (okay) { char *target = n == 4 ? w[3] : "web"; okay = emit(&code, OP_TARGET, 1, &target, number); }
+                if (okay) { char *target = installable_web ? "pwa" : n == 4 ? w[3] : "web"; okay = emit(&code, OP_TARGET, 1, &target, number); }
                 saw_application = 1;
             }
             else if (n == 3 && !strcmp(w[0], "listen") && !strcmp(w[1], "on")) {

@@ -1,0 +1,3 @@
+model Task
+    field title is text required
+end

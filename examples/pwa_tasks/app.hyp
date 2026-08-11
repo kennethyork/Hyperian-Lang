@@ -1,0 +1,8 @@
+application "Pocket Tasks" is installable web application
+listen on 8091
+serve files from "public" at "/assets"
+serve files from "public" at "/"
+
+include "models/task.hyp"
+include "controllers/tasks.hyp"
+include "views/main.hyp"

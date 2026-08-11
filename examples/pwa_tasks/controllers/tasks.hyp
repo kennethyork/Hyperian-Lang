@@ -1,0 +1,11 @@
+controller Tasks
+    when someone visits "/"
+        find all Task as tasks
+        show view "main" with tasks
+    end
+
+    when someone submits "/tasks"
+        create Task from form
+        redirect to "/"
+    end
+end

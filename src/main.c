@@ -184,7 +184,7 @@ static int bundle_application(const char *source, const char *output, const char
 static int doctor(void) {
     puts("Hyperian " HYPERIAN_VERSION " toolchain check\n"
          "  compiler and bytecode VM: ready\n"
-         "  web, API, console, service: ready");
+         "  web, installable PWA, API, console, service: ready");
 #ifdef HYPERIAN_HAVE_GTK3
     puts("  desktop and mobile preview (GTK3): ready");
 #else
@@ -211,23 +211,27 @@ static int doctor(void) {
 }
 
 static int create_project(const char *name, const char *target) {
-    static const char *targets[] = {"web", "console", "api", "service", "desktop", "mobile", "game"}; int known = 0;
+    static const char *targets[] = {"web", "pwa", "console", "api", "service", "desktop", "mobile", "game"}; int known = 0;
     for (size_t i = 0; i < sizeof(targets) / sizeof(targets[0]); i++) if (!strcmp(target, targets[i])) known = 1;
     if (!project_name_is_safe(name)) { fprintf(stderr, "error: use only letters, numbers, hyphens, or underscores in a project name\n"); return 1; }
-    if (!known) { fprintf(stderr, "error: target must be web, console, api, service, desktop, mobile, or game\n"); return 1; }
+    if (!known) { fprintf(stderr, "error: target must be web, pwa, console, api, service, desktop, mobile, or game\n"); return 1; }
     char path[1024], source[4096];
     if (!make_project_directory(name)) return 1;
     const char *folders[] = {"models", "controllers", "views", "public", "packages"};
     for (size_t i = 0; i < sizeof(folders) / sizeof(folders[0]); i++) {
         snprintf(path, sizeof(path), "%s/%s", name, folders[i]); if (!make_project_directory(path)) return 1;
     }
+    const char *network_setup = !strcmp(target, "pwa") ?
+        "listen on 8000\nserve files from \"public\" at \"/assets\"\nserve files from \"public\" at \"/\"" :
+        (!strcmp(target, "web") || !strcmp(target, "api")) ? "listen on 8000\nserve files from \"public\" at \"/assets\"" : "";
+    const char *source_target = !strcmp(target, "pwa") ? "installable web application" : target;
     snprintf(source, sizeof(source), "application \"%s\" is %s\n%s\ninclude \"models/item.hyp\"\ninclude \"controllers/items.hyp\"\n%s",
-        name, target, (!strcmp(target, "web") || !strcmp(target, "api")) ? "listen on 8000\nserve files from \"public\" at \"/assets\"" : "",
+        name, source_target, network_setup,
         strcmp(target, "api") ? "include \"views/main.hyp\"\n" : "");
     snprintf(path, sizeof(path), "%s/app.hyp", name); if (!write_project_file(path, source)) return 1;
     snprintf(path, sizeof(path), "%s/models/item.hyp", name);
     if (!write_project_file(path, "model Item\n    field name is text required\nend\n")) return 1;
-    if (!strcmp(target, "web")) snprintf(source, sizeof(source),
+    if (!strcmp(target, "web") || !strcmp(target, "pwa")) snprintf(source, sizeof(source),
         "controller Items\n    when someone visits \"/\"\n        find all Item as items\n        show view \"main\" with items\n    end\nend\n");
     else if (!strcmp(target, "api")) snprintf(source, sizeof(source),
         "controller Items\n    when someone visits \"/items\"\n        find all Item as items\n        show json items\n    end\nend\n");
@@ -246,15 +250,28 @@ static int create_project(const char *name, const char *target) {
             "view \"main\"\n    heading \"Native desktop application\"\n    input \"Your name\" as name\n    button \"Save item\" runs action activate\n    show status\n    for each item_name in item_names show\n        show item_name\n    end\nend\n") :
             !strcmp(target, "game") ?
             "view \"main\"\n    fill background with color 18 24 38\n    draw rectangle at player_x 100 sized 100 by 100 with color 70 170 255\nend\n" :
+            !strcmp(target, "pwa") ?
+            "view \"main\"\n    title \"Installable Hyperian application\"\n    style \"/assets/app.css\"\n    heading \"Installable Hyperian application\"\n    text \"This English MVC application works online and can be installed.\"\nend\n" :
             "view \"main\"\n    heading \"Welcome to Hyperian\"\n    text \"Your foldered MVC application is ready.\"\nend\n";
         if (!write_project_file(path, view)) return 1;
     }
     snprintf(path, sizeof(path), "%s/public/app.css", name);
     if (!write_project_file(path, "body { font-family: system-ui, sans-serif; margin: 3rem auto; max-width: 48rem; }\n")) return 1;
+    if (!strcmp(target, "pwa")) {
+        snprintf(path, sizeof(path), "%s/public/manifest.webmanifest", name);
+        snprintf(source, sizeof(source), "{\n  \"name\": \"%s\",\n  \"short_name\": \"%s\",\n  \"start_url\": \"/\",\n  \"display\": \"standalone\",\n  \"background_color\": \"#111827\",\n  \"theme_color\": \"#2563eb\",\n  \"icons\": [{\"src\": \"/assets/icon.svg\", \"sizes\": \"any\", \"type\": \"image/svg+xml\", \"purpose\": \"any maskable\"}]\n}\n", name, name);
+        if (!write_project_file(path, source)) return 1;
+        snprintf(path, sizeof(path), "%s/public/service-worker.js", name);
+        if (!write_project_file(path, "const CACHE='hyperian-pwa-v1';\nconst CORE=['/','/assets/app.css','/assets/manifest.webmanifest','/assets/icon.svg'];\nself.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(CORE)).then(()=>self.skipWaiting())));\nself.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim())));\nself.addEventListener('fetch',event=>{if(event.request.method!=='GET')return;event.respondWith(fetch(event.request).then(response=>{const copy=response.clone();caches.open(CACHE).then(cache=>cache.put(event.request,copy));return response}).catch(()=>caches.match(event.request).then(cached=>cached||caches.match('/'))))});\n")) return 1;
+        snprintf(path, sizeof(path), "%s/public/icon.svg", name);
+        if (!write_project_file(path, "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 512 512\"><rect width=\"512\" height=\"512\" rx=\"96\" fill=\"#2563eb\"/><path d=\"M128 112h72v108h112V112h72v288h-72V286H200v114h-72z\" fill=\"white\"/></svg>\n")) return 1;
+    }
     snprintf(path, sizeof(path), "%s/README.md", name);
-    snprintf(source, sizeof(source), "# %s\n\nRun this %s application with:\n\n    hyperian run app.hyp\n", name, target);
+    snprintf(source, sizeof(source), "# %s\n\nRun this %s with:\n\n    hyperian run app.hyp\n", name,
+        !strcmp(target, "pwa") ? "installable web application" : target);
     if (!write_project_file(path, source)) return 1;
-    printf("Created %s as a foldered Hyperian %s application.\n", name, target); return 0;
+    printf("Created %s as a foldered Hyperian %s.\n", name,
+        !strcmp(target, "pwa") ? "installable web application" : target); return 0;
 }
 
 static int format_source(const char *path) {
