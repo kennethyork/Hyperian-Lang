@@ -1,0 +1,16 @@
+application "Broken Native Query" is service
+
+model Task
+    field title is text required
+end
+
+controller Tasks
+    when application starts
+        collect every Task title where missing is value ordered by also_missing as titles
+        show view "main"
+    end
+end
+
+view "main"
+    heading "Broken query"
+end

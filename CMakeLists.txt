@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(Hyperian VERSION 0.28.0 LANGUAGES C)
+project(Hyperian VERSION 0.29.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -120,6 +120,13 @@ add_test(NAME run_native_crud
     COMMAND ${CMAKE_COMMAND} -E env HYPERIAN_DATA=${CMAKE_BINARY_DIR}/native_crud.hdb HYPERIAN_CONSOLE_TEST_STATE=remaining
         $<TARGET_FILE:hyperian> run ${CMAKE_BINARY_DIR}/native_crud.hyc)
 set_tests_properties(run_native_crud PROPERTIES DEPENDS "clean_native_crud_data;compile_native_crud" PASS_REGULAR_EXPRESSION "remaining=0")
+add_test(NAME clean_native_queries_data COMMAND ${CMAKE_COMMAND} -E remove ${CMAKE_BINARY_DIR}/native_queries.hdb)
+add_test(NAME compile_native_queries
+    COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/native_queries.hyp -o ${CMAKE_BINARY_DIR}/native_queries.hyc)
+add_test(NAME run_native_queries
+    COMMAND ${CMAKE_COMMAND} -E env HYPERIAN_DATA=${CMAKE_BINARY_DIR}/native_queries.hdb HYPERIAN_CONSOLE_TEST_STATE=query_result
+        $<TARGET_FILE:hyperian> run ${CMAKE_BINARY_DIR}/native_queries.hyc)
+set_tests_properties(run_native_queries PROPERTIES DEPENDS "clean_native_queries_data;compile_native_queries" PASS_REGULAR_EXPRESSION "query_result=Alpha/Gamma/Gamma/2/Alpha")
 add_test(NAME reject_duplicate_field
     COMMAND hyperian check ${CMAKE_SOURCE_DIR}/tests/bad_duplicate_field.hyp)
 set_tests_properties(reject_duplicate_field PROPERTIES WILL_FAIL TRUE)
@@ -129,6 +136,12 @@ set_tests_properties(reject_crud_without_id PROPERTIES WILL_FAIL TRUE)
 add_test(NAME reject_secret_collection
     COMMAND hyperian check ${CMAKE_SOURCE_DIR}/tests/bad_collect_secret.hyp)
 set_tests_properties(reject_secret_collection PROPERTIES WILL_FAIL TRUE)
+add_test(NAME reject_secret_query_filter COMMAND hyperian check ${CMAKE_SOURCE_DIR}/tests/bad_query_secret_filter.hyp)
+set_tests_properties(reject_secret_query_filter PROPERTIES WILL_FAIL TRUE)
+add_test(NAME reject_secret_query_order COMMAND hyperian check ${CMAKE_SOURCE_DIR}/tests/bad_query_secret_order.hyp)
+set_tests_properties(reject_secret_query_order PROPERTIES WILL_FAIL TRUE)
+add_test(NAME reject_missing_query_field COMMAND hyperian check ${CMAKE_SOURCE_DIR}/tests/bad_query_missing_field.hyp)
+set_tests_properties(reject_missing_query_field PROPERTIES WILL_FAIL TRUE)
 add_test(NAME compile_api_relationships
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/blog_api.hyp -o ${CMAKE_BINARY_DIR}/blog_api.hyc)
 add_test(NAME compile_authentication
@@ -283,9 +296,9 @@ if(SQLITE3_FOUND)
     add_test(NAME compile_native_sqlite_crud
         COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/native_crud_sqlite.hyp -o ${CMAKE_BINARY_DIR}/native_crud_sqlite.hyc)
     add_test(NAME run_native_sqlite_crud
-        COMMAND ${CMAKE_COMMAND} -E env HYPERIAN_DATA=${CMAKE_BINARY_DIR}/native_crud.sqlite HYPERIAN_CONSOLE_TEST_STATE=note_count
+        COMMAND ${CMAKE_COMMAND} -E env HYPERIAN_DATA=${CMAKE_BINARY_DIR}/native_crud.sqlite HYPERIAN_CONSOLE_TEST_STATE=sqlite_query_result
             $<TARGET_FILE:hyperian> run ${CMAKE_BINARY_DIR}/native_crud_sqlite.hyc)
-    set_tests_properties(run_native_sqlite_crud PROPERTIES DEPENDS "clean_native_sqlite_crud;compile_native_sqlite_crud" PASS_REGULAR_EXPRESSION "note_count=1")
+    set_tests_properties(run_native_sqlite_crud PROPERTIES DEPENDS "clean_native_sqlite_crud;compile_native_sqlite_crud" PASS_REGULAR_EXPRESSION "sqlite_query_result=Updated SQLite title/3")
     add_test(NAME create_legacy_sqlite_data
         COMMAND hyperian_sqlite_fixture create ${CMAKE_BINARY_DIR}/legacy-migration.sqlite)
     add_test(NAME migrate_sqlite_data

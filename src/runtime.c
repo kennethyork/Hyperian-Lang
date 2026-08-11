@@ -353,7 +353,7 @@ static int is_logic_instruction(uint8_t opcode) {
         opcode == OP_LIST_ITEM || opcode == OP_HTTP_GET || opcode == OP_MAKE_MAP || opcode == OP_MAP_PUT ||
         opcode == OP_MAP_GET || opcode == OP_MAP_REMOVE || opcode == OP_MAP_COUNT || opcode == OP_PLAY_SOUND || opcode == OP_OPEN_VIEW ||
         opcode == OP_CREATE_STATE || opcode == OP_FIND_STATE || opcode == OP_UPDATE_STATE || opcode == OP_DELETE_STATE || opcode == OP_COUNT_RECORDS || opcode == OP_COLLECT_FIELD ||
-        opcode == OP_MOVE_POSITION || opcode == OP_APPLY_GRAVITY || opcode == OP_KEEP_INSIDE || opcode == OP_CHECK_COLLISION;
+        opcode == OP_MOVE_POSITION || opcode == OP_APPLY_GRAVITY || opcode == OP_KEEP_INSIDE || opcode == OP_CHECK_COLLISION || opcode == OP_COLLECT_QUERY;
 }
 
 static HyperianSoundHandler sound_handler = NULL;
@@ -397,6 +397,10 @@ static void debug_instruction(const Instruction *in, int depth) {
         case OP_APPLY_GRAVITY: printf("apply gravity %s to %s", in->args[0], in->args[1]); break;
         case OP_KEEP_INSIDE: printf("keep position %s %s inside %s by %s sized %s by %s", in->args[0], in->args[1], in->args[2], in->args[3], in->args[4], in->args[5]); break;
         case OP_CHECK_COLLISION: printf("check collision and store it as %s", in->args[8]); break;
+        case OP_COLLECT_QUERY: printf("collect every %s %s", in->args[0], in->args[1]);
+            if (*in->args[2]) printf(" where %s is %s", in->args[2], in->args[3]);
+            if (*in->args[4]) printf(" ordered by %s%s", in->args[4], !strcmp(in->args[5], "descending") ? " descending" : "");
+            printf(" as %s", in->args[6]); break;
         default: printf("execute %s", opcode_name(in->opcode)); break;
     }
     putchar('\n');
@@ -431,6 +435,13 @@ static int physics_number(Scope *scope, const char *expression, double *number, 
 
 static void set_physics_number(HyperianState *state, const char *name, double number) {
     char value[64]; snprintf(value, sizeof(value), "%.15g", number); local_set(state, name, value);
+}
+
+static int compare_query_values(const char *left, const char *right) {
+    double left_number, right_number;
+    if (number_value(left, &left_number) && number_value(right, &right_number))
+        return left_number < right_number ? -1 : left_number > right_number ? 1 : 0;
+    return strcmp(left, right);
 }
 
 static void expose_record_values(const Bytecode *code, Scope *scope, Record *record, const char *name) {
@@ -638,6 +649,40 @@ static int execute_logic_at(const Bytecode *code, size_t *position, Scope *scope
             snprintf(collection, sizeof(collection), "%s", combined);
         }
         local_set(scope->locals, in->args[2], collection);
+    } else if (in->opcode == OP_COLLECT_QUERY) {
+        if (!scope->data) { snprintf(error, error_size, "persistent model work is not available in this context"); return 0; }
+        char filter_value[HYPERIAN_VALUE_SIZE] = "";
+        if (*in->args[2]) evaluate(scope, in->args[3], filter_value, sizeof(filter_value));
+        size_t count = 0;
+        for (Record *record = scope->data->records; record; record = record->next)
+            if (!strcmp(record->model, in->args[0]) && (!*in->args[2] ||
+                (record_value(record, in->args[2]) && !strcmp(record_value(record, in->args[2]), filter_value)))) count++;
+        Record **matches = count ? malloc(count * sizeof(*matches)) : NULL; size_t at = 0;
+        if (count && !matches) { snprintf(error, error_size, "there is not enough memory to collect the records"); return 0; }
+        for (Record *record = scope->data->records; record; record = record->next)
+            if (!strcmp(record->model, in->args[0]) && (!*in->args[2] ||
+                (record_value(record, in->args[2]) && !strcmp(record_value(record, in->args[2]), filter_value)))) matches[at++] = record;
+        if (*in->args[4]) for (size_t a = 1; a < count; a++) {
+            Record *chosen = matches[a]; size_t b = a;
+            const char *chosen_value = record_value(chosen, in->args[4]); if (!chosen_value) chosen_value = "";
+            while (b) {
+                const char *previous = record_value(matches[b - 1], in->args[4]); if (!previous) previous = "";
+                int order = compare_query_values(previous, chosen_value);
+                if (!strcmp(in->args[5], "descending")) order = -order;
+                if (order <= 0) break;
+                matches[b] = matches[b - 1]; b--;
+            }
+            matches[b] = chosen;
+        }
+        char collection[HYPERIAN_VALUE_SIZE] = "";
+        for (size_t i = 0; i < count; i++) {
+            const char *value = record_value(matches[i], in->args[1]); char combined[HYPERIAN_VALUE_SIZE];
+            if (!list_add_value(collection, value ? value : "", combined, sizeof(combined))) {
+                free(matches); snprintf(error, error_size, "the collected values are too large to fit in %s", in->args[6]); return 0;
+            }
+            snprintf(collection, sizeof(collection), "%s", combined);
+        }
+        free(matches); local_set(scope->locals, in->args[6], collection);
     }
     if (debugger_active) debug_changes(&before, scope->locals, depth);
     return 1;

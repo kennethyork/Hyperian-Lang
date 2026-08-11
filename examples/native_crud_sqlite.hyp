@@ -16,7 +16,18 @@ controller Notes
         update the Note numbered note_id using the current values
         find the Note numbered note_id as updated_note
         set loaded_title to updated_note_title
+
+        set title to "Another SQLite title"
+        set important to true
+        create a Note using the current values as another_id
+        set title to "Hidden SQLite title"
+        set important to false
+        create a Note using the current values as hidden_id
+
+        collect every Note title where important is true ordered by title descending as important_titles
+        take item 1 from important_titles as first_important_title
         count all Note records as note_count
+        set sqlite_query_result to first_important_title joined with "/" joined with note_count
     end
 
     when application starts

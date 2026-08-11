@@ -180,7 +180,7 @@ static int validate(Bytecode *code, const char *path) {
         }
         if ((in->opcode == OP_FIND_ALL || in->opcode == OP_FIND_ONE || in->opcode == OP_FIND_WHERE || in->opcode == OP_FIND_ORDERED || in->opcode == OP_FIND_SIGNED_IN || in->opcode == OP_SIGN_IN || in->opcode == OP_CREATE ||
             in->opcode == OP_UPDATE || in->opcode == OP_DELETE || in->opcode == OP_CREATE_STATE || in->opcode == OP_FIND_STATE ||
-            in->opcode == OP_UPDATE_STATE || in->opcode == OP_DELETE_STATE || in->opcode == OP_COUNT_RECORDS || in->opcode == OP_COLLECT_FIELD) && !known_name(code, OP_MODEL, in->args[0])) {
+            in->opcode == OP_UPDATE_STATE || in->opcode == OP_DELETE_STATE || in->opcode == OP_COUNT_RECORDS || in->opcode == OP_COLLECT_FIELD || in->opcode == OP_COLLECT_QUERY) && !known_name(code, OP_MODEL, in->args[0])) {
             char message[256]; snprintf(message, sizeof(message), "there is no model named %s", in->args[0]);
             source_error(path, in->line, message); return 0;
         }
@@ -196,6 +196,14 @@ static int validate(Bytecode *code, const char *path) {
         }
         if (in->opcode == OP_COLLECT_FIELD && !strcmp(model_field_kind(code, in->args[0], in->args[1]), "secret")) {
             source_error(path, in->line, "secret fields cannot be collected into a view"); return 0;
+        }
+        if (in->opcode == OP_COLLECT_QUERY) {
+            if (!model_has_field(code, in->args[0], in->args[1])) { source_error(path, in->line, "the field to collect does not exist on this model"); return 0; }
+            if (!strcmp(model_field_kind(code, in->args[0], in->args[1]), "secret")) { source_error(path, in->line, "secret fields cannot be collected into a view"); return 0; }
+            if (*in->args[2] && !model_has_field(code, in->args[0], in->args[2])) { source_error(path, in->line, "the collection filter field does not exist on this model"); return 0; }
+            if (*in->args[2] && !strcmp(model_field_kind(code, in->args[0], in->args[2]), "secret")) { source_error(path, in->line, "secret fields cannot be used as collection filters"); return 0; }
+            if (*in->args[4] && !model_has_field(code, in->args[0], in->args[4])) { source_error(path, in->line, "the collection order field does not exist on this model"); return 0; }
+            if (*in->args[4] && !strcmp(model_field_kind(code, in->args[0], in->args[4]), "secret")) { source_error(path, in->line, "secret fields cannot be used to order collections"); return 0; }
         }
         if (in->opcode == OP_FIND_WHERE && !model_has_field(code, in->args[0], in->args[1])) {
             source_error(path, in->line, "the filtered field does not exist on this model"); return 0;
@@ -520,6 +528,19 @@ int compile_file(const char *source_path, const char *output_path) {
                 char *args[2] = {w[2], w[5]}; okay = emit(&code, OP_COUNT_RECORDS, 2, args, number);
             } else if (n == 6 && !strcmp(w[0], "collect") && !strcmp(w[1], "every") && !strcmp(w[4], "as") && is_name(w[5])) {
                 char *args[3] = {w[2], w[3], w[5]}; okay = emit(&code, OP_COLLECT_FIELD, 3, args, number);
+            } else if (n == 10 && !strcmp(w[0], "collect") && !strcmp(w[1], "every") && !strcmp(w[4], "where") &&
+                !strcmp(w[6], "is") && !strcmp(w[8], "as") && is_name(w[9])) {
+                char *args[7] = {w[2], w[3], w[5], w[7], "", "ascending", w[9]}; okay = emit(&code, OP_COLLECT_QUERY, 7, args, number);
+            } else if ((n == 9 || n == 10) && !strcmp(w[0], "collect") && !strcmp(w[1], "every") && !strcmp(w[4], "ordered") &&
+                !strcmp(w[5], "by") && !strcmp(w[n - 2], "as") && is_name(w[n - 1]) &&
+                (n == 9 || !strcmp(w[7], "descending"))) {
+                char *args[7] = {w[2], w[3], "", "", w[6], n == 10 ? "descending" : "ascending", w[n - 1]};
+                okay = emit(&code, OP_COLLECT_QUERY, 7, args, number);
+            } else if ((n == 13 || n == 14) && !strcmp(w[0], "collect") && !strcmp(w[1], "every") && !strcmp(w[4], "where") &&
+                !strcmp(w[6], "is") && !strcmp(w[8], "ordered") && !strcmp(w[9], "by") && !strcmp(w[n - 2], "as") &&
+                is_name(w[n - 1]) && (n == 13 || !strcmp(w[11], "descending"))) {
+                char *args[7] = {w[2], w[3], w[5], w[7], w[10], n == 14 ? "descending" : "ascending", w[n - 1]};
+                okay = emit(&code, OP_COLLECT_QUERY, 7, args, number);
             } else if (n == 5 && !strcmp(w[0], "find") && !strcmp(w[1], "all") && !strcmp(w[3], "as")) {
                 char *args[2] = {w[2], w[4]}; okay = emit(&code, OP_FIND_ALL, 2, args, number);
             } else if (n == 8 && !strcmp(w[0], "find") && !strcmp(w[1], "all") && !strcmp(w[3], "ordered") &&

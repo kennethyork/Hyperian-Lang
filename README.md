@@ -584,7 +584,17 @@ view "notes"
 end
 ```
 
-Collected fields must exist and cannot be secret. The compiler checks both rules. Native repeated values are rendered as real GTK labels and are rebuilt when an action opens or refreshes the view.
+Collections can be filtered by a literal or controller value, ordered numerically or alphabetically, and reversed—all in the same English instruction:
+
+```hyperian
+collect every Task title where status is wanted_status as matching_titles
+collect every Task title ordered by priority as priority_titles
+collect every Task title ordered by priority descending as reverse_priority_titles
+collect every Task title where status is open ordered by priority as open_titles
+collect every Task title where status is open ordered by priority descending as newest_open_titles
+```
+
+Collected, filtered, and ordered fields must exist and cannot be secret. The compiler checks every field before producing bytecode. The native VM runs the same query behavior over HDB and SQLite data; numeric order fields sort as numbers and other fields sort as text. Native repeated values are rendered as real GTK labels and are rebuilt when an action opens or refreshes the view. See [examples/native_queries.hyp](examples/native_queries.hyp).
 
 Services, desktop apps, and mobile previews can schedule recurring controller work:
 
@@ -757,6 +767,6 @@ Quoted text may contain spaces. `#` starts a comment. Indentation is optional bu
 
 ## Project status
 
-Version 0.28 is a small but real MVC platform: custom bytecode, a native VM, standalone executable and asset-bundle creation, versioned Android/iOS mobile deployment packages, a linkable native mobile runtime bridge, self-contained native Android Studio and SwiftUI Xcode project generation, native backend diagnostics, eight compiler targets including installable offline web applications, an English source-line debugger, persistent model CRUD and collection queries inside native controller actions, repeated native collection views, recurring service and native-interface timers, interactive multi-view GTK desktop and phone-sized mobile preview interfaces with close events, SDL2 keyboard/frame events, frame-rate-independent movement and gravity, boundaries, rectangle collision detection, BMP sprites, WAV sound, and state-driven rendering, native lists and maps, selectable HDB or transactional SQLite storage, recoverable runtime errors, an HTTP/HTTPS client, local packages, reusable actions, native file access, foldered project generation, versioned migrations, persistent CRUD models, safe HTML and typed JSON, authentication and authorization, middleware, formatting, and English tests.
+Version 0.29 is a small but real MVC platform: custom bytecode, a native VM, standalone executable and asset-bundle creation, versioned Android/iOS mobile deployment packages, a linkable native mobile runtime bridge, self-contained native Android Studio and SwiftUI Xcode project generation, native backend diagnostics, eight compiler targets including installable offline web applications, an English source-line debugger, persistent model CRUD plus filtered and ordered collection queries inside native controller actions, repeated native collection views, recurring service and native-interface timers, interactive multi-view GTK desktop and phone-sized mobile preview interfaces with close events, SDL2 keyboard/frame events, frame-rate-independent movement and gravity, boundaries, rectangle collision detection, BMP sprites, WAV sound, and state-driven rendering, native lists and maps, selectable HDB or transactional SQLite storage, recoverable runtime errors, an HTTP/HTTPS client, local packages, reusable actions, native file access, foldered project generation, versioned migrations, persistent CRUD models, safe HTML and typed JSON, authentication and authorization, middleware, formatting, and English tests.
 
 The next major layers are automated APK/AAB/IPA builds and signing, HTTPS/SQLite phone integration, richer desktop and mobile events, animation helpers, more collision shapes, more media formats, and broader cross-compilation. Those are not claimed as complete yet.
