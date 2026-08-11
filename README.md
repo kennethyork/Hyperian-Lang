@@ -8,7 +8,7 @@ Hyperian is an English-like, general-purpose language where every application is
 - a bytecode virtual machine;
 - separate native runtimes for different application targets.
 
-The goal is that a beginner can read the source aloud and understand it. Web, console, API, one-shot service, native GTK desktop, and native SDL2 game programs are executable today.
+The goal is that a beginner can read the source aloud and understand it. Web, console, API, one-shot service, native GTK desktop, phone-sized mobile preview, and native SDL2 game programs are executable today.
 
 ## Build the compiler
 
@@ -102,12 +102,13 @@ The first instruction declares what you are making:
 application "Tasks" is web
 application "Greeter" is console
 application "Drawing" is desktop
+application "Pocket Tasks" is mobile
 application "Accounts" is api
 application "Worker" is service
 application "Adventure" is game
 ```
 
-The compiler recognizes all six targets and records the target in bytecode. Each target has a real backend: HTTP for `web` and `api`, terminal execution for `console` and `service`, GTK widgets for `desktop`, and an SDL2 render loop for `game`. GTK3 and SDL2 are optional native build dependencies.
+The compiler recognizes all seven targets and records the target in bytecode. HTTP runs `web` and `api`, the terminal runs `console` and `service`, GTK widgets run `desktop` and the phone-sized `mobile` preview, and SDL2 runs `game`. GTK3 and SDL2 are optional native build dependencies. The mobile preview validates interface behavior on a development computer; Android and iOS export are not implemented yet.
 
 Create a complete foldered project for any target:
 
@@ -115,6 +116,7 @@ Create a complete foldered project for any target:
 hyperian new MyWebsite --target web
 hyperian new MyTool --target console
 hyperian new MyDesktopApp --target desktop
+hyperian new MyPhoneApp --target mobile
 hyperian new MyGame --target game
 ```
 
@@ -504,7 +506,7 @@ view "playfield"
 end
 ```
 
-The SDL2 backend dispatches arrow, space, and enter keys through `when player presses ...`, runs `when game updates` every frame, and evaluates drawing positions, sizes, and colors from controller state. See [examples/desktop_notes.hyp](examples/desktop_notes.hyp) and [examples/blocks_game.hyp](examples/blocks_game.hyp). Audio, sprites, physics, and richer timing remain upcoming layers.
+The SDL2 backend dispatches arrow, space, and enter keys through `when player presses ...`, runs `when game updates` every frame, and evaluates drawing positions, sizes, and colors from controller state. The `mobile` target uses the same controls and actions in a narrow touch-friendly preview window. See [examples/desktop_notes.hyp](examples/desktop_notes.hyp), [examples/mobile_tasks.hyp](examples/mobile_tasks.hyp), and [examples/blocks_game.hyp](examples/blocks_game.hyp). Audio, sprites, physics, richer timing, and deployable phone packaging remain upcoming layers.
 
 ## Programs split across files
 
@@ -628,6 +630,6 @@ Quoted text may contain spaces. `#` starts a comment. Indentation is optional bu
 
 ## Project status
 
-Version 0.15 is a small but real MVC platform: custom bytecode, a native VM, standalone executable creation, six executable targets, an English source-line debugger, interactive GTK controller buttons and reactive values, SDL2 keyboard/frame events and state-driven rendering, native lists and maps, selectable HDB or transactional SQLite storage, recoverable runtime errors, an HTTP/HTTPS client, local packages, reusable actions, native file access, foldered project generation, versioned migrations, persistent CRUD models, safe HTML and typed JSON, authentication and authorization, middleware, formatting, and English tests.
+Version 0.16 is a small but real MVC platform: custom bytecode, a native VM, standalone executable creation, seven compiler targets, an English source-line debugger, interactive GTK desktop and phone-sized mobile preview interfaces, SDL2 keyboard/frame events and state-driven rendering, native lists and maps, selectable HDB or transactional SQLite storage, recoverable runtime errors, an HTTP/HTTPS client, local packages, reusable actions, native file access, foldered project generation, versioned migrations, persistent CRUD models, safe HTML and typed JSON, authentication and authorization, middleware, formatting, and English tests.
 
-The next major layers are a source-level debugger, richer desktop window events, game animation/audio/physics, mobile backends, and cross-platform release packaging. Those are not claimed as complete yet.
+The next major layers are richer desktop and mobile events, Android/iOS export, game animation/audio/physics, and cross-platform release packaging. Those are not claimed as complete yet.

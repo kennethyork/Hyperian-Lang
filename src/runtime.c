@@ -1383,6 +1383,7 @@ int run_bytecode(const char *path, int port_override) {
         int result = run_console(&code, name); bytecode_free(&code); return result;
     }
     if (!strcmp(target, "desktop")) { int result = run_desktop_app(&code, name); bytecode_free(&code); return result; }
+    if (!strcmp(target, "mobile")) { int result = run_mobile_app(&code, name); bytecode_free(&code); return result; }
     if (!strcmp(target, "game")) { int result = run_game_app(&code, name); bytecode_free(&code); return result; }
     if (strcmp(target, "web") && strcmp(target, "api")) {
         fprintf(stderr, "error: the %s backend is declared but is not implemented yet\n", target);

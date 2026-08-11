@@ -129,7 +129,7 @@ static int validate(Bytecode *code, const char *path) {
             source_error(path, in->line, "this controller action does not exist"); return 0;
         }
         if (in->opcode == OP_BUTTON_ACTION && !known_name(code, OP_ACTION, in->args[1])) {
-            source_error(path, in->line, "this desktop button action does not exist"); return 0;
+            source_error(path, in->line, "this interface button action does not exist"); return 0;
         }
         if (in->opcode == OP_RUN_ACTION) {
             Instruction *action = NULL;
@@ -332,7 +332,7 @@ int compile_file(const char *source_path, const char *output_path) {
         if (current == BLOCK_ROOT) {
             if ((n == 2 || n == 4) && !strcmp(w[0], "application") &&
                 (n == 2 || (!strcmp(w[2], "is") && (!strcmp(w[3], "web") || !strcmp(w[3], "console") ||
-                !strcmp(w[3], "desktop") || !strcmp(w[3], "api") || !strcmp(w[3], "service") || !strcmp(w[3], "game"))))) {
+                !strcmp(w[3], "desktop") || !strcmp(w[3], "mobile") || !strcmp(w[3], "api") || !strcmp(w[3], "service") || !strcmp(w[3], "game"))))) {
                 okay = emit(&code, OP_APPLICATION, 1, &w[1], number);
                 if (okay) { char *target = n == 4 ? w[3] : "web"; okay = emit(&code, OP_TARGET, 1, &target, number); }
                 saw_application = 1;

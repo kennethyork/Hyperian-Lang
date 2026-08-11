@@ -1,0 +1,28 @@
+application "Mobile Tasks" is mobile
+
+model Task
+    field title is text required
+end
+
+controller Tasks
+    action initialize
+        set status to "Ready on mobile"
+    end
+
+    action "add task"
+        set status to "Added: " plus title
+    end
+
+    when application starts
+        run action initialize
+        show view "home"
+    end
+end
+
+view "home"
+    heading "My mobile tasks"
+    text "The same English MVC code drives this phone-sized preview."
+    input "Task title" as title
+    button "Add task" runs action "add task"
+    show status
+end

@@ -92,14 +92,15 @@ static void add_desktop_widgets(DesktopContext *context, GtkWidget *box, size_t 
     }
 }
 
-int run_desktop_app(const Bytecode *code, const char *name) {
+static int run_interface_app(const Bytecode *code, const char *name, int mobile) {
     if (!gtk_init_check(NULL, NULL)) { fprintf(stderr, "error: cannot open a desktop display\n"); return 1; }
     const char *view_name = starting_view(code); if (!view_name) { fprintf(stderr, "error: desktop application needs a starting view\n"); return 1; }
     DesktopContext context = {.code = code}; hyperian_state_init(&context.state); char error[256] = {0};
     if (!hyperian_execute_event(code, "START", &context.state, error, sizeof(error))) { fprintf(stderr, "error: %s\n", error); return 1; }
     GtkWidget *window = gtk_window_new(GTK_WINDOW_TOPLEVEL), *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
-    gtk_window_set_title(GTK_WINDOW(window), name); gtk_window_set_default_size(GTK_WINDOW(window), 800, 600);
-    gtk_container_set_border_width(GTK_CONTAINER(window), 20); gtk_container_add(GTK_CONTAINER(window), box);
+    char title[256]; snprintf(title, sizeof(title), "%s%s", name, mobile ? " — mobile preview" : "");
+    gtk_window_set_title(GTK_WINDOW(window), title); gtk_window_set_default_size(GTK_WINDOW(window), mobile ? 390 : 800, mobile ? 780 : 600);
+    gtk_container_set_border_width(GTK_CONTAINER(window), mobile ? 16 : 20); gtk_box_set_spacing(GTK_BOX(box), mobile ? 12 : 8); gtk_container_add(GTK_CONTAINER(window), box);
     g_signal_connect(window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
     for (size_t i = 0; i < code->count; i++) if (code->items[i].opcode == OP_VIEW && !strcmp(code->items[i].args[0], view_name)) {
         add_desktop_widgets(&context, box, i + 1, desktop_end(code, i, OP_END_VIEW)); break;
@@ -113,8 +114,13 @@ int run_desktop_app(const Bytecode *code, const char *name) {
     } else gtk_main();
     return 0;
 }
+int run_desktop_app(const Bytecode *code, const char *name) { return run_interface_app(code, name, 0); }
+int run_mobile_app(const Bytecode *code, const char *name) { return run_interface_app(code, name, 1); }
 #else
 int run_desktop_app(const Bytecode *code, const char *name) {
     (void)code; (void)name; fprintf(stderr, "error: this Hyperian build does not include the GTK desktop backend\n"); return 1;
+}
+int run_mobile_app(const Bytecode *code, const char *name) {
+    (void)code; (void)name; fprintf(stderr, "error: this Hyperian build does not include the GTK mobile preview backend\n"); return 1;
 }
 #endif

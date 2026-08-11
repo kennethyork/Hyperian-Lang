@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#define HYPERIAN_VERSION "0.15.0"
+#define HYPERIAN_VERSION "0.16.0"
 #define HYC_MAGIC "HYC1"
 #define HYC_MAX_ARGS 9
 #define HYPERIAN_STATE_MAX 64
@@ -70,6 +70,7 @@ int debug_bytecode(const char *path, const char *event, const char *action, cons
 int test_bytecode(const char *path);
 int migrate_bytecode(const char *path);
 int run_desktop_app(const Bytecode *code, const char *name);
+int run_mobile_app(const Bytecode *code, const char *name);
 int run_game_app(const Bytecode *code, const char *name);
 int hyperian_http_get(const char *url, char *body, size_t body_size, long *status, char *error, size_t error_size);
 void hyperian_state_init(HyperianState *state);

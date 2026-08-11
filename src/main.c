@@ -102,10 +102,10 @@ static int write_project_file(const char *path, const char *contents) {
 }
 
 static int create_project(const char *name, const char *target) {
-    static const char *targets[] = {"web", "console", "api", "service", "desktop", "game"}; int known = 0;
+    static const char *targets[] = {"web", "console", "api", "service", "desktop", "mobile", "game"}; int known = 0;
     for (size_t i = 0; i < sizeof(targets) / sizeof(targets[0]); i++) if (!strcmp(target, targets[i])) known = 1;
     if (!project_name_is_safe(name)) { fprintf(stderr, "error: use only letters, numbers, hyphens, or underscores in a project name\n"); return 1; }
-    if (!known) { fprintf(stderr, "error: target must be web, console, api, service, desktop, or game\n"); return 1; }
+    if (!known) { fprintf(stderr, "error: target must be web, console, api, service, desktop, mobile, or game\n"); return 1; }
     char path[1024], source[4096];
     if (!make_project_directory(name)) return 1;
     const char *folders[] = {"models", "controllers", "views", "public", "packages"};
@@ -122,7 +122,7 @@ static int create_project(const char *name, const char *target) {
         "controller Items\n    when someone visits \"/\"\n        find all Item as items\n        show view \"main\" with items\n    end\nend\n");
     else if (!strcmp(target, "api")) snprintf(source, sizeof(source),
         "controller Items\n    when someone visits \"/items\"\n        find all Item as items\n        show json items\n    end\nend\n");
-    else if (!strcmp(target, "desktop")) snprintf(source, sizeof(source),
+    else if (!strcmp(target, "desktop") || !strcmp(target, "mobile")) snprintf(source, sizeof(source),
         "controller Items\n    action initialize\n        set status to ready\n    end\n    action activate\n        set status to \"Button pressed\"\n    end\n    when application starts\n        run action initialize\n        show view \"main\"\n    end\nend\n");
     else if (!strcmp(target, "game")) snprintf(source, sizeof(source),
         "controller Items\n    action initialize\n        set player_x to 100\n    end\n    action \"move right\"\n        set player_x to player_x plus 20\n    end\n    when application starts\n        run action initialize\n        show view \"main\"\n    end\n    when player presses right\n        run action \"move right\"\n    end\nend\n");
@@ -131,8 +131,10 @@ static int create_project(const char *name, const char *target) {
     snprintf(path, sizeof(path), "%s/controllers/items.hyp", name); if (!write_project_file(path, source)) return 1;
     if (strcmp(target, "api")) {
         snprintf(path, sizeof(path), "%s/views/main.hyp", name);
-        const char *view = !strcmp(target, "desktop") ?
-            "view \"main\"\n    heading \"Native desktop application\"\n    input \"Your name\" as name\n    button \"Run action\" runs action activate\n    show status\nend\n" :
+        const char *view = (!strcmp(target, "desktop") || !strcmp(target, "mobile")) ?
+            (!strcmp(target, "mobile") ?
+            "view \"main\"\n    heading \"Mobile application\"\n    input \"Your name\" as name\n    button \"Run action\" runs action activate\n    show status\nend\n" :
+            "view \"main\"\n    heading \"Native desktop application\"\n    input \"Your name\" as name\n    button \"Run action\" runs action activate\n    show status\nend\n") :
             !strcmp(target, "game") ?
             "view \"main\"\n    fill background with color 18 24 38\n    draw rectangle at player_x 100 sized 100 by 100 with color 70 170 255\nend\n" :
             "view \"main\"\n    heading \"Welcome to Hyperian\"\n    text \"Your foldered MVC application is ready.\"\nend\n";
