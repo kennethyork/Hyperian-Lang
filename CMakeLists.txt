@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(Hyperian VERSION 0.30.0 LANGUAGES C)
+project(Hyperian VERSION 0.31.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -195,6 +195,31 @@ add_test(NAME compile_foldered_mvc_program
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/foldered_app/app.hyp -o ${CMAKE_BINARY_DIR}/foldered_app.hyc)
 add_test(NAME compile_native_desktop
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/desktop_notes.hyp -o ${CMAKE_BINARY_DIR}/desktop_notes.hyc)
+find_program(XVFB_RUN xvfb-run)
+if(GTK3_FOUND AND XVFB_RUN)
+    add_test(NAME clean_desktop_input_event_data COMMAND ${CMAKE_COMMAND} -E remove ${CMAKE_BINARY_DIR}/desktop_input_events.hdb)
+    add_test(NAME run_desktop_input_event
+        COMMAND ${XVFB_RUN} -a ${CMAKE_COMMAND} -E env HYPERIAN_DATA=${CMAKE_BINARY_DIR}/desktop_input_events.hdb
+            HYPERIAN_VISUAL_TEST=1 HYPERIAN_VISUAL_TEST_INPUT=Hello HYPERIAN_VISUAL_TEST_STATE=live_preview
+            $<TARGET_FILE:hyperian> run ${CMAKE_SOURCE_DIR}/examples/desktop_notes.hyp)
+    set_tests_properties(run_desktop_input_event PROPERTIES DEPENDS "compile_native_desktop;clean_desktop_input_event_data" PASS_REGULAR_EXPRESSION "live_preview=Typing:Hello")
+    add_test(NAME clean_desktop_submit_event_data COMMAND ${CMAKE_COMMAND} -E remove ${CMAKE_BINARY_DIR}/desktop_submit_events.hdb)
+    add_test(NAME run_desktop_submit_event
+        COMMAND ${XVFB_RUN} -a ${CMAKE_COMMAND} -E env HYPERIAN_DATA=${CMAKE_BINARY_DIR}/desktop_submit_events.hdb
+            HYPERIAN_VISUAL_TEST=1 HYPERIAN_VISUAL_TEST_INPUT=Hello HYPERIAN_VISUAL_TEST_SUBMIT=title HYPERIAN_VISUAL_TEST_STATE=status
+            $<TARGET_FILE:hyperian> run ${CMAKE_SOURCE_DIR}/examples/desktop_notes.hyp)
+    set_tests_properties(run_desktop_submit_event PROPERTIES DEPENDS "compile_native_desktop;clean_desktop_submit_event_data" PASS_REGULAR_EXPRESSION "status=Saved note:")
+    add_test(NAME run_desktop_textarea_change_event
+        COMMAND ${XVFB_RUN} -a ${CMAKE_COMMAND} -E env HYPERIAN_DATA=${CMAKE_BINARY_DIR}/desktop_textarea_events.hdb HYPERIAN_VISUAL_TEST=1 HYPERIAN_VISUAL_TEST_INPUT_NAME=details
+            HYPERIAN_VISUAL_TEST_INPUT=Hello HYPERIAN_VISUAL_TEST_STATE=status
+            $<TARGET_FILE:hyperian> run ${CMAKE_SOURCE_DIR}/examples/desktop_notes.hyp)
+    set_tests_properties(run_desktop_textarea_change_event PROPERTIES DEPENDS compile_native_desktop PASS_REGULAR_EXPRESSION "status=Editing details")
+    add_test(NAME run_desktop_checkbox_change_event
+        COMMAND ${XVFB_RUN} -a ${CMAKE_COMMAND} -E env HYPERIAN_DATA=${CMAKE_BINARY_DIR}/desktop_checkbox_events.hdb HYPERIAN_VISUAL_TEST=1 HYPERIAN_VISUAL_TEST_INPUT_NAME=important
+            HYPERIAN_VISUAL_TEST_INPUT=true HYPERIAN_VISUAL_TEST_STATE=status
+            $<TARGET_FILE:hyperian> run ${CMAKE_SOURCE_DIR}/examples/desktop_notes.hyp)
+    set_tests_properties(run_desktop_checkbox_change_event PROPERTIES DEPENDS compile_native_desktop PASS_REGULAR_EXPRESSION "status=Importance changed")
+endif()
 add_test(NAME compile_mobile_preview
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/mobile_tasks.hyp -o ${CMAKE_BINARY_DIR}/mobile_tasks.hyc)
 add_executable(hyperian_mobile_bridge_test tests/mobile_bridge_test.c)
@@ -226,9 +251,21 @@ set_tests_properties(reject_web_mobile_export PROPERTIES WILL_FAIL TRUE)
 add_test(NAME debug_mobile_navigation
     COMMAND hyperian debug ${CMAKE_SOURCE_DIR}/examples/mobile_tasks.hyp --action "show completed")
 set_tests_properties(debug_mobile_navigation PROPERTIES PASS_REGULAR_EXPRESSION "__hyperian_open_view = completed")
+add_test(NAME debug_english_input_event
+    COMMAND hyperian debug ${CMAKE_SOURCE_DIR}/examples/mobile_tasks.hyp --event "input title changes")
+set_tests_properties(debug_english_input_event PROPERTIES PASS_REGULAR_EXPRESSION "Debugging event input title changes")
 add_test(NAME reject_missing_desktop_action
     COMMAND hyperian check ${CMAKE_SOURCE_DIR}/tests/bad_desktop_action.hyp)
 set_tests_properties(reject_missing_desktop_action PROPERTIES WILL_FAIL TRUE)
+add_test(NAME reject_missing_input_event
+    COMMAND hyperian check ${CMAKE_SOURCE_DIR}/tests/bad_missing_input_event.hyp)
+set_tests_properties(reject_missing_input_event PROPERTIES WILL_FAIL TRUE)
+add_test(NAME reject_textarea_submission
+    COMMAND hyperian check ${CMAKE_SOURCE_DIR}/tests/bad_textarea_submission.hyp)
+set_tests_properties(reject_textarea_submission PROPERTIES WILL_FAIL TRUE)
+add_test(NAME reject_input_event_outside_native_interface
+    COMMAND hyperian check ${CMAKE_SOURCE_DIR}/tests/bad_input_event_target.hyp)
+set_tests_properties(reject_input_event_outside_native_interface PROPERTIES WILL_FAIL TRUE)
 add_test(NAME compile_native_game
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/blocks_game.hyp -o ${CMAKE_BINARY_DIR}/blocks_game.hyc)
 add_test(NAME compile_game_physics

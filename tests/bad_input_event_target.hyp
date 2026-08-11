@@ -1,0 +1,19 @@
+application "Wrong Input Target" is console
+
+model Setting
+    field name is text
+end
+
+controller Main
+    when application starts
+        show view "main"
+    end
+
+    when input name changes
+        set status to changed
+    end
+end
+
+view "main"
+    input "Name" as name
+end

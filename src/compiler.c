@@ -78,6 +78,14 @@ static int duplicate_name(const Bytecode *code, uint8_t op, const char *name) {
     return count > 1;
 }
 
+static int known_interface_input(const Bytecode *code, const char *name, int can_be_multiline_or_checkbox) {
+    for (size_t i = 0; i < code->count; i++)
+        if ((code->items[i].opcode == OP_INPUT || (can_be_multiline_or_checkbox &&
+            (code->items[i].opcode == OP_TEXTAREA || code->items[i].opcode == OP_CHECKBOX))) &&
+            !strcmp(code->items[i].args[1], name)) return 1;
+    return 0;
+}
+
 static int model_has_field(const Bytecode *code, const char *model, const char *field) {
     if (!strcmp(field, "id")) return 1;
     for (size_t i = 0; i < code->count; i++) if (code->items[i].opcode == OP_MODEL && !strcmp(code->items[i].args[0], model))
@@ -130,6 +138,12 @@ static int validate(Bytecode *code, const char *path) {
         }
         if (in->opcode == OP_BUTTON_ACTION && !known_name(code, OP_ACTION, in->args[1])) {
             source_error(path, in->line, "this interface button action does not exist"); return 0;
+        }
+        if (in->opcode == OP_EVENT && !strncmp(in->args[0], "CHANGE:", 7) && !known_interface_input(code, in->args[0] + 7, 1)) {
+            source_error(path, in->line, "the input that should report changes does not exist"); return 0;
+        }
+        if (in->opcode == OP_EVENT && !strncmp(in->args[0], "SUBMIT:", 7) && !known_interface_input(code, in->args[0] + 7, 0)) {
+            source_error(path, in->line, "the submitted input does not exist or is not a single-line input"); return 0;
         }
         if (in->opcode == OP_RUN_ACTION) {
             Instruction *action = NULL;
@@ -279,6 +293,11 @@ static int validate(Bytecode *code, const char *path) {
             code->items[i].opcode == OP_KEEP_INSIDE || code->items[i].opcode == OP_CHECK_COLLISION ||
             code->items[i].opcode == OP_MOVE_VALUE_TOWARD || code->items[i].opcode == OP_ADVANCE_ANIMATION) {
             source_error(path, code->items[i].line, "game physics and animation instructions require an application declared as game"); return 0;
+        }
+    if (strcmp(target, "desktop") && strcmp(target, "mobile")) for (size_t i = 0; i < code->count; i++)
+        if (code->items[i].opcode == OP_EVENT && (!strncmp(code->items[i].args[0], "CHANGE:", 7) ||
+            !strncmp(code->items[i].args[0], "SUBMIT:", 7))) {
+            source_error(path, code->items[i].line, "input change and submission events require a desktop or mobile application"); return 0;
         }
     if (!strcmp(target, "web") || !strcmp(target, "pwa")) {
         int routes = 0;
@@ -471,6 +490,16 @@ int compile_file(const char *source_path, const char *output_path) {
             }
             if (n == 3 && !strcmp(w[0], "when") && !strcmp(w[1], "application") && !strcmp(w[2], "starts")) {
                 char *event = "START"; okay = emit(&code, OP_EVENT, 1, &event, number); stack[depth++] = BLOCK_ROUTE; continue;
+            }
+            if (n == 4 && !strcmp(w[0], "when") && !strcmp(w[1], "input") && !strcmp(w[3], "changes") && is_name(w[2])) {
+                if (strlen(w[2]) >= 64) { source_error(source_path, number, "an input name must be shorter than 64 characters"); okay = 0; continue; }
+                char event[80]; snprintf(event, sizeof(event), "CHANGE:%s", w[2]); char *arg = event;
+                okay = emit(&code, OP_EVENT, 1, &arg, number); stack[depth++] = BLOCK_ROUTE; continue;
+            }
+            if (n == 5 && !strcmp(w[0], "when") && !strcmp(w[1], "input") && !strcmp(w[3], "is") && !strcmp(w[4], "submitted") && is_name(w[2])) {
+                if (strlen(w[2]) >= 64) { source_error(source_path, number, "an input name must be shorter than 64 characters"); okay = 0; continue; }
+                char event[80]; snprintf(event, sizeof(event), "SUBMIT:%s", w[2]); char *arg = event;
+                okay = emit(&code, OP_EVENT, 1, &arg, number); stack[depth++] = BLOCK_ROUTE; continue;
             }
             if (n == 4 && !strcmp(w[0], "when") && !strcmp(w[1], "player") && !strcmp(w[2], "presses") && is_name(w[3])) {
                 char event[256]; snprintf(event, sizeof(event), "KEY:%s", w[3]); char *arg = event;

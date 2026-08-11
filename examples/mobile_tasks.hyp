@@ -7,6 +7,9 @@ end
 controller Tasks
     action initialize
         set status to "Ready on mobile"
+        set live_preview to "Start typing a task"
+        set details_preview to "No details yet"
+        set urgency_preview to "Urgent:false"
         set heartbeat to 0
         collect every Task title as task_titles
     end
@@ -30,6 +33,22 @@ controller Tasks
         show view "home"
     end
 
+    when input title changes
+        set live_preview to "Typing:" joined with title
+    end
+
+    when input title is submitted
+        run action "add task"
+    end
+
+    when input details changes
+        set details_preview to "Details:" joined with details
+    end
+
+    when input urgent changes
+        set urgency_preview to "Urgent:" joined with urgent
+    end
+
     every 1 second
         set heartbeat to heartbeat plus 1
     end
@@ -39,6 +58,11 @@ view "home"
     heading "My mobile tasks"
     text "The same English MVC code drives this phone-sized preview."
     input "Task title" as title
+    textarea "Task details" as details
+    checkbox "Urgent" as urgent
+    show live_preview
+    show details_preview
+    show urgency_preview
     button "Add task" runs action "add task"
     button "Completed tasks" runs action "show completed"
     show status

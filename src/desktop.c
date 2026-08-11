@@ -8,9 +8,9 @@
 #include <gtk/gtk.h>
 
 typedef enum { DESKTOP_ENTRY, DESKTOP_TEXT, DESKTOP_CHECK } DesktopInputKind;
-typedef struct { const char *name; GtkWidget *widget; DesktopInputKind kind; } DesktopInput;
-typedef struct { const char *expression; GtkWidget *label; } DesktopOutput;
 typedef struct DesktopContext DesktopContext;
+typedef struct { DesktopContext *context; const char *name; GtkWidget *widget; DesktopInputKind kind; } DesktopInput;
+typedef struct { const char *expression; GtkWidget *label; } DesktopOutput;
 typedef struct { DesktopContext *context; const char *action; } DesktopButton;
 typedef struct { DesktopContext *context; const char *event; } DesktopTimer;
 struct DesktopContext {
@@ -21,6 +21,7 @@ struct DesktopContext {
     DesktopOutput outputs[HYPERIAN_STATE_MAX]; int output_count;
     DesktopButton buttons[HYPERIAN_STATE_MAX]; int button_count;
     DesktopTimer timers[HYPERIAN_STATE_MAX]; int timer_count;
+    int handling_input_event;
 };
 
 static int show_interface_view(DesktopContext *context, const char *name);
@@ -75,6 +76,32 @@ static void apply_state_transition(DesktopContext *context) {
     } else refresh_outputs(context);
 }
 
+static int desktop_has_event(const Bytecode *code, const char *kind, const char *name) {
+    char wanted[80];
+    if (snprintf(wanted, sizeof(wanted), "%s:%s", kind, name) >= (int)sizeof(wanted)) return 0;
+    for (size_t i = 0; i < code->count; i++)
+        if (code->items[i].opcode == OP_EVENT && !strcmp(code->items[i].args[0], wanted)) return 1;
+    return 0;
+}
+
+static void dispatch_input_event(DesktopInput *input, const char *kind) {
+    DesktopContext *context = input->context;
+    if (context->handling_input_event) return;
+    context->handling_input_event = 1; sync_inputs(context);
+    char event[80], error[256] = {0}; snprintf(event, sizeof(event), "%s:%s", kind, input->name);
+    if (!hyperian_execute_data_event(context->data, event, &context->state, error, sizeof(error)))
+        hyperian_state_set(&context->state, "error", error);
+    apply_state_transition(context); context->handling_input_event = 0;
+}
+
+static void input_changed(gpointer widget, gpointer data) {
+    (void)widget; dispatch_input_event((DesktopInput *)data, "CHANGE");
+}
+
+static void input_submitted(GtkEntry *entry, gpointer data) {
+    (void)entry; dispatch_input_event((DesktopInput *)data, "SUBMIT");
+}
+
 static void action_clicked(GtkButton *button, gpointer data) {
     (void)button; DesktopButton *binding = data; char error[256] = {0}; sync_inputs(binding->context);
     if (!hyperian_execute_data_action(binding->context->data, binding->action, NULL, &binding->context->state, error, sizeof(error)))
@@ -90,7 +117,19 @@ static gboolean timer_fired(gpointer data) {
 }
 
 static void remember_input(DesktopContext *context, const char *name, GtkWidget *widget, DesktopInputKind kind) {
-    if (context->input_count < HYPERIAN_STATE_MAX) context->inputs[context->input_count++] = (DesktopInput){name, widget, kind};
+    if (context->input_count >= HYPERIAN_STATE_MAX) return;
+    DesktopInput *input = &context->inputs[context->input_count++]; *input = (DesktopInput){context, name, widget, kind};
+    const char *value = hyperian_state_get(&context->state, name); if (!value) value = "";
+    if (kind == DESKTOP_ENTRY) gtk_entry_set_text(GTK_ENTRY(widget), value);
+    else if (kind == DESKTOP_CHECK) gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(widget), !strcmp(value, "true"));
+    else gtk_text_buffer_set_text(gtk_text_view_get_buffer(GTK_TEXT_VIEW(widget)), value, -1);
+    if (desktop_has_event(context->code, "CHANGE", name)) {
+        if (kind == DESKTOP_ENTRY) g_signal_connect(widget, "changed", G_CALLBACK(input_changed), input);
+        else if (kind == DESKTOP_CHECK) g_signal_connect(widget, "toggled", G_CALLBACK(input_changed), input);
+        else g_signal_connect(gtk_text_view_get_buffer(GTK_TEXT_VIEW(widget)), "changed", G_CALLBACK(input_changed), input);
+    }
+    if (kind == DESKTOP_ENTRY && desktop_has_event(context->code, "SUBMIT", name))
+        g_signal_connect(widget, "activate", G_CALLBACK(input_submitted), input);
 }
 
 static int next_desktop_list_value(const char **cursor, char *value, size_t value_size) {
@@ -180,10 +219,20 @@ static int run_interface_app(const Bytecode *code, const char *name, int mobile)
         }
     gtk_widget_show_all(window);
     if (getenv("HYPERIAN_VISUAL_TEST")) {
-        const char *test_input = getenv("HYPERIAN_VISUAL_TEST_INPUT");
-        if (test_input && context.input_count && context.inputs[0].kind == DESKTOP_ENTRY)
-            gtk_entry_set_text(GTK_ENTRY(context.inputs[0].widget), test_input);
-        const char *wanted_action = getenv("HYPERIAN_VISUAL_TEST_ACTION"); DesktopButton *chosen = context.button_count ? &context.buttons[0] : NULL;
+        const char *test_input = getenv("HYPERIAN_VISUAL_TEST_INPUT"), *test_input_name = getenv("HYPERIAN_VISUAL_TEST_INPUT_NAME");
+        DesktopInput *changed = context.input_count ? &context.inputs[0] : NULL;
+        for (int i = 0; test_input_name && i < context.input_count; i++)
+            if (!strcmp(context.inputs[i].name, test_input_name)) changed = &context.inputs[i];
+        if (test_input && changed) {
+            if (changed->kind == DESKTOP_ENTRY) gtk_entry_set_text(GTK_ENTRY(changed->widget), test_input);
+            else if (changed->kind == DESKTOP_CHECK) gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(changed->widget), !strcmp(test_input, "true"));
+            else gtk_text_buffer_set_text(gtk_text_view_get_buffer(GTK_TEXT_VIEW(changed->widget)), test_input, -1);
+        }
+        const char *wanted_submit = getenv("HYPERIAN_VISUAL_TEST_SUBMIT"); DesktopInput *submitted = NULL;
+        for (int i = 0; wanted_submit && i < context.input_count; i++)
+            if (context.inputs[i].kind == DESKTOP_ENTRY && !strcmp(context.inputs[i].name, wanted_submit)) submitted = &context.inputs[i];
+        if (submitted) input_submitted(GTK_ENTRY(submitted->widget), submitted);
+        const char *wanted_action = getenv("HYPERIAN_VISUAL_TEST_ACTION"); DesktopButton *chosen = NULL;
         for (int i = 0; wanted_action && i < context.button_count; i++) if (!strcmp(context.buttons[i].action, wanted_action)) chosen = &context.buttons[i];
         if (chosen) action_clicked(NULL, chosen);
         const char *test_timer = getenv("HYPERIAN_VISUAL_TEST_TIMER");

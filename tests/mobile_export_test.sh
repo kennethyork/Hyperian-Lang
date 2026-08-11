@@ -30,6 +30,8 @@ if [ "$platform" = android ]; then
     grep 'hyperian_mobile_send_event' "$android/app/src/main/cpp/hyperian_jni.c"
     grep 'System.loadLibrary("hyperian_mobile_jni")' "$android/app/src/main/java/com/hyperian/generated/MainActivity.java"
     grep 'private void scheduleTimer' "$android/app/src/main/java/com/hyperian/generated/MainActivity.java"
+    grep 'addTextChangedListener' "$android/app/src/main/java/com/hyperian/generated/MainActivity.java"
+    grep 'sendInputEvent(changeEvent)' "$android/app/src/main/java/com/hyperian/generated/MainActivity.java"
     grep '<string name="app_name">Mobile Tasks</string>' "$android/app/src/main/res/values/strings.xml"
 fi
 
@@ -48,6 +50,8 @@ if [ "$platform" = ios ]; then
     grep 'hyperian_mobile_send_event' "$ios/HyperianIOS/HyperianBridge.m"
     grep '@main' "$ios/HyperianIOS/HyperianApp.swift"
     grep 'Timer.scheduledTimer' "$ios/HyperianIOS/ContentView.swift"
+    grep 'control.changeEvent' "$ios/HyperianIOS/ContentView.swift"
+    grep 'onSubmit' "$ios/HyperianIOS/ContentView.swift"
     grep '<string>Mobile Tasks</string>' "$ios/HyperianIOS/Info.plist"
     grep -Eq 'rootObject = [0-9A-F]{24};' "$ios/HyperianIOS.xcodeproj/project.pbxproj"
     if command -v xmllint >/dev/null 2>&1; then xmllint --noout "$ios/HyperianIOS/Info.plist"; fi

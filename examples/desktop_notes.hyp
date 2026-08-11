@@ -9,6 +9,7 @@ end
 controller Notes
     action "initialize desktop"
         set status to "Ready for a note"
+        set live_preview to "Start typing a note"
         collect every Note title as note_titles
     end
 
@@ -24,12 +25,29 @@ controller Notes
         run action "initialize desktop"
         show view "notes"
     end
+
+    when input title changes
+        set live_preview to "Typing:" joined with title
+    end
+
+    when input title is submitted
+        run action "save note"
+    end
+
+    when input details changes
+        set status to "Editing details"
+    end
+
+    when input important changes
+        set status to "Importance changed"
+    end
 end
 
 view "notes"
     heading "Native desktop notes"
     text "This window and its controls are rendered by GTK, not a browser."
     input "Note title" as title
+    show live_preview
     textarea "Note details" as details
     checkbox "Important" as important
     button "Save note" runs action "save note"

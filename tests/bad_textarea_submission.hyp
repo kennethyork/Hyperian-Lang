@@ -1,0 +1,19 @@
+application "Textarea Submission" is desktop
+
+model Setting
+    field name is text
+end
+
+controller Main
+    when application starts
+        show view "main"
+    end
+
+    when input details is submitted
+        set status to submitted
+    end
+end
+
+view "main"
+    textarea "Details" as details
+end

@@ -1,0 +1,19 @@
+application "Missing Input Event" is mobile
+
+model Setting
+    field name is text
+end
+
+controller Main
+    when application starts
+        show view "main"
+    end
+
+    when input missing changes
+        set status to changed
+    end
+end
+
+view "main"
+    heading "No matching input"
+end

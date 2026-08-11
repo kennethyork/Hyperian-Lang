@@ -783,20 +783,38 @@ int hyperian_execute_data_event(HyperianData *data, const char *event, HyperianS
     return execute_event_with_data(data->code, data, event, state, error, error_size);
 }
 
+static const char *english_debug_event(const char *event, char *translated, size_t size) {
+    if (!event) return NULL;
+    if (!strcmp(event, "application starts")) return "START";
+    if (!strcmp(event, "window closes")) return "CLOSE";
+    if (!strcmp(event, "game updates")) return "FRAME";
+    char name[64], extra;
+    if (sscanf(event, "player presses %63s%c", name, &extra) == 1) {
+        snprintf(translated, size, "KEY:%s", name); return translated;
+    }
+    if (sscanf(event, "input %63s changes%c", name, &extra) == 1) {
+        snprintf(translated, size, "CHANGE:%s", name); return translated;
+    }
+    if (sscanf(event, "input %63s is submitted%c", name, &extra) == 1) {
+        snprintf(translated, size, "SUBMIT:%s", name); return translated;
+    }
+    return event;
+}
+
 int debug_bytecode(const char *path, const char *event, const char *action, const char *input) {
     Bytecode code; bytecode_init(&code); char error[256] = {0}; HyperianState state;
     if (!bytecode_read(&code, path, error, sizeof(error))) { fprintf(stderr, "error: %s\n", error); return 1; }
     HyperianData *data = hyperian_data_open(&code, error, sizeof(error));
     if (!data) { fprintf(stderr, "Debugger could not open the application data: %s\n", error); bytecode_free(&code); return 1; }
-    hyperian_state_init(&state);
-    if (event && strcmp(event, "START") && !hyperian_execute_data_event(data, "START", &state, error, sizeof(error))) {
+    hyperian_state_init(&state); char translated[80]; const char *selected_event = english_debug_event(event, translated, sizeof(translated));
+    if (selected_event && strcmp(selected_event, "START") && !hyperian_execute_data_event(data, "START", &state, error, sizeof(error))) {
         fprintf(stderr, "Debugger could not prepare the application: %s\n", error); hyperian_data_close(data); bytecode_free(&code); return 1;
     }
-    if (event && !strcmp(event, "FRAME")) hyperian_state_set(&state, "seconds_since_last_frame", "0.0166666666666667");
+    if (selected_event && !strcmp(selected_event, "FRAME")) hyperian_state_set(&state, "seconds_since_last_frame", "0.0166666666666667");
     debugger_active = 1;
     printf("Debugging %s %s\n", action ? "action" : "event", action ? action : event);
     int okay = action ? hyperian_execute_data_action(data, action, input, &state, error, sizeof(error))
-                      : hyperian_execute_data_event(data, event, &state, error, sizeof(error));
+                      : hyperian_execute_data_event(data, selected_event, &state, error, sizeof(error));
     debugger_active = 0;
     if (!okay) fprintf(stderr, "Debugger stopped: %s\n", error);
     printf("Final state:\n");

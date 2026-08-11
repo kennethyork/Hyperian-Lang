@@ -81,6 +81,14 @@ static int value_is_true(const char *value) {
     return value && *value && strcmp(value, "false") && strcmp(value, "0");
 }
 
+static int has_input_event(const Bytecode *code, const char *kind, const char *name) {
+    char wanted[80];
+    if (snprintf(wanted, sizeof(wanted), "%s:%s", kind, name) >= (int)sizeof(wanted)) return 0;
+    for (size_t i = 0; i < code->count; i++)
+        if (code->items[i].opcode == OP_EVENT && !strcmp(code->items[i].args[0], wanted)) return 1;
+    return 0;
+}
+
 static void render_controls(HyperianMobile *mobile, Json *json, size_t from, size_t to) {
     for (size_t i = from; json->okay && i < to; i++) {
         Instruction *in = &mobile->code.items[i]; char value[HYPERIAN_VALUE_SIZE];
@@ -116,7 +124,15 @@ static void render_controls(HyperianMobile *mobile, Json *json, size_t from, siz
         } else if (in->opcode == OP_INPUT || in->opcode == OP_TEXTAREA || in->opcode == OP_CHECKBOX) {
             control_value(json, "label", in->args[0]); control_value(json, "name", in->args[1]);
             control_value(json, "value", hyperian_state_get(&mobile->state, in->args[1]) ? hyperian_state_get(&mobile->state, in->args[1]) : "");
-            json_raw(json, ",\"required\":"); json_raw(json, !strcmp(in->args[2], "true") ? "true" : "false");
+            char event[80];
+            if (has_input_event(&mobile->code, "CHANGE", in->args[1])) {
+                snprintf(event, sizeof(event), "CHANGE:%s", in->args[1]); control_value(json, "changeEvent", event);
+            }
+            if (in->opcode == OP_INPUT && has_input_event(&mobile->code, "SUBMIT", in->args[1])) {
+                snprintf(event, sizeof(event), "SUBMIT:%s", in->args[1]); control_value(json, "submitEvent", event);
+            }
+            json_raw(json, ",\"required\":");
+            json_raw(json, in->argc > 2 && in->args[2] && !strcmp(in->args[2], "true") ? "true" : "false");
         } else if (in->opcode == OP_BUTTON_ACTION) {
             control_value(json, "label", in->args[0]); control_value(json, "action", in->args[1]);
         } else if (in->opcode == OP_BUTTON) { control_value(json, "label", in->args[0]); control_value(json, "action", ""); }

@@ -8,7 +8,9 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.text.Editable;
 import android.text.InputType;
+import android.text.TextWatcher;
 import android.view.View;
 import android.widget.Button;
 import android.widget.CheckBox;
@@ -81,10 +83,20 @@ public final class MainActivity extends Activity {
         } else if (kind.equals("input") || kind.equals("textarea")) {
             EditText input = new EditText(this); input.setHint(control.optString("label")); input.setText(control.optString("value"));
             if (kind.equals("textarea")) { input.setMinLines(4); input.setGravity(android.view.Gravity.TOP); input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE); }
-            inputs.put(control.getString("name"), input); view = input;
+            else input.setSingleLine(true);
+            String inputName = control.getString("name"), changeEvent = control.optString("changeEvent"), submitEvent = control.optString("submitEvent");
+            inputs.put(inputName, input);
+            if (!changeEvent.isEmpty()) input.addTextChangedListener(new TextWatcher() {
+                @Override public void beforeTextChanged(CharSequence text, int start, int count, int after) {}
+                @Override public void onTextChanged(CharSequence text, int start, int before, int count) {}
+                @Override public void afterTextChanged(Editable text) { sendInputEvent(changeEvent); }
+            });
+            if (!submitEvent.isEmpty()) input.setOnEditorActionListener((ignored, action, event) -> { sendInputEvent(submitEvent); return true; });
+            view = input;
         } else if (kind.equals("checkbox")) {
             CheckBox input = new CheckBox(this); input.setText(control.optString("label")); input.setChecked(control.optString("value").equals("true"));
-            inputs.put(control.getString("name"), input); view = input;
+            String inputName = control.getString("name"), changeEvent = control.optString("changeEvent"); inputs.put(inputName, input);
+            if (!changeEvent.isEmpty()) input.setOnCheckedChangeListener((ignored, checked) -> sendInputEvent(changeEvent)); view = input;
         } else if (kind.equals("button")) {
             Button button = new Button(this); button.setText(control.optString("label")); String action = control.optString("action");
             button.setEnabled(!action.isEmpty()); button.setOnClickListener(ignored -> runAction(action)); view = button;
@@ -103,11 +115,22 @@ public final class MainActivity extends Activity {
     }
 
     private void runAction(String action) {
+        syncInputs();
+        String error = runMobileAction(action); if (!error.isEmpty()) Toast.makeText(this, error, Toast.LENGTH_LONG).show(); render();
+    }
+
+    private void syncInputs() {
         for (Map.Entry<String, View> item : inputs.entrySet()) {
             String value = item.getValue() instanceof CheckBox ? (((CheckBox)item.getValue()).isChecked() ? "true" : "false") : ((EditText)item.getValue()).getText().toString();
             setMobileValue(item.getKey(), value);
         }
-        String error = runMobileAction(action); if (!error.isEmpty()) Toast.makeText(this, error, Toast.LENGTH_LONG).show(); render();
+    }
+
+    private void sendInputEvent(String event) {
+        content.post(() -> {
+            syncInputs(); String error = sendMobileEvent(event);
+            if (!error.isEmpty()) Toast.makeText(MainActivity.this, error, Toast.LENGTH_LONG).show(); render();
+        });
     }
 
     private void scheduleTimer(long interval) {

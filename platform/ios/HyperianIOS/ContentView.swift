@@ -19,6 +19,8 @@ struct HyperianControl: Decodable {
     var source: String?
     var description: String?
     var required: Bool?
+    var changeEvent: String?
+    var submitEvent: String?
 }
 
 @MainActor final class HyperianApplication: ObservableObject {
@@ -39,7 +41,10 @@ struct HyperianControl: Decodable {
 
     func binding(for control: HyperianControl) -> Binding<String> {
         let name = control.name ?? ""
-        return Binding(get: { self.values[name] ?? control.value ?? "" }, set: { self.values[name] = $0 })
+        return Binding(get: { self.values[name] ?? control.value ?? "" }, set: {
+            self.values[name] = $0
+            if let event = control.changeEvent { DispatchQueue.main.async { self.sendInputEvent(event) } }
+        })
     }
 
     func booleanBinding(for control: HyperianControl) -> Binding<Bool> {
@@ -50,6 +55,17 @@ struct HyperianControl: Decodable {
     func run(_ action: String) {
         for (name, value) in values { bridge.setValue(value, named: name) }
         let error = bridge.runAction(action)
+        if !error.isEmpty { message = error }
+        refresh()
+    }
+
+    func submit(_ control: HyperianControl) {
+        if let event = control.submitEvent { sendInputEvent(event) }
+    }
+
+    private func sendInputEvent(_ event: String) {
+        for (name, value) in values { bridge.setValue(value, named: name) }
+        let error = bridge.sendEvent(event)
         if !error.isEmpty { message = error }
         refresh()
     }
@@ -97,7 +113,7 @@ struct ContentView: View {
         switch control.kind {
         case "heading": Text(control.text ?? "").font(.largeTitle).bold()
         case "text", "value": Text(control.text ?? "")
-        case "input": TextField(control.label ?? "", text: application.binding(for: control)).textFieldStyle(.roundedBorder)
+        case "input": TextField(control.label ?? "", text: application.binding(for: control)).textFieldStyle(.roundedBorder).onSubmit { application.submit(control) }
         case "textarea": TextEditor(text: application.binding(for: control)).frame(minHeight: 120).overlay(RoundedRectangle(cornerRadius: 8).stroke(.secondary))
         case "checkbox": Toggle(control.label ?? "", isOn: application.booleanBinding(for: control))
         case "button": Button(control.label ?? "") { application.run(control.action ?? "") }.buttonStyle(.borderedProminent).disabled((control.action ?? "").isEmpty)

@@ -16,9 +16,19 @@ int main(int argc, char **argv) {
     int okay = hyperian_mobile_start(mobile, error, sizeof(error)) &&
         hyperian_mobile_render_json(mobile, json, sizeof(json), error, sizeof(error)) &&
         contains(json, "\"view\":\"home\"") && contains(json, "\"kind\":\"input\"") &&
-        contains(json, "\"action\":\"add task\"");
+        contains(json, "\"action\":\"add task\"") && contains(json, "\"changeEvent\":\"CHANGE:title\"") &&
+        contains(json, "\"submitEvent\":\"SUBMIT:title\"") && contains(json, "\"changeEvent\":\"CHANGE:details\"") &&
+        contains(json, "\"changeEvent\":\"CHANGE:urgent\"");
     if (okay) okay = hyperian_mobile_set(mobile, "title", "Coffee \"and\" tea", error, sizeof(error)) &&
-        hyperian_mobile_run_action(mobile, "add task", NULL, error, sizeof(error)) &&
+        hyperian_mobile_send_event(mobile, "CHANGE:title", error, sizeof(error)) &&
+        hyperian_mobile_value(mobile, "live_preview") && !strcmp(hyperian_mobile_value(mobile, "live_preview"), "Typing:Coffee \"and\" tea") &&
+        hyperian_mobile_set(mobile, "details", "Bring a cup", error, sizeof(error)) &&
+        hyperian_mobile_send_event(mobile, "CHANGE:details", error, sizeof(error)) &&
+        hyperian_mobile_value(mobile, "details_preview") && !strcmp(hyperian_mobile_value(mobile, "details_preview"), "Details:Bring a cup") &&
+        hyperian_mobile_set(mobile, "urgent", "true", error, sizeof(error)) &&
+        hyperian_mobile_send_event(mobile, "CHANGE:urgent", error, sizeof(error)) &&
+        hyperian_mobile_value(mobile, "urgency_preview") && !strcmp(hyperian_mobile_value(mobile, "urgency_preview"), "Urgent:true") &&
+        hyperian_mobile_send_event(mobile, "SUBMIT:title", error, sizeof(error)) &&
         hyperian_mobile_value(mobile, "status") && !strcmp(hyperian_mobile_value(mobile, "status"), "Added:Coffee \"and\" tea") &&
         hyperian_mobile_render_json(mobile, json, sizeof(json), error, sizeof(error)) &&
         contains(json, "Coffee \\\"and\\\" tea") && contains(json, "\"timers\":[1000]") &&
@@ -27,8 +37,9 @@ int main(int argc, char **argv) {
         hyperian_mobile_send_event(mobile, "TIMER:1000", error, sizeof(error)) &&
         hyperian_mobile_value(mobile, "heartbeat") && !strcmp(hyperian_mobile_value(mobile, "heartbeat"), "1");
     if (!okay && !*error) {
-        fprintf(stderr, "status=%s heartbeat=%s json=%s\n", hyperian_mobile_value(mobile, "status"),
-            hyperian_mobile_value(mobile, "heartbeat"), json);
+        fprintf(stderr, "status=%s preview=%s details=%s urgency=%s heartbeat=%s json=%s\n", hyperian_mobile_value(mobile, "status"),
+            hyperian_mobile_value(mobile, "live_preview"), hyperian_mobile_value(mobile, "details_preview"),
+            hyperian_mobile_value(mobile, "urgency_preview"), hyperian_mobile_value(mobile, "heartbeat"), json);
         snprintf(error, sizeof(error), "a rendered mobile value was incorrect");
     }
     if (!okay) fprintf(stderr, "mobile bridge failed: %s\n", error);
