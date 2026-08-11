@@ -4,6 +4,7 @@
 #include <arpa/inet.h>
 #include <ctype.h>
 #include <errno.h>
+#include <float.h>
 #include <signal.h>
 #include <stdarg.h>
 #include <stdlib.h>
@@ -353,7 +354,8 @@ static int is_logic_instruction(uint8_t opcode) {
         opcode == OP_LIST_ITEM || opcode == OP_HTTP_GET || opcode == OP_MAKE_MAP || opcode == OP_MAP_PUT ||
         opcode == OP_MAP_GET || opcode == OP_MAP_REMOVE || opcode == OP_MAP_COUNT || opcode == OP_PLAY_SOUND || opcode == OP_OPEN_VIEW ||
         opcode == OP_CREATE_STATE || opcode == OP_FIND_STATE || opcode == OP_UPDATE_STATE || opcode == OP_DELETE_STATE || opcode == OP_COUNT_RECORDS || opcode == OP_COLLECT_FIELD ||
-        opcode == OP_MOVE_POSITION || opcode == OP_APPLY_GRAVITY || opcode == OP_KEEP_INSIDE || opcode == OP_CHECK_COLLISION || opcode == OP_COLLECT_QUERY;
+        opcode == OP_MOVE_POSITION || opcode == OP_APPLY_GRAVITY || opcode == OP_KEEP_INSIDE || opcode == OP_CHECK_COLLISION || opcode == OP_COLLECT_QUERY ||
+        opcode == OP_MOVE_VALUE_TOWARD || opcode == OP_ADVANCE_ANIMATION;
 }
 
 static HyperianSoundHandler sound_handler = NULL;
@@ -401,6 +403,8 @@ static void debug_instruction(const Instruction *in, int depth) {
             if (*in->args[2]) printf(" where %s is %s", in->args[2], in->args[3]);
             if (*in->args[4]) printf(" ordered by %s%s", in->args[4], !strcmp(in->args[5], "descending") ? " descending" : "");
             printf(" as %s", in->args[6]); break;
+        case OP_MOVE_VALUE_TOWARD: printf("move value %s toward %s at %s per second", in->args[0], in->args[1], in->args[2]); break;
+        case OP_ADVANCE_ANIMATION: printf("advance animation %s from %s through %s every %s milliseconds", in->args[0], in->args[1], in->args[2], in->args[3]); break;
         default: printf("execute %s", opcode_name(in->opcode)); break;
     }
     putchar('\n');
@@ -408,6 +412,7 @@ static void debug_instruction(const Instruction *in, int depth) {
 
 static void debug_changes(const HyperianState *before, const HyperianState *after, int depth) {
     for (int i = 0; i < after->count; i++) {
+        if (!strncmp(after->names[i], "__hyperian_animation_", sizeof("__hyperian_animation_") - 1)) continue;
         const char *old = hyperian_state_get(before, after->names[i]);
         if (!old || strcmp(old, after->values[i]))
             printf("%*s%s is now %s\n", depth * 2 + 2, "", after->names[i], *after->values[i] ? after->values[i] : "empty");
@@ -429,8 +434,8 @@ static void form_from_current_values(const Bytecode *code, const char *model, Sc
 
 static int physics_number(Scope *scope, const char *expression, double *number, char *error, size_t error_size) {
     char value[128], *end; evaluate(scope, expression, value, sizeof(value)); *number = strtod(value, &end);
-    if (*value && !*end) return 1;
-    snprintf(error, error_size, "game physics needs a number for %s", expression); return 0;
+    if (*value && !*end && *number == *number && *number >= -DBL_MAX && *number <= DBL_MAX) return 1;
+    snprintf(error, error_size, "this game instruction needs a number for %s", expression); return 0;
 }
 
 static void set_physics_number(HyperianState *state, const char *name, double number) {
@@ -460,6 +465,50 @@ static int execute_logic_at(const Bytecode *code, size_t *position, Scope *scope
     if (debugger_active) { before = *scope->locals; debug_instruction(in, depth); }
     if (in->opcode == OP_SET_VALUE) {
         char value[2048]; evaluate(scope, in->args[1], value, sizeof(value)); local_set(scope->locals, in->args[0], value);
+    } else if (in->opcode == OP_MOVE_VALUE_TOWARD) {
+        double current, target, speed, seconds;
+        if (!physics_number(scope, in->args[0], &current, error, error_size) || !physics_number(scope, in->args[1], &target, error, error_size) ||
+            !physics_number(scope, in->args[2], &speed, error, error_size) ||
+            !physics_number(scope, "seconds_since_last_frame", &seconds, error, error_size)) return 0;
+        if (speed < 0) { snprintf(error, error_size, "animation speed cannot be negative"); return 0; }
+        if (seconds < 0) { snprintf(error, error_size, "time since the last frame cannot be negative"); return 0; }
+        double distance = target - current, change = speed * seconds;
+        if (distance > change) current += change;
+        else if (distance < -change) current -= change;
+        else current = target;
+        set_physics_number(scope->locals, in->args[0], current);
+    } else if (in->opcode == OP_ADVANCE_ANIMATION) {
+        double first_number, last_number, seconds;
+        if (!physics_number(scope, in->args[1], &first_number, error, error_size) || !physics_number(scope, in->args[2], &last_number, error, error_size) ||
+            !physics_number(scope, "seconds_since_last_frame", &seconds, error, error_size)) return 0;
+        if (first_number < -1000000000 || first_number > 1000000000 || last_number < -1000000000 || last_number > 1000000000) {
+            snprintf(error, error_size, "animation frame numbers must be between -1000000000 and 1000000000"); return 0;
+        }
+        long first = (long)first_number, last = (long)last_number;
+        if (first_number != (double)first || last_number != (double)last || last < first || last - first > 1000000) {
+            snprintf(error, error_size, "animation frames must be whole numbers in increasing order"); return 0;
+        }
+        if (seconds < 0 || seconds > 86400) { snprintf(error, error_size, "time since the last frame must be between zero and one day"); return 0; }
+        double interval = strtod(in->args[3], NULL) / 1000.0;
+        if (interval < 0.001 || interval > 86400) { snprintf(error, error_size, "animation interval must be between one millisecond and one day"); return 0; }
+        char elapsed_name[64]; snprintf(elapsed_name, sizeof(elapsed_name), "__hyperian_animation_%u", in->line);
+        const char *saved_elapsed = local_value(scope->locals, elapsed_name); double elapsed = 0;
+        if (saved_elapsed && *saved_elapsed) {
+            char *end; elapsed = strtod(saved_elapsed, &end);
+            if (*end || elapsed != elapsed || elapsed < 0 || elapsed > 86400) elapsed = 0;
+        }
+        elapsed += seconds;
+        unsigned long steps = (unsigned long)(elapsed / interval);
+        elapsed -= (double)steps * interval;
+        const char *saved_frame = local_value(scope->locals, in->args[0]); double frame_number = first_number;
+        if (saved_frame && *saved_frame) {
+            char *end; double parsed = strtod(saved_frame, &end);
+            if (!*end && parsed == parsed && parsed >= first_number && parsed <= last_number && parsed == (double)(long)parsed) frame_number = parsed;
+        }
+        unsigned long frame_count = (unsigned long)(last - first + 1);
+        long frame = first + (long)(((unsigned long)((long)frame_number - first) + steps) % frame_count);
+        set_physics_number(scope->locals, in->args[0], (double)frame);
+        set_physics_number(scope->locals, elapsed_name, elapsed);
     } else if (in->opcode == OP_MOVE_POSITION) {
         double x, y, velocity_x, velocity_y, seconds;
         if (!physics_number(scope, in->args[0], &x, error, error_size) || !physics_number(scope, in->args[1], &y, error, error_size) ||
@@ -743,6 +792,7 @@ int debug_bytecode(const char *path, const char *event, const char *action, cons
     if (event && strcmp(event, "START") && !hyperian_execute_data_event(data, "START", &state, error, sizeof(error))) {
         fprintf(stderr, "Debugger could not prepare the application: %s\n", error); hyperian_data_close(data); bytecode_free(&code); return 1;
     }
+    if (event && !strcmp(event, "FRAME")) hyperian_state_set(&state, "seconds_since_last_frame", "0.0166666666666667");
     debugger_active = 1;
     printf("Debugging %s %s\n", action ? "action" : "event", action ? action : event);
     int okay = action ? hyperian_execute_data_action(data, action, input, &state, error, sizeof(error))
@@ -750,8 +800,11 @@ int debug_bytecode(const char *path, const char *event, const char *action, cons
     debugger_active = 0;
     if (!okay) fprintf(stderr, "Debugger stopped: %s\n", error);
     printf("Final state:\n");
-    if (!state.count) printf("  no values were set\n");
-    for (int i = 0; i < state.count; i++) printf("  %s = %s\n", state.names[i], *state.values[i] ? state.values[i] : "empty");
+    int visible = 0;
+    for (int i = 0; i < state.count; i++) if (strncmp(state.names[i], "__hyperian_animation_", sizeof("__hyperian_animation_") - 1)) {
+        printf("  %s = %s\n", state.names[i], *state.values[i] ? state.values[i] : "empty"); visible++;
+    }
+    if (!visible) printf("  no values were set\n");
     hyperian_data_close(data); bytecode_free(&code); return okay ? 0 : 1;
 }
 

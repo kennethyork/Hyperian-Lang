@@ -1,0 +1,19 @@
+application "Bad Animation Frames" is game
+
+model Setting
+    field name is text
+end
+
+controller Main
+    when application starts
+        show view "main"
+    end
+
+    when game updates
+        advance animation frame from 4 through 1 every 100 milliseconds
+    end
+end
+
+view "main"
+    show frame
+end

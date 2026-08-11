@@ -276,8 +276,9 @@ static int validate(Bytecode *code, const char *path) {
     }
     if (strcmp(target, "game")) for (size_t i = 0; i < code->count; i++)
         if (code->items[i].opcode == OP_MOVE_POSITION || code->items[i].opcode == OP_APPLY_GRAVITY ||
-            code->items[i].opcode == OP_KEEP_INSIDE || code->items[i].opcode == OP_CHECK_COLLISION) {
-            source_error(path, code->items[i].line, "game physics instructions require an application declared as game"); return 0;
+            code->items[i].opcode == OP_KEEP_INSIDE || code->items[i].opcode == OP_CHECK_COLLISION ||
+            code->items[i].opcode == OP_MOVE_VALUE_TOWARD || code->items[i].opcode == OP_ADVANCE_ANIMATION) {
+            source_error(path, code->items[i].line, "game physics and animation instructions require an application declared as game"); return 0;
         }
     if (!strcmp(target, "web") || !strcmp(target, "pwa")) {
         int routes = 0;
@@ -499,7 +500,22 @@ int compile_file(const char *source_path, const char *output_path) {
             if (!method || w[3][0] != '/') { source_error(source_path, number, "say: when someone visits \"/path\""); okay = 0; }
             else { char *args[2] = {(char *)method, w[3]}; okay = emit(&code, OP_ROUTE, 2, args, number); stack[depth++] = BLOCK_ROUTE; }
         } else if (current == BLOCK_ROUTE || current == BLOCK_ACTION || current == BLOCK_LOGIC_IF || current == BLOCK_REPEAT || current == BLOCK_TEST || current == BLOCK_TRY) {
-            if (n == 8 && !strcmp(w[0], "move") && !strcmp(w[1], "position") && !strcmp(w[4], "using") &&
+            if (n == 9 && !strcmp(w[0], "move") && !strcmp(w[1], "value") && !strcmp(w[3], "toward") &&
+                !strcmp(w[5], "at") && !strcmp(w[7], "per") && !strcmp(w[8], "second") && is_name(w[2])) {
+                char *args[3] = {w[2], w[4], w[6]}; okay = emit(&code, OP_MOVE_VALUE_TOWARD, 3, args, number);
+            } else if (n == 10 && !strcmp(w[0], "advance") && !strcmp(w[1], "animation") && !strcmp(w[3], "from") &&
+                !strcmp(w[5], "through") && !strcmp(w[7], "every") && is_name(w[2])) {
+                char *end; long amount = strtol(w[8], &end, 10), multiplier = 0;
+                if (!strcmp(w[9], "millisecond") || !strcmp(w[9], "milliseconds")) multiplier = 1;
+                else if (!strcmp(w[9], "second") || !strcmp(w[9], "seconds")) multiplier = 1000;
+                else if (!strcmp(w[9], "minute") || !strcmp(w[9], "minutes")) multiplier = 60000;
+                if (*end || amount < 1 || !multiplier || amount > 86400000 / multiplier) {
+                    source_error(source_path, number, "say: advance animation frame from 1 through 4 every 100 milliseconds; the interval can be at most one day"); okay = 0;
+                } else {
+                    char interval[32]; snprintf(interval, sizeof(interval), "%ld", amount * multiplier);
+                    char *args[4] = {w[2], w[4], w[6], interval}; okay = emit(&code, OP_ADVANCE_ANIMATION, 4, args, number);
+                }
+            } else if (n == 8 && !strcmp(w[0], "move") && !strcmp(w[1], "position") && !strcmp(w[4], "using") &&
                 !strcmp(w[5], "velocity") && is_name(w[2]) && is_name(w[3]) && is_name(w[6]) && is_name(w[7])) {
                 char *args[4] = {w[2], w[3], w[6], w[7]}; okay = emit(&code, OP_MOVE_POSITION, 4, args, number);
             } else if (n == 5 && !strcmp(w[0], "apply") && !strcmp(w[1], "gravity") && !strcmp(w[3], "to") && is_name(w[4])) {

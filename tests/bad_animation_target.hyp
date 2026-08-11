@@ -1,0 +1,17 @@
+application "Wrong Animation Target" is console
+
+model Setting
+    field name is text
+end
+
+controller Main
+    when application starts
+        set glow to 0
+        move value glow toward 1 at 2 per second
+        show view "main"
+    end
+end
+
+view "main"
+    show glow
+end

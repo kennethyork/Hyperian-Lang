@@ -621,6 +621,8 @@ controller Game
         set player_y to 100
         set player_velocity_x to 200
         set player_velocity_y to 0
+        set glow to 0
+        set animation_frame to 1
     end
 
     when application starts
@@ -629,6 +631,8 @@ controller Game
     end
 
     when game updates
+        move value glow toward 1 at 2 per second
+        advance animation animation_frame from 1 through 4 every 100 milliseconds
         apply gravity 300 to player_velocity_y
         move position player_x player_y using velocity player_velocity_x player_velocity_y
         keep position player_x player_y inside 960 by 540 sized 64 by 64
@@ -643,7 +647,11 @@ view "playfield"
 end
 ```
 
-The SDL2 backend dispatches arrow, space, and enter keys through `when player presses ...`, runs `when game updates` every frame, and exposes elapsed time as `seconds_since_last_frame`. English physics instructions apply frame-rate-independent velocity and gravity, clamp an object inside its play area, and test axis-aligned rectangle collisions. Invalid numbers or negative sizes stop with friendly runtime errors, and physics instructions are rejected outside a `game` application. Views can draw state-positioned BMP images, and actions can say `play sound "assets/jump.wav"` for WAV audio. See [examples/blocks_game.hyp](examples/blocks_game.hyp), [examples/game_media.hyp](examples/game_media.hyp), and [examples/physics_game.hyp](examples/physics_game.hyp).
+The SDL2 backend dispatches arrow, space, and enter keys through `when player presses ...`, runs `when game updates` every frame, and exposes elapsed time as `seconds_since_last_frame`. English physics instructions apply frame-rate-independent velocity and gravity, clamp an object inside its play area, and test axis-aligned rectangle collisions.
+
+Animation needs no manual frame-time arithmetic. `move value` approaches its target without overshooting, whether the target is above or below the current value. `advance animation` changes a whole-number frame at the requested millisecond, second, or minute interval, keeps leftover time, catches up after a slow frame, and wraps from the final frame back to the first. The native VM performs both operations deterministically from elapsed frame time. The compiler restricts them to game applications, and invalid speeds, time, frames, or intervals stop with friendly errors.
+
+Views can draw state-positioned BMP images, and actions can say `play sound "assets/jump.wav"` for WAV audio. See [examples/blocks_game.hyp](examples/blocks_game.hyp), [examples/game_media.hyp](examples/game_media.hyp), and [examples/physics_game.hyp](examples/physics_game.hyp).
 
 ## Programs split across files
 
@@ -767,6 +775,6 @@ Quoted text may contain spaces. `#` starts a comment. Indentation is optional bu
 
 ## Project status
 
-Version 0.29 is a small but real MVC platform: custom bytecode, a native VM, standalone executable and asset-bundle creation, versioned Android/iOS mobile deployment packages, a linkable native mobile runtime bridge, self-contained native Android Studio and SwiftUI Xcode project generation, native backend diagnostics, eight compiler targets including installable offline web applications, an English source-line debugger, persistent model CRUD plus filtered and ordered collection queries inside native controller actions, repeated native collection views, recurring service and native-interface timers, interactive multi-view GTK desktop and phone-sized mobile preview interfaces with close events, SDL2 keyboard/frame events, frame-rate-independent movement and gravity, boundaries, rectangle collision detection, BMP sprites, WAV sound, and state-driven rendering, native lists and maps, selectable HDB or transactional SQLite storage, recoverable runtime errors, an HTTP/HTTPS client, local packages, reusable actions, native file access, foldered project generation, versioned migrations, persistent CRUD models, safe HTML and typed JSON, authentication and authorization, middleware, formatting, and English tests.
+Version 0.30 is a small but real MVC platform: custom bytecode, a native VM, standalone executable and asset-bundle creation, versioned Android/iOS mobile deployment packages, a linkable native mobile runtime bridge, self-contained native Android Studio and SwiftUI Xcode project generation, native backend diagnostics, eight compiler targets including installable offline web applications, an English source-line debugger, persistent model CRUD plus filtered and ordered collection queries inside native controller actions, repeated native collection views, recurring service and native-interface timers, interactive multi-view GTK desktop and phone-sized mobile preview interfaces with close events, SDL2 keyboard/frame events, frame-rate-independent movement, gravity, smooth value transitions, timed animation frames, boundaries, rectangle collision detection, BMP sprites, WAV sound, and state-driven rendering, native lists and maps, selectable HDB or transactional SQLite storage, recoverable runtime errors, an HTTP/HTTPS client, local packages, reusable actions, native file access, foldered project generation, versioned migrations, persistent CRUD models, safe HTML and typed JSON, authentication and authorization, middleware, formatting, and English tests.
 
-The next major layers are automated APK/AAB/IPA builds and signing, HTTPS/SQLite phone integration, richer desktop and mobile events, animation helpers, more collision shapes, more media formats, and broader cross-compilation. Those are not claimed as complete yet.
+The next major layers are automated APK/AAB/IPA builds and signing, HTTPS/SQLite phone integration, richer desktop and mobile events, more collision shapes, more media formats, and broader cross-compilation. Those are not claimed as complete yet.

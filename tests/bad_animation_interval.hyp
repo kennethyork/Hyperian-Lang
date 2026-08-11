@@ -1,0 +1,19 @@
+application "Bad Animation Interval" is game
+
+model Setting
+    field name is text
+end
+
+controller Main
+    when application starts
+        show view "main"
+    end
+
+    when game updates
+        advance animation frame from 1 through 4 every 0 milliseconds
+    end
+end
+
+view "main"
+    show frame
+end

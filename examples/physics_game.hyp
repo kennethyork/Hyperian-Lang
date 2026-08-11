@@ -13,6 +13,9 @@ controller World
         set obstacle_x to 15
         set obstacle_y to 10
         set player_hit to false
+        set glow to 0
+        set shrink to 2
+        set animation_frame to 1
     end
 
     when application starts
@@ -21,6 +24,9 @@ controller World
     end
 
     when game updates
+        move value glow toward 1 at 2 per second
+        move value shrink toward 1 at 2 per second
+        advance animation animation_frame from 1 through 4 every 100 milliseconds
         apply gravity 200 to player_velocity_y
         move position player_x player_y using velocity player_velocity_x player_velocity_y
         keep position player_x player_y inside 40 by 40 sized 10 by 10

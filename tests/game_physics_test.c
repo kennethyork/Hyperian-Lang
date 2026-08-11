@@ -18,7 +18,14 @@ int main(int argc, char **argv) {
     hyperian_state_set(&state, "seconds_since_last_frame", "0.25");
     if (okay) okay = hyperian_execute_event(&code, "FRAME", &state, error, sizeof(error));
     if (okay) okay = expected(&state, "player_velocity_y", "50") && expected(&state, "player_x", "30") &&
-        expected(&state, "player_y", "22.5") && expected(&state, "player_hit", "true");
+        expected(&state, "player_y", "22.5") && expected(&state, "player_hit", "true") &&
+        expected(&state, "glow", "0.5") && expected(&state, "shrink", "1.5") && expected(&state, "animation_frame", "3");
+    hyperian_state_set(&state, "seconds_since_last_frame", "0.2");
+    if (okay) okay = hyperian_execute_event(&code, "FRAME", &state, error, sizeof(error));
+    if (okay) okay = expected(&state, "glow", "0.9") && expected(&state, "shrink", "1.1") && expected(&state, "animation_frame", "1");
+    hyperian_state_set(&state, "seconds_since_last_frame", "0.2");
+    if (okay) okay = hyperian_execute_event(&code, "FRAME", &state, error, sizeof(error));
+    if (okay) okay = expected(&state, "glow", "1") && expected(&state, "shrink", "1") && expected(&state, "animation_frame", "3");
     if (!okay) fprintf(stderr, "physics test failed: %s\n", error);
     bytecode_free(&code); return okay ? 0 : 1;
 }

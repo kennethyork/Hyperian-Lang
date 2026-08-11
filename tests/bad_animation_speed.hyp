@@ -1,0 +1,20 @@
+application "Bad Animation Speed" is game
+
+model Setting
+    field name is text
+end
+
+controller Main
+    when application starts
+        set glow to 0
+        show view "main"
+    end
+
+    when game updates
+        move value glow toward 1 at -2 per second
+    end
+end
+
+view "main"
+    show glow
+end

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(Hyperian VERSION 0.29.0 LANGUAGES C)
+project(Hyperian VERSION 0.30.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -243,6 +243,27 @@ set_tests_properties(run_game_physics PROPERTIES DEPENDS compile_game_physics)
 add_test(NAME reject_physics_outside_game
     COMMAND hyperian check ${CMAKE_SOURCE_DIR}/tests/bad_physics_target.hyp)
 set_tests_properties(reject_physics_outside_game PROPERTIES WILL_FAIL TRUE)
+add_test(NAME reject_animation_outside_game
+    COMMAND hyperian check ${CMAKE_SOURCE_DIR}/tests/bad_animation_target.hyp)
+set_tests_properties(reject_animation_outside_game PROPERTIES WILL_FAIL TRUE)
+add_test(NAME reject_bad_animation_interval
+    COMMAND hyperian check ${CMAKE_SOURCE_DIR}/tests/bad_animation_interval.hyp)
+set_tests_properties(reject_bad_animation_interval PROPERTIES WILL_FAIL TRUE)
+add_test(NAME reject_bad_animation_frames_at_runtime
+    COMMAND hyperian debug ${CMAKE_SOURCE_DIR}/tests/bad_animation_frames.hyp --event FRAME)
+set_tests_properties(reject_bad_animation_frames_at_runtime PROPERTIES WILL_FAIL TRUE)
+add_test(NAME reject_bad_animation_speed_at_runtime
+    COMMAND hyperian debug ${CMAKE_SOURCE_DIR}/tests/bad_animation_speed.hyp --event FRAME)
+set_tests_properties(reject_bad_animation_speed_at_runtime PROPERTIES WILL_FAIL TRUE)
+add_test(NAME reject_bad_animation_number_at_runtime
+    COMMAND hyperian debug ${CMAKE_SOURCE_DIR}/tests/bad_animation_number.hyp --event FRAME)
+set_tests_properties(reject_bad_animation_number_at_runtime PROPERTIES WILL_FAIL TRUE)
+add_test(NAME inspect_game_animation
+    COMMAND hyperian inspect ${CMAKE_BINARY_DIR}/physics_game.hyc)
+set_tests_properties(inspect_game_animation PROPERTIES DEPENDS compile_game_physics PASS_REGULAR_EXPRESSION "ADVANCE_ANIMATION animation_frame 1 4 100")
+add_test(NAME debug_game_animation
+    COMMAND hyperian debug ${CMAKE_SOURCE_DIR}/examples/physics_game.hyp --event FRAME)
+set_tests_properties(debug_game_animation PROPERTIES PASS_REGULAR_EXPRESSION "advance animation animation_frame from 1 through 4 every 100 milliseconds")
 add_test(NAME compile_game_media
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/game_media.hyp -o ${CMAKE_BINARY_DIR}/game_media.hyc)
 if(SDL2_FOUND)
