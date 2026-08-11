@@ -1,0 +1,35 @@
+# A complete Hyperian MVC application.
+application "Tiny Tasks" is web
+listen on 8080
+
+model Task
+    field title is text required
+    field done is boolean default false
+end
+
+controller Tasks
+    when someone visits "/"
+        find all Task as tasks
+        show view "tasks" with tasks
+    end
+
+    when someone submits "/tasks"
+        create Task from form
+        redirect to "/"
+    end
+end
+
+view "tasks"
+    title "Tiny Tasks"
+    heading "Things I need to do"
+    text "Add a task below. Hyperian handles the model, controller, and view."
+
+    form posts to "/tasks"
+        input "What needs doing?" as title required
+        button "Add task"
+    end
+
+    for each task in tasks show
+        show task.title
+    end
+end

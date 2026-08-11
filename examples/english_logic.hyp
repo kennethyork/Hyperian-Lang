@@ -1,0 +1,83 @@
+# Reusable controller logic written as readable English.
+application "English Logic" is web
+listen on 8083
+
+model Calculation
+    field name is text
+end
+
+controller Calculator
+    action "prepare every route"
+        set prepared to yes
+    end
+
+    before every route run action "prepare every route"
+
+    action calculate
+        set total to 2
+        repeat 4 times
+            set total to total plus 3
+        end
+
+        if total is greater than 10
+            set message to "The total is large"
+        otherwise
+            set message to "The total is small"
+        end
+    end
+
+    action "multiply form numbers"
+        set total to price times quantity
+        set message to "The form was calculated"
+    end
+
+    test "repeating addition"
+        set total to 2
+        repeat 4 times
+            set total to total plus 3
+        end
+        expect total to be 14
+    end
+
+    test "reusable multiplication action"
+        set price to 7
+        set quantity to 6
+        run action "multiply form numbers"
+        expect total to be 42
+    end
+
+    when someone visits "/"
+        run action calculate
+        show view "result"
+    end
+
+
+    when someone submits "/calculate"
+        read price from form as price
+        read quantity from form as quantity
+        run action "multiply form numbers"
+        show view "result"
+    end
+end
+
+view "result"
+    heading "Calculation finished"
+    text "The total is:"
+    show total
+    text "The controller says:"
+    show message
+    text "Middleware prepared:"
+    show prepared
+    form posts to "/calculate"
+        input "Price" as price required
+        input "Quantity" as quantity required
+        button "Calculate"
+    end
+end
+
+view "not-found"
+    heading "That page was not found"
+    link "Return home" to "/"
+end
+
+when error 404 show view "not-found"

@@ -1,0 +1,19 @@
+# A native console application, still organized as MVC.
+application "Friendly Greeter" is console
+
+model Person
+    field name is text required
+end
+
+controller Greeting
+    when application starts
+        ask "What is your name?" as name
+        show view "greeting" with name
+    end
+end
+
+view "greeting"
+    heading "Welcome"
+    say "It is good to meet you,"
+    show name
+end

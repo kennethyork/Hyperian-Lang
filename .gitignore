@@ -1,0 +1,7 @@
+build/
+*.hyc
+hyperian-data.hdb
+hyperian-data.hdb.tmp
+.pytest_cache/
+.ollamadev/
+

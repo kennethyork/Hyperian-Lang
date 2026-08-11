@@ -1,0 +1,13 @@
+application "Broken"
+model Thing
+    field name is text
+end
+controller Things
+    when someone visits "/"
+        show view "missing"
+    end
+end
+view "real"
+    heading "Real"
+end
+

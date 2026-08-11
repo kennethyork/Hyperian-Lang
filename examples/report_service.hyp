@@ -1,0 +1,26 @@
+# A native one-shot service/job using the shared English logic engine.
+application "Daily Report" is service
+
+model Report
+    field name is text
+end
+
+controller Reporting
+    action "count work"
+        set completed to 0
+        repeat 5 times
+            set completed to completed plus 1
+        end
+    end
+
+    when application starts
+        run action "count work"
+        show view "report"
+    end
+end
+
+view "report"
+    heading "Daily service report"
+    say "Completed jobs:"
+    show completed
+end

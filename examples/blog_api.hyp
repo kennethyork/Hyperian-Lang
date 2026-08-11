@@ -1,0 +1,44 @@
+# JSON API plus a real relationship between models.
+application "Blog API" is api
+listen on 8081
+
+model Author
+    field name is text required unique minimum 2 maximum 80
+end
+
+model Post
+    field author is reference Author required
+    field title is text required minimum 2 maximum 120
+    field body is text maximum 5000
+end
+
+controller Authors
+    when someone submits "/authors"
+        create Author from form
+        find all Author ordered by name as authors
+        show json authors
+    end
+end
+
+controller Posts
+    when someone visits "/posts"
+        find all Post ordered by title as posts
+        show json posts
+    end
+
+    when someone submits "/posts"
+        create Post from form
+        find all Post ordered by title as posts
+        show json posts
+    end
+
+    when someone visits "/posts/{id}"
+        find Post by route id as post
+        show json post
+    end
+
+    when someone visits "/authors/{id}/posts"
+        find Post where author is route id as posts
+        show json posts
+    end
+end

@@ -1,0 +1,13 @@
+application "Broken Route" is web
+model Note
+    field title is text
+end
+controller Notes
+    when someone submits "/notes"
+        delete Note using route id
+        redirect to "/"
+    end
+end
+view "notes"
+    heading "Notes"
+end

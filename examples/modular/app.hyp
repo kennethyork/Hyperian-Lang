@@ -1,0 +1,7 @@
+application "Modular App" is web
+listen on 8084
+serve files from "examples/modular/public" at "/assets"
+
+include "models.hyp"
+include "controllers.hyp"
+include "views.hyp"

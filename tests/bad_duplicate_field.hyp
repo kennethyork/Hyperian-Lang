@@ -1,0 +1,13 @@
+application "Broken Model" is web
+model Person
+    field name is text
+    field name is number
+end
+controller People
+    when someone visits "/"
+        show view "people"
+    end
+end
+view "people"
+    heading "People"
+end

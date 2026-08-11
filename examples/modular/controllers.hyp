@@ -1,0 +1,16 @@
+controller Home
+    action "prepare greeting"
+        set greeting to "Hello from several Hyperian files"
+    end
+
+    when someone visits "/"
+        run action "prepare greeting"
+        find all Greeting as greetings
+        show view "home"
+    end
+
+    when someone submits "/greetings"
+        create Greeting from form
+        redirect to "/"
+    end
+end
