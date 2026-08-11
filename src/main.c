@@ -232,7 +232,7 @@ static int create_project(const char *name, const char *target) {
     else if (!strcmp(target, "api")) snprintf(source, sizeof(source),
         "controller Items\n    when someone visits \"/items\"\n        find all Item as items\n        show json items\n    end\nend\n");
     else if (!strcmp(target, "desktop") || !strcmp(target, "mobile")) snprintf(source, sizeof(source),
-        "controller Items\n    action initialize\n        set status to ready\n    end\n    action activate\n        set status to \"Button pressed\"\n    end\n    when application starts\n        run action initialize\n        show view \"main\"\n    end\nend\n");
+        "controller Items\n    action initialize\n        set status to ready\n    end\n    action activate\n        create a Item using the current values as item_id\n        count all Item records as item_count\n        set status to \"Saved item \" joined with item_id\n    end\n    when application starts\n        run action initialize\n        show view \"main\"\n    end\nend\n");
     else if (!strcmp(target, "game")) snprintf(source, sizeof(source),
         "controller Items\n    action initialize\n        set player_x to 100\n    end\n    action \"move right\"\n        set player_x to player_x plus 20\n    end\n    when application starts\n        run action initialize\n        show view \"main\"\n    end\n    when player presses right\n        run action \"move right\"\n    end\nend\n");
     else snprintf(source, sizeof(source),

@@ -2,6 +2,8 @@ application "Desktop Notes" is desktop
 
 model Note
     field title is text required
+    field details is text
+    field important is boolean default false
 end
 
 controller Notes
@@ -10,13 +12,14 @@ controller Notes
     end
 
     action "save note"
-        set status to "Saved:" joined with title
+        create a Note using the current values as note_id
+        count all Note records as note_count
+        set status to "Saved note " joined with note_id
     end
 
     when application starts
         run action "initialize desktop"
-        find all Note as notes
-        show view "notes" with notes
+        show view "notes"
     end
 end
 

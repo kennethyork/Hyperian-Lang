@@ -179,7 +179,8 @@ static int validate(Bytecode *code, const char *path) {
             if (!model_has_field(code, in->args[0], in->args[2])) { source_error(path, in->line, "the renamed field must exist in the current model"); return 0; }
         }
         if ((in->opcode == OP_FIND_ALL || in->opcode == OP_FIND_ONE || in->opcode == OP_FIND_WHERE || in->opcode == OP_FIND_ORDERED || in->opcode == OP_FIND_SIGNED_IN || in->opcode == OP_SIGN_IN || in->opcode == OP_CREATE ||
-            in->opcode == OP_UPDATE || in->opcode == OP_DELETE) && !known_name(code, OP_MODEL, in->args[0])) {
+            in->opcode == OP_UPDATE || in->opcode == OP_DELETE || in->opcode == OP_CREATE_STATE || in->opcode == OP_FIND_STATE ||
+            in->opcode == OP_UPDATE_STATE || in->opcode == OP_DELETE_STATE || in->opcode == OP_COUNT_RECORDS) && !known_name(code, OP_MODEL, in->args[0])) {
             char message[256]; snprintf(message, sizeof(message), "there is no model named %s", in->args[0]);
             source_error(path, in->line, message); return 0;
         }
@@ -477,7 +478,21 @@ int compile_file(const char *source_path, const char *output_path) {
             if (!method || w[3][0] != '/') { source_error(source_path, number, "say: when someone visits \"/path\""); okay = 0; }
             else { char *args[2] = {(char *)method, w[3]}; okay = emit(&code, OP_ROUTE, 2, args, number); stack[depth++] = BLOCK_ROUTE; }
         } else if (current == BLOCK_ROUTE || current == BLOCK_ACTION || current == BLOCK_LOGIC_IF || current == BLOCK_REPEAT || current == BLOCK_TEST || current == BLOCK_TRY) {
-            if (n == 5 && !strcmp(w[0], "find") && !strcmp(w[1], "all") && !strcmp(w[3], "as")) {
+            if (n == 9 && !strcmp(w[0], "create") && !strcmp(w[1], "a") && !strcmp(w[3], "using") &&
+                !strcmp(w[4], "the") && !strcmp(w[5], "current") && !strcmp(w[6], "values") && !strcmp(w[7], "as") && is_name(w[8])) {
+                char *args[2] = {w[2], w[8]}; okay = emit(&code, OP_CREATE_STATE, 2, args, number);
+            } else if (n == 7 && !strcmp(w[0], "find") && !strcmp(w[1], "the") && !strcmp(w[3], "numbered") &&
+                !strcmp(w[5], "as") && is_name(w[6])) {
+                char *args[3] = {w[2], w[4], w[6]}; okay = emit(&code, OP_FIND_STATE, 3, args, number);
+            } else if (n == 9 && !strcmp(w[0], "update") && !strcmp(w[1], "the") && !strcmp(w[3], "numbered") &&
+                !strcmp(w[5], "using") && !strcmp(w[6], "the") && !strcmp(w[7], "current") && !strcmp(w[8], "values")) {
+                char *args[2] = {w[2], w[4]}; okay = emit(&code, OP_UPDATE_STATE, 2, args, number);
+            } else if (n == 5 && !strcmp(w[0], "delete") && !strcmp(w[1], "the") && !strcmp(w[3], "numbered")) {
+                char *args[2] = {w[2], w[4]}; okay = emit(&code, OP_DELETE_STATE, 2, args, number);
+            } else if (n == 6 && !strcmp(w[0], "count") && !strcmp(w[1], "all") && !strcmp(w[3], "records") &&
+                !strcmp(w[4], "as") && is_name(w[5])) {
+                char *args[2] = {w[2], w[5]}; okay = emit(&code, OP_COUNT_RECORDS, 2, args, number);
+            } else if (n == 5 && !strcmp(w[0], "find") && !strcmp(w[1], "all") && !strcmp(w[3], "as")) {
                 char *args[2] = {w[2], w[4]}; okay = emit(&code, OP_FIND_ALL, 2, args, number);
             } else if (n == 8 && !strcmp(w[0], "find") && !strcmp(w[1], "all") && !strcmp(w[3], "ordered") &&
                 !strcmp(w[4], "by") && !strcmp(w[6], "as")) {

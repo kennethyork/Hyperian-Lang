@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(Hyperian VERSION 0.20.0 LANGUAGES C)
+project(Hyperian VERSION 0.21.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -66,6 +66,13 @@ add_test(NAME run_console
 set_tests_properties(run_console PROPERTIES DEPENDS compile_console)
 add_test(NAME compile_crud
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/notes_crud.hyp -o ${CMAKE_BINARY_DIR}/notes_crud.hyc)
+add_test(NAME clean_native_crud_data COMMAND ${CMAKE_COMMAND} -E remove ${CMAKE_BINARY_DIR}/native_crud.hdb)
+add_test(NAME compile_native_crud
+    COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/native_crud.hyp -o ${CMAKE_BINARY_DIR}/native_crud.hyc)
+add_test(NAME run_native_crud
+    COMMAND ${CMAKE_COMMAND} -E env HYPERIAN_DATA=${CMAKE_BINARY_DIR}/native_crud.hdb HYPERIAN_CONSOLE_TEST_STATE=remaining
+        $<TARGET_FILE:hyperian> run ${CMAKE_BINARY_DIR}/native_crud.hyc)
+set_tests_properties(run_native_crud PROPERTIES DEPENDS "clean_native_crud_data;compile_native_crud" PASS_REGULAR_EXPRESSION "remaining=0")
 add_test(NAME reject_duplicate_field
     COMMAND hyperian check ${CMAKE_SOURCE_DIR}/tests/bad_duplicate_field.hyp)
 set_tests_properties(reject_duplicate_field PROPERTIES WILL_FAIL TRUE)
@@ -180,6 +187,13 @@ if(SQLITE3_FOUND)
     target_compile_options(hyperian_sqlite_fixture PRIVATE -Wall -Wextra -Wpedantic)
     add_test(NAME compile_sqlite_storage
         COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/sqlite_tasks.hyp -o ${CMAKE_BINARY_DIR}/sqlite_tasks.hyc)
+    add_test(NAME clean_native_sqlite_crud COMMAND ${CMAKE_COMMAND} -E remove ${CMAKE_BINARY_DIR}/native_crud.sqlite)
+    add_test(NAME compile_native_sqlite_crud
+        COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/native_crud_sqlite.hyp -o ${CMAKE_BINARY_DIR}/native_crud_sqlite.hyc)
+    add_test(NAME run_native_sqlite_crud
+        COMMAND ${CMAKE_COMMAND} -E env HYPERIAN_DATA=${CMAKE_BINARY_DIR}/native_crud.sqlite HYPERIAN_CONSOLE_TEST_STATE=note_count
+            $<TARGET_FILE:hyperian> run ${CMAKE_BINARY_DIR}/native_crud_sqlite.hyc)
+    set_tests_properties(run_native_sqlite_crud PROPERTIES DEPENDS "clean_native_sqlite_crud;compile_native_sqlite_crud" PASS_REGULAR_EXPRESSION "note_count=1")
     add_test(NAME create_legacy_sqlite_data
         COMMAND hyperian_sqlite_fixture create ${CMAKE_BINARY_DIR}/legacy-migration.sqlite)
     add_test(NAME migrate_sqlite_data

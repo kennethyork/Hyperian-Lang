@@ -22,6 +22,7 @@
 typedef struct { char *data; size_t length, capacity; } Buffer;
 typedef struct { char *key, *value; } Pair;
 typedef struct Record { char *model; Pair fields[FIELD_MAX]; int field_count; struct Record *next; } Record;
+struct HyperianData { const Bytecode *code; Record *records; };
 typedef struct Session { char token[65]; char *model, *record_id; struct Session *next; } Session;
 typedef struct { Pair pairs[FIELD_MAX]; int count; } Form;
 typedef HyperianState VariableSet;
@@ -33,11 +34,17 @@ typedef struct {
     const char *filter_field, *filter_value, *order_field;
     const char *raw_content;
     VariableSet *locals;
+    HyperianData *data;
 } Scope;
 
 static const char *resolve(Scope *scope, const char *expression);
 static const char *field_kind(const Bytecode *code, const char *model, const char *field);
 static int field_protected(const Bytecode *code, const char *model, const char *field);
+static int create_record(const Bytecode *code, const char *model, Form *form, Record **records, char *error, size_t error_size);
+static int update_record(const Bytecode *code, const char *model, const char *id, Form *form, Record *records, char *error, size_t error_size);
+static int delete_record(Record **records, const char *model, const char *id);
+static int save_records(Record *records, const Bytecode *code);
+static Record *find_record(Record *records, const char *model, const char *id);
 
 static volatile sig_atomic_t keep_running = 1;
 static void stop_server(int signal_number) { (void)signal_number; keep_running = 0; }
@@ -344,7 +351,8 @@ static int is_logic_instruction(uint8_t opcode) {
         opcode == OP_RETURN_VALUE || opcode == OP_READ_FILE || opcode == OP_WRITE_FILE || opcode == OP_TRY ||
         opcode == OP_MAKE_LIST || opcode == OP_LIST_ADD || opcode == OP_LIST_REMOVE || opcode == OP_LIST_COUNT ||
         opcode == OP_LIST_ITEM || opcode == OP_HTTP_GET || opcode == OP_MAKE_MAP || opcode == OP_MAP_PUT ||
-        opcode == OP_MAP_GET || opcode == OP_MAP_REMOVE || opcode == OP_MAP_COUNT || opcode == OP_PLAY_SOUND || opcode == OP_OPEN_VIEW;
+        opcode == OP_MAP_GET || opcode == OP_MAP_REMOVE || opcode == OP_MAP_COUNT || opcode == OP_PLAY_SOUND || opcode == OP_OPEN_VIEW ||
+        opcode == OP_CREATE_STATE || opcode == OP_FIND_STATE || opcode == OP_UPDATE_STATE || opcode == OP_DELETE_STATE || opcode == OP_COUNT_RECORDS;
 }
 
 static HyperianSoundHandler sound_handler = NULL;
@@ -378,6 +386,11 @@ static void debug_instruction(const Instruction *in, int depth) {
         case OP_MAP_COUNT: printf("count map %s as %s", in->args[0], in->args[1]); break;
         case OP_PLAY_SOUND: printf("play sound %s", in->args[0]); break;
         case OP_OPEN_VIEW: printf("open view %s", in->args[0]); break;
+        case OP_CREATE_STATE: printf("create a %s using the current values as %s", in->args[0], in->args[1]); break;
+        case OP_FIND_STATE: printf("find the %s numbered %s as %s", in->args[0], in->args[1], in->args[2]); break;
+        case OP_UPDATE_STATE: printf("update the %s numbered %s using the current values", in->args[0], in->args[1]); break;
+        case OP_DELETE_STATE: printf("delete the %s numbered %s", in->args[0], in->args[1]); break;
+        case OP_COUNT_RECORDS: printf("count all %s records as %s", in->args[0], in->args[1]); break;
         default: printf("execute %s", opcode_name(in->opcode)); break;
     }
     putchar('\n');
@@ -388,6 +401,28 @@ static void debug_changes(const HyperianState *before, const HyperianState *afte
         const char *old = hyperian_state_get(before, after->names[i]);
         if (!old || strcmp(old, after->values[i]))
             printf("%*s%s is now %s\n", depth * 2 + 2, "", after->names[i], *after->values[i] ? after->values[i] : "empty");
+    }
+}
+
+static void form_from_current_values(const Bytecode *code, const char *model, Scope *scope, Form *form) {
+    memset(form, 0, sizeof(*form)); int inside = 0;
+    for (size_t i = 0; i < code->count; i++) {
+        Instruction *in = &code->items[i];
+        if (in->opcode == OP_MODEL) inside = !strcmp(in->args[0], model);
+        else if (inside && in->opcode == OP_END_MODEL) break;
+        else if (inside && in->opcode == OP_FIELD && form->count < FIELD_MAX) {
+            const char *value = local_value(scope->locals, in->args[0]);
+            if (value) form->pairs[form->count++] = (Pair){in->args[0], (char *)value};
+        }
+    }
+}
+
+static void expose_record_values(const Bytecode *code, Scope *scope, Record *record, const char *name) {
+    char key[128];
+    for (int i = 0; i < record->field_count; i++) {
+        if (!strcmp(field_kind(code, record->model, record->fields[i].key), "secret")) continue;
+        if (snprintf(key, sizeof(key), "%s_%s", name, record->fields[i].key) < (int)sizeof(key))
+            local_set(scope->locals, key, record->fields[i].value);
     }
 }
 
@@ -518,6 +553,34 @@ static int execute_logic_at(const Bytecode *code, size_t *position, Scope *scope
         if (!sound_handler(path, error, error_size)) return 0;
     } else if (in->opcode == OP_OPEN_VIEW) {
         local_set(scope->locals, "__hyperian_open_view", in->args[0]);
+    } else if (in->opcode == OP_CREATE_STATE) {
+        if (!scope->data) { snprintf(error, error_size, "persistent model work is not available in this context"); return 0; }
+        Form form; form_from_current_values(code, in->args[0], scope, &form);
+        if (!create_record(code, in->args[0], &form, &scope->data->records, error, error_size)) {
+            if (!*error) snprintf(error, error_size, "could not create the %s", in->args[0]);
+            return 0;
+        }
+        if (!save_records(scope->data->records, code)) { snprintf(error, error_size, "could not save the data"); return 0; }
+        local_set(scope->locals, in->args[1], record_value(scope->data->records, "id"));
+    } else if (in->opcode == OP_FIND_STATE) {
+        if (!scope->data) { snprintf(error, error_size, "persistent model work is not available in this context"); return 0; }
+        char id[128]; evaluate(scope, in->args[1], id, sizeof(id)); Record *record = find_record(scope->data->records, in->args[0], id);
+        char found[128]; snprintf(found, sizeof(found), "%s_found", in->args[2]); local_set(scope->locals, found, record ? "true" : "false");
+        if (record) expose_record_values(code, scope, record, in->args[2]);
+    } else if (in->opcode == OP_UPDATE_STATE) {
+        if (!scope->data) { snprintf(error, error_size, "persistent model work is not available in this context"); return 0; }
+        char id[128]; evaluate(scope, in->args[1], id, sizeof(id)); Form form; form_from_current_values(code, in->args[0], scope, &form);
+        if (!update_record(code, in->args[0], id, &form, scope->data->records, error, error_size)) return 0;
+        if (!save_records(scope->data->records, code)) { snprintf(error, error_size, "could not save the data"); return 0; }
+    } else if (in->opcode == OP_DELETE_STATE) {
+        if (!scope->data) { snprintf(error, error_size, "persistent model work is not available in this context"); return 0; }
+        char id[128]; evaluate(scope, in->args[1], id, sizeof(id));
+        if (!delete_record(&scope->data->records, in->args[0], id)) { snprintf(error, error_size, "%s %s was not found", in->args[0], id); return 0; }
+        if (!save_records(scope->data->records, code)) { snprintf(error, error_size, "could not save the data"); return 0; }
+    } else if (in->opcode == OP_COUNT_RECORDS) {
+        if (!scope->data) { snprintf(error, error_size, "persistent model work is not available in this context"); return 0; }
+        int count = 0; for (Record *record = scope->data->records; record; record = record->next) if (!strcmp(record->model, in->args[0])) count++;
+        char value[32]; snprintf(value, sizeof(value), "%d", count); local_set(scope->locals, in->args[1], value);
     }
     if (debugger_active) debug_changes(&before, scope->locals, depth);
     return 1;
@@ -530,44 +593,64 @@ static int execute_logic_range(const Bytecode *code, size_t from, size_t to, Sco
     return 1;
 }
 
-int hyperian_execute_action(const Bytecode *code, const char *name, const char *input, HyperianState *state, char *error, size_t error_size) {
+static int execute_action_with_data(const Bytecode *code, HyperianData *data, const char *name, const char *input, HyperianState *state, char *error, size_t error_size) {
     for (size_t action = 0; action < code->count; action++) if (code->items[action].opcode == OP_ACTION && !strcmp(code->items[action].args[0], name)) {
         int accepts_input = code->items[action].argc > 1 && *code->items[action].args[1];
         if (accepts_input && !input) { snprintf(error, error_size, "action %s needs an input", name); return 0; }
         if (!accepts_input && input) { snprintf(error, error_size, "action %s does not accept an input", name); return 0; }
         if (accepts_input) local_set(state, code->items[action].args[1], input);
-        Scope scope = {.locals = state}; size_t end = find_end(code, action, OP_ACTION, OP_END_ACTION);
+        Scope scope = {.locals = state, .data = data}; size_t end = find_end(code, action, OP_ACTION, OP_END_ACTION);
         return execute_logic_range(code, action + 1, end, &scope, 0, error, error_size);
     }
     snprintf(error, error_size, "action %s does not exist", name); return 0;
 }
 
-int hyperian_execute_event(const Bytecode *code, const char *event, HyperianState *state, char *error, size_t error_size) {
+int hyperian_execute_action(const Bytecode *code, const char *name, const char *input, HyperianState *state, char *error, size_t error_size) {
+    return execute_action_with_data(code, NULL, name, input, state, error, error_size);
+}
+
+static int execute_event_with_data(const Bytecode *code, HyperianData *data, const char *event, HyperianState *state, char *error, size_t error_size) {
     for (size_t at = 0; at < code->count; at++) if (code->items[at].opcode == OP_EVENT && !strcmp(code->items[at].args[0], event)) {
-        Scope scope = {.locals = state}; size_t end = find_end(code, at, OP_EVENT, OP_END_ROUTE);
+        Scope scope = {.locals = state, .data = data}; size_t end = find_end(code, at, OP_EVENT, OP_END_ROUTE);
         if (!execute_logic_range(code, at + 1, end, &scope, 0, error, error_size)) return 0;
         at = end;
     }
     return 1;
 }
 
+int hyperian_execute_event(const Bytecode *code, const char *event, HyperianState *state, char *error, size_t error_size) {
+    return execute_event_with_data(code, NULL, event, state, error, error_size);
+}
+
+int hyperian_execute_data_action(HyperianData *data, const char *name, const char *input, HyperianState *state, char *error, size_t error_size) {
+    if (!data) { snprintf(error, error_size, "the data session is not open"); return 0; }
+    return execute_action_with_data(data->code, data, name, input, state, error, error_size);
+}
+
+int hyperian_execute_data_event(HyperianData *data, const char *event, HyperianState *state, char *error, size_t error_size) {
+    if (!data) { snprintf(error, error_size, "the data session is not open"); return 0; }
+    return execute_event_with_data(data->code, data, event, state, error, error_size);
+}
+
 int debug_bytecode(const char *path, const char *event, const char *action, const char *input) {
     Bytecode code; bytecode_init(&code); char error[256] = {0}; HyperianState state;
     if (!bytecode_read(&code, path, error, sizeof(error))) { fprintf(stderr, "error: %s\n", error); return 1; }
+    HyperianData *data = hyperian_data_open(&code, error, sizeof(error));
+    if (!data) { fprintf(stderr, "Debugger could not open the application data: %s\n", error); bytecode_free(&code); return 1; }
     hyperian_state_init(&state);
-    if (event && strcmp(event, "START") && !hyperian_execute_event(&code, "START", &state, error, sizeof(error))) {
-        fprintf(stderr, "Debugger could not prepare the application: %s\n", error); bytecode_free(&code); return 1;
+    if (event && strcmp(event, "START") && !hyperian_execute_data_event(data, "START", &state, error, sizeof(error))) {
+        fprintf(stderr, "Debugger could not prepare the application: %s\n", error); hyperian_data_close(data); bytecode_free(&code); return 1;
     }
     debugger_active = 1;
     printf("Debugging %s %s\n", action ? "action" : "event", action ? action : event);
-    int okay = action ? hyperian_execute_action(&code, action, input, &state, error, sizeof(error))
-                      : hyperian_execute_event(&code, event, &state, error, sizeof(error));
+    int okay = action ? hyperian_execute_data_action(data, action, input, &state, error, sizeof(error))
+                      : hyperian_execute_data_event(data, event, &state, error, sizeof(error));
     debugger_active = 0;
     if (!okay) fprintf(stderr, "Debugger stopped: %s\n", error);
     printf("Final state:\n");
     if (!state.count) printf("  no values were set\n");
     for (int i = 0; i < state.count; i++) printf("  %s = %s\n", state.names[i], *state.values[i] ? state.values[i] : "empty");
-    bytecode_free(&code); return okay ? 0 : 1;
+    hyperian_data_close(data); bytecode_free(&code); return okay ? 0 : 1;
 }
 
 static int render_range(const Bytecode *code, size_t from, size_t to, Buffer *body, Scope *scope, Record *records) {
@@ -928,7 +1011,8 @@ static Response execute_route(const Bytecode *code, size_t route_at, Form *form,
     const char *route_id, const char *session_token, Session **sessions) {
     Pair route_variables[1] = {{"id", (char *)(route_id ? route_id : "")}};
     VariableSet locals = {0};
-    Scope scope = {.variables = route_variables, .variable_count = route_id ? 1 : 0, .locals = &locals}; char error[256] = {0};
+    HyperianData route_data = {.code = code, .records = *records};
+    Scope scope = {.variables = route_variables, .variable_count = route_id ? 1 : 0, .locals = &locals, .data = &route_data}; char error[256] = {0};
     const char *response_cookie = NULL;
     for (size_t middleware = 0; middleware < code->count; middleware++) if (code->items[middleware].opcode == OP_BEFORE_ACTION) {
         if (code->items[middleware].argc > 1 && strcmp(code->items[middleware].args[1], "*") &&
@@ -937,6 +1021,7 @@ static Response execute_route(const Bytecode *code, size_t route_at, Form *form,
         Instruction saved = code->items[middleware];
         ((Bytecode *)code)->items[middleware] = call;
         size_t position = middleware; int okay = execute_logic_at(code, &position, &scope, 0, error, sizeof(error));
+        *records = route_data.records;
         ((Bytecode *)code)->items[middleware] = saved;
         if (!okay) return (Response){500, error_page(error), NULL, "text/html; charset=utf-8", NULL, 0};
     }
@@ -947,7 +1032,8 @@ static Response execute_route(const Bytecode *code, size_t route_at, Form *form,
             continue;
         }
         if (is_logic_instruction(in->opcode)) {
-            if (!execute_logic_at(code, &i, &scope, 0, error, sizeof(error)))
+            int okay = execute_logic_at(code, &i, &scope, 0, error, sizeof(error)); *records = route_data.records;
+            if (!okay)
                 return (Response){500, error_page(error), NULL, "text/html; charset=utf-8", response_cookie, 0};
             continue;
         }
@@ -993,13 +1079,16 @@ static Response execute_route(const Bytecode *code, size_t route_at, Form *form,
             if (!create_record(code, in->args[0], form, records, error, sizeof(error)))
                 return (Response){400, error_page(*error ? error : "Could not create the record"), NULL, "text/html; charset=utf-8", NULL, 0};
             if (!save_records(*records, code)) return (Response){500, error_page("Could not save the data file"), NULL, "text/html; charset=utf-8", NULL, 0};
+            route_data.records = *records;
         } else if (in->opcode == OP_UPDATE) {
             if (!update_record(code, in->args[0], route_id, form, *records, error, sizeof(error)))
                 return (Response){strstr(error, "not found") ? 404 : 400, error_page(error), NULL, "text/html; charset=utf-8", NULL, 0};
             if (!save_records(*records, code)) return (Response){500, error_page("Could not save the data file"), NULL, "text/html; charset=utf-8", NULL, 0};
+            route_data.records = *records;
         } else if (in->opcode == OP_DELETE) {
             if (!delete_record(records, in->args[0], route_id)) return (Response){404, error_page("Record not found"), NULL, "text/html; charset=utf-8", NULL, 0};
             if (!save_records(*records, code)) return (Response){500, error_page("Could not save the data file"), NULL, "text/html; charset=utf-8", NULL, 0};
+            route_data.records = *records;
         } else if (in->opcode == OP_SHOW_VIEW) {
             return (Response){200, render_view(code, in->args[0], &scope, *records, app_name), NULL, "text/html; charset=utf-8", response_cookie, 0};
         } else if (in->opcode == OP_SHOW_JSON) {
@@ -1312,6 +1401,19 @@ damaged:
     fclose(file); *okay = 0; fprintf(stderr, "error: data file %s is damaged\n", data_path()); return NULL;
 }
 
+HyperianData *hyperian_data_open(const Bytecode *code, char *error, size_t error_size) {
+    HyperianData *data = calloc(1, sizeof(*data)); int okay = 0;
+    if (!data) { snprintf(error, error_size, "there was not enough memory to open the data"); return NULL; }
+    data->code = code; data->records = load_records(code, &okay);
+    if (!okay) { snprintf(error, error_size, "the application data could not be opened"); free(data); return NULL; }
+    return data;
+}
+
+void hyperian_data_close(HyperianData *data) {
+    if (!data) return;
+    records_free(data->records); free(data);
+}
+
 static int console_render_range(const Bytecode *code, size_t from, size_t to, Scope *scope, Record *records) {
     for (size_t i = from; i < to; i++) {
         Instruction *in = &code->items[i];
@@ -1358,9 +1460,9 @@ static uint64_t monotonic_milliseconds(void) {
 
 static int run_console(const Bytecode *code, const char *app_name, int service) {
     VariableSet locals = {0};
-    Scope scope = {.locals = &locals};
     int data_okay; Record *records = load_records(code, &data_okay);
     if (!data_okay) return 1;
+    HyperianData data = {.code = code, .records = records}; Scope scope = {.locals = &locals, .data = &data};
     printf("%s\n", app_name);
     for (size_t i = 0; i < code->count; i++) if (code->items[i].opcode == OP_EVENT && !strcmp(code->items[i].args[0], "START")) {
         for (i++; i < code->count && code->items[i].opcode != OP_END_ROUTE; i++) {
@@ -1372,7 +1474,7 @@ static int run_console(const Bytecode *code, const char *app_name, int service) 
                 local_set(&locals, in->args[1], answer);
             } else if (is_logic_instruction(in->opcode)) {
                 char error[256];
-                if (!execute_logic_at(code, &i, &scope, 0, error, sizeof(error))) { fprintf(stderr, "error: %s\n", error); records_free(records); return 1; }
+                if (!execute_logic_at(code, &i, &scope, 0, error, sizeof(error))) { fprintf(stderr, "error: %s\n", error); records_free(data.records); return 1; }
             } else if (in->opcode == OP_FIND_ALL) {
                 scope.model = in->args[0]; scope.collection_alias = in->args[1];
             } else if (in->opcode == OP_SHOW_VIEW) {
@@ -1380,7 +1482,7 @@ static int run_console(const Bytecode *code, const char *app_name, int service) 
                 for (size_t v = 0; v < code->count; v++) if (code->items[v].opcode == OP_VIEW && !strcmp(code->items[v].args[0], in->args[0])) {
                     start = v + 1; end = find_end(code, v, OP_VIEW, OP_END_VIEW); break;
                 }
-                console_render_range(code, start, end, &scope, records);
+                console_render_range(code, start, end, &scope, data.records);
             }
         }
         break;
@@ -1405,8 +1507,8 @@ static int run_console(const Bytecode *code, const char *app_name, int service) 
                 for (int i = 0; i < timer_count; i++) {
                     if (now >= timers[i].next) {
                         char error[256] = {0};
-                        if (!hyperian_execute_event(code, timers[i].event, &locals, error, sizeof(error))) {
-                            fprintf(stderr, "error in scheduled service work: %s\n", error); records_free(records); return 1;
+                        if (!hyperian_execute_data_event(&data, timers[i].event, &locals, error, sizeof(error))) {
+                            fprintf(stderr, "error in scheduled service work: %s\n", error); records_free(data.records); return 1;
                         }
                         do timers[i].next += timers[i].interval; while (timers[i].next <= now);
                         ticks++;
@@ -1422,7 +1524,10 @@ static int run_console(const Bytecode *code, const char *app_name, int service) 
             if (test_name) printf("%s=%s\n", test_name, hyperian_state_get(&locals, test_name) ? hyperian_state_get(&locals, test_name) : "");
         }
     }
-    records_free(records); return 0;
+    const char *console_test_name = getenv("HYPERIAN_CONSOLE_TEST_STATE");
+    if (console_test_name) printf("%s=%s\n", console_test_name,
+        hyperian_state_get(&locals, console_test_name) ? hyperian_state_get(&locals, console_test_name) : "");
+    records_free(data.records); return 0;
 }
 
 int run_bytecode(const char *path, int port_override) {

@@ -1,0 +1,32 @@
+application "Native SQLite Work" is service
+store data in sqlite file "native-crud.sqlite"
+
+model Note
+    field title is text required
+    field important is boolean default false
+end
+
+controller Notes
+    action "exercise native data"
+        set title to "SQLite title"
+        set important to true
+        create a Note using the current values as note_id
+        find the Note numbered note_id as note
+        set title to "Updated SQLite title"
+        update the Note numbered note_id using the current values
+        find the Note numbered note_id as updated_note
+        set loaded_title to updated_note_title
+        count all Note records as note_count
+    end
+
+    when application starts
+        run action "exercise native data"
+        show view "result"
+    end
+end
+
+view "result"
+    heading "Native SQLite data"
+    show loaded_title
+    show note_count
+end

@@ -1,0 +1,37 @@
+application "Native Data Work" is service
+
+model Note
+    field title is text required
+    field important is boolean default false
+end
+
+controller Notes
+    action "exercise native data"
+        set title to "First title"
+        set important to true
+        create a Note using the current values as note_id
+        count all Note records as first_count
+
+        find the Note numbered note_id as note
+        set title to "Updated title"
+        update the Note numbered note_id using the current values
+        find the Note numbered note_id as updated_note
+        set loaded_title to updated_note_title
+
+        delete the Note numbered note_id
+        count all Note records as remaining
+    end
+
+    when application starts
+        run action "exercise native data"
+        show view "result"
+    end
+end
+
+view "result"
+    heading "Native persistent data"
+    text "Loaded the updated title:"
+    show loaded_title
+    text "Records remaining after deletion:"
+    show remaining
+end

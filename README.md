@@ -510,6 +510,24 @@ end
 
 Opening a view rebuilds the native controls while keeping controller state. The close event can run ordinary action logic for cleanup or saving.
 
+Native controller actions use the same persistent models, validation rules, secret hashing, HDB files, SQLite option, and migrations as web applications. CRUD remains readable:
+
+```hyperian
+action "save note"
+    create a Note using the current values as note_id
+    find the Note numbered note_id as saved_note
+    set title to "A better title"
+    update the Note numbered note_id using the current values
+    count all Note records as note_count
+end
+
+action "remove note"
+    delete the Note numbered note_id
+end
+```
+
+“Current values” are controller values and synchronized view inputs whose names match model fields. Finding a record exposes values such as `saved_note_title`, `saved_note_id`, and `saved_note_found`, making them available to later actions and reactive views. See [examples/native_crud.hyp](examples/native_crud.hyp) and [examples/desktop_notes.hyp](examples/desktop_notes.hyp).
+
 Services, desktop apps, and mobile previews can schedule recurring controller work:
 
 ```hyperian
@@ -674,6 +692,6 @@ Quoted text may contain spaces. `#` starts a comment. Indentation is optional bu
 
 ## Project status
 
-Version 0.20 is a small but real MVC platform: custom bytecode, a native VM, standalone executable and asset-bundle creation, native backend diagnostics, seven compiler targets, an English source-line debugger, recurring service and native-interface timers, interactive multi-view GTK desktop and phone-sized mobile preview interfaces with close events, SDL2 keyboard/frame events, frame timing, BMP sprites, WAV sound, and state-driven rendering, native lists and maps, selectable HDB or transactional SQLite storage, recoverable runtime errors, an HTTP/HTTPS client, local packages, reusable actions, native file access, foldered project generation, versioned migrations, persistent CRUD models, safe HTML and typed JSON, authentication and authorization, middleware, formatting, and English tests.
+Version 0.21 is a small but real MVC platform: custom bytecode, a native VM, standalone executable and asset-bundle creation, native backend diagnostics, seven compiler targets, an English source-line debugger, persistent model CRUD inside native controller actions, recurring service and native-interface timers, interactive multi-view GTK desktop and phone-sized mobile preview interfaces with close events, SDL2 keyboard/frame events, frame timing, BMP sprites, WAV sound, and state-driven rendering, native lists and maps, selectable HDB or transactional SQLite storage, recoverable runtime errors, an HTTP/HTTPS client, local packages, reusable actions, native file access, foldered project generation, versioned migrations, persistent CRUD models, safe HTML and typed JSON, authentication and authorization, middleware, formatting, and English tests.
 
 The next major layers are richer desktop and mobile events, Android/iOS export, game animation and physics helpers, more media formats, and automated cross-compilation. Those are not claimed as complete yet.

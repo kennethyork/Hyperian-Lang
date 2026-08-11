@@ -55,9 +55,9 @@ static const char *key_name(SDL_Keycode key) {
     return NULL;
 }
 
-static int run_game_event(const Bytecode *code, const char *event, HyperianState *state) {
+static int run_game_event(HyperianData *data, const char *event, HyperianState *state) {
     char error[256] = {0};
-    if (hyperian_execute_event(code, event, state, error, sizeof(error))) return 1;
+    if (hyperian_execute_data_event(data, event, state, error, sizeof(error))) return 1;
     fprintf(stderr, "error in %s: %s\n", event, error); return 0;
 }
 
@@ -73,29 +73,31 @@ int run_game_app(const Bytecode *code, const char *name) {
     size_t view_from, view_to;
     if (!game_view_range(code, &view_from, &view_to)) { fprintf(stderr, "error: game application needs a starting view\n"); return 1; }
     HyperianState state; hyperian_state_init(&state);
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS)) { fprintf(stderr, "error: cannot start SDL2: %s\n", SDL_GetError()); return 1; }
+    char data_error[256] = {0}; HyperianData *data = hyperian_data_open(code, data_error, sizeof(data_error));
+    if (!data) { fprintf(stderr, "error: %s\n", data_error); return 1; }
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS)) { fprintf(stderr, "error: cannot start SDL2: %s\n", SDL_GetError()); hyperian_data_close(data); return 1; }
     hyperian_set_sound_handler(play_game_sound);
-    if (!run_game_event(code, "START", &state)) { hyperian_set_sound_handler(NULL); SDL_Quit(); return 1; }
+    if (!run_game_event(data, "START", &state)) { hyperian_set_sound_handler(NULL); hyperian_data_close(data); SDL_Quit(); return 1; }
     SDL_Window *window = SDL_CreateWindow(name, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 960, 540, SDL_WINDOW_SHOWN);
     SDL_Renderer *renderer = window ? SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC) : NULL;
     if (window && !renderer) renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
-    if (!window || !renderer) { fprintf(stderr, "error: cannot create game window: %s\n", SDL_GetError()); if (window) SDL_DestroyWindow(window); hyperian_set_sound_handler(NULL); SDL_Quit(); return 1; }
+    if (!window || !renderer) { fprintf(stderr, "error: cannot create game window: %s\n", SDL_GetError()); if (window) SDL_DestroyWindow(window); hyperian_set_sound_handler(NULL); hyperian_data_close(data); SDL_Quit(); return 1; }
     GameSprite sprites[GAME_SPRITES_MAX] = {0}; int sprite_count = 0;
     const char *injected_key = getenv("HYPERIAN_GAME_TEST_KEY"); int running = 1, failed = 0, frames = 0;
-    if (injected_key) { char event[128]; snprintf(event, sizeof(event), "KEY:%s", injected_key); if (!run_game_event(code, event, &state)) { running = 0; failed = 1; } }
+    if (injected_key) { char event[128]; snprintf(event, sizeof(event), "KEY:%s", injected_key); if (!run_game_event(data, event, &state)) { running = 0; failed = 1; } }
     Uint64 previous_frame = SDL_GetPerformanceCounter();
     while (running) {
         SDL_Event input; while (SDL_PollEvent(&input)) {
             if (input.type == SDL_QUIT || (input.type == SDL_KEYDOWN && input.key.keysym.sym == SDLK_ESCAPE)) running = 0;
             else if (input.type == SDL_KEYDOWN) {
-                const char *key = key_name(input.key.keysym.sym); if (key) { char event[128]; snprintf(event, sizeof(event), "KEY:%s", key); if (!run_game_event(code, event, &state)) { running = 0; failed = 1; } }
+                const char *key = key_name(input.key.keysym.sym); if (key) { char event[128]; snprintf(event, sizeof(event), "KEY:%s", key); if (!run_game_event(data, event, &state)) { running = 0; failed = 1; } }
             }
         }
         Uint64 current_frame = SDL_GetPerformanceCounter(); char frame_seconds[64];
         snprintf(frame_seconds, sizeof(frame_seconds), "%.6f", (double)(current_frame - previous_frame) / (double)SDL_GetPerformanceFrequency());
         previous_frame = current_frame; hyperian_state_set(&state, "seconds_since_last_frame", frame_seconds);
         if (!running) break;
-        if (!run_game_event(code, "FRAME", &state)) { failed = 1; break; }
+        if (!run_game_event(data, "FRAME", &state)) { failed = 1; break; }
         int red = 20, green = 24, blue = 35;
         for (size_t i = view_from; i < view_to; i++) if (code->items[i].opcode == OP_BACKGROUND) {
             char value[32];
@@ -130,7 +132,7 @@ int run_game_app(const Bytecode *code, const char *name) {
     if (test_name) printf("%s=%s\n", test_name, hyperian_state_get(&state, test_name) ? hyperian_state_get(&state, test_name) : "");
     for (int i = 0; i < sprite_count; i++) SDL_DestroyTexture(sprites[i].texture);
     if (game_audio_device) { SDL_CloseAudioDevice(game_audio_device); game_audio_device = 0; }
-    hyperian_set_sound_handler(NULL); SDL_DestroyRenderer(renderer); SDL_DestroyWindow(window); SDL_Quit(); return failed ? 1 : 0;
+    hyperian_set_sound_handler(NULL); hyperian_data_close(data); SDL_DestroyRenderer(renderer); SDL_DestroyWindow(window); SDL_Quit(); return failed ? 1 : 0;
 }
 #else
 int run_game_app(const Bytecode *code, const char *name) {
