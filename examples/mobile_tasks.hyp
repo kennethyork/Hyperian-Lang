@@ -11,7 +11,7 @@ controller Tasks
         set details_preview to "No details yet"
         set urgency_preview to "Urgent:false"
         set lifecycle_status to "Application started"
-        set gesture_status to "No swipe yet"
+        set gesture_status to "No gesture yet"
         set heartbeat to 0
         collect every Task title as task_titles
     end
@@ -81,6 +81,14 @@ controller Tasks
 
     when someone swipes down
         set gesture_status to "Swiped down"
+    end
+
+    when someone taps
+        set gesture_status to "Tapped"
+    end
+
+    when someone presses and holds
+        set gesture_status to "Pressed and held"
     end
 
     every 1 second

@@ -1,0 +1,19 @@
+application "Wrong Hold Target" is desktop
+
+model Setting
+    field name is text
+end
+
+controller Main
+    when application starts
+        show view "main"
+    end
+
+    when someone presses and holds
+        set status to held
+    end
+end
+
+view "main"
+    show status
+end

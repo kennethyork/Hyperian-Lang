@@ -359,7 +359,7 @@ static int doctor(void) {
     puts("  SQLite storage: not included; native HDB storage is ready");
 #endif
     puts("  filtered and ordered native model collections: ready");
-    puts("  native input, lifecycle, and four-direction swipe events: ready");
+    puts("  native input, lifecycle, tap, hold, and four-direction swipe events: ready");
 #ifdef HYPERIAN_HAVE_CURL
     puts("  HTTP and HTTPS client: ready");
 #else
@@ -401,7 +401,7 @@ static int create_project(const char *name, const char *target) {
         "controller Items\n    when someone visits \"/items\"\n        find all Item as items\n        show json items\n    end\nend\n");
     else if (!strcmp(target, "desktop") || !strcmp(target, "mobile")) snprintf(source, sizeof(source),
         "controller Items\n    action initialize\n        set status to ready\n        collect every Item name ordered by name as item_names\n    end\n    action activate\n        create a Item using the current values as item_id\n        count all Item records as item_count\n        collect every Item name ordered by name as item_names\n        set status to \"Saved item:\" joined with item_id\n        open view \"main\"\n    end\n    when application starts\n        run action initialize\n        show view \"main\"\n    end\n    when input name changes\n        set status to \"Typing:\" joined with name\n    end\n    when input name is submitted\n        run action activate\n    end\n    when window gains focus\n        set status to focused\n    end\n    when window loses focus\n        set status to unfocused\n    end\n%send\n",
-        !strcmp(target, "mobile") ? "    when someone swipes left\n        set status to \"Swiped left\"\n    end\n" : "");
+        !strcmp(target, "mobile") ? "    when someone taps\n        set status to \"Tapped\"\n    end\n    when someone presses and holds\n        set status to \"Pressed and held\"\n    end\n    when someone swipes left\n        set status to \"Swiped left\"\n    end\n" : "");
     else if (!strcmp(target, "game")) snprintf(source, sizeof(source),
         "controller Items\n    action initialize\n        set player_x to 100\n        set player_y to 100\n        set player_velocity_x to 0\n        set player_velocity_y to 0\n        set glow to 0\n        set animation_frame to 1\n    end\n    action \"move right\"\n        set player_velocity_x to 200\n    end\n    when application starts\n        run action initialize\n        show view \"main\"\n    end\n    when player presses right\n        run action \"move right\"\n    end\n    when game updates\n        move value glow toward 1 at 2 per second\n        advance animation animation_frame from 1 through 4 every 100 milliseconds\n        apply gravity 300 to player_velocity_y\n        move position player_x player_y using velocity player_velocity_x player_velocity_y\n        keep position player_x player_y inside 960 by 540 sized 100 by 100\n        check collision between player_x player_y sized 100 by 100 and 400 260 sized 120 by 120 as player_hit\n    end\nend\n");
     else snprintf(source, sizeof(source),

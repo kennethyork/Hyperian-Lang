@@ -77,12 +77,16 @@ struct HyperianControl: Decodable {
         refresh()
     }
 
-    func swipe(_ distance: CGSize) {
-        let direction = abs(distance.width) >= abs(distance.height) ? (distance.width < 0 ? "left" : "right") : (distance.height < 0 ? "up" : "down")
+    func gesture(_ event: String) {
         for (name, value) in values { bridge.setValue(value, named: name) }
-        let error = bridge.sendEvent("SWIPE:\(direction)")
+        let error = bridge.sendEvent(event)
         if !error.isEmpty { message = error }
         refresh()
+    }
+
+    func swipe(_ distance: CGSize) {
+        let direction = abs(distance.width) >= abs(distance.height) ? (distance.width < 0 ? "left" : "right") : (distance.height < 0 ? "up" : "down")
+        gesture("SWIPE:\(direction)")
     }
 
     private func sendInputEvent(_ event: String) {
@@ -132,6 +136,14 @@ struct ContentView: View {
         }.onAppear { application.lifecycle(scenePhase) }
          .onChange(of: scenePhase) { phase in application.lifecycle(phase) }
          .simultaneousGesture(DragGesture(minimumDistance: 50).onEnded { application.swipe($0.translation) })
+         .simultaneousGesture(
+            LongPressGesture(minimumDuration: 0.5).exclusively(before: TapGesture()).onEnded { result in
+                switch result {
+                case .first: application.gesture("LONG_PRESS")
+                case .second: application.gesture("TAP")
+                }
+            }
+         )
     }
 
     @ViewBuilder private func controlView(_ control: HyperianControl) -> some View {

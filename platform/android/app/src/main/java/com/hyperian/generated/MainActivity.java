@@ -53,13 +53,15 @@ public final class MainActivity extends Activity {
         scroll.addView(content); setContentView(scroll);
         gestures = new GestureDetector(this, new GestureDetector.SimpleOnGestureListener() {
             @Override public boolean onDown(MotionEvent event) { return true; }
+            @Override public boolean onSingleTapConfirmed(MotionEvent event) { sendGestureEvent("TAP"); return true; }
+            @Override public void onLongPress(MotionEvent event) { sendGestureEvent("LONG_PRESS"); }
             @Override public boolean onFling(MotionEvent first, MotionEvent last, float velocityX, float velocityY) {
                 if (first == null || last == null) return false;
                 float horizontal = last.getX() - first.getX(), vertical = last.getY() - first.getY();
                 if (Math.max(Math.abs(horizontal), Math.abs(vertical)) < pixels(50) ||
                     Math.max(Math.abs(velocityX), Math.abs(velocityY)) < pixels(100)) return false;
                 String direction = Math.abs(horizontal) >= Math.abs(vertical) ? (horizontal < 0 ? "left" : "right") : (vertical < 0 ? "up" : "down");
-                sendSwipeEvent(direction); return true;
+                sendGestureEvent("SWIPE:" + direction); return true;
             }
         });
         scroll.setOnTouchListener((view, event) -> { gestures.onTouchEvent(event); return false; });
@@ -155,8 +157,8 @@ public final class MainActivity extends Activity {
         if (renderAfterward) render();
     }
 
-    private void sendSwipeEvent(String direction) {
-        content.post(() -> sendLifecycleEvent("SWIPE:" + direction, true));
+    private void sendGestureEvent(String event) {
+        content.post(() -> sendLifecycleEvent(event, true));
     }
 
     private void scheduleTimer(long interval) {

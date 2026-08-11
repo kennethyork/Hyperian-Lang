@@ -792,6 +792,8 @@ static const char *english_debug_event(const char *event, char *translated, size
     if (!strcmp(event, "window gains focus")) return "FOCUS";
     if (!strcmp(event, "window loses focus")) return "BLUR";
     if (!strcmp(event, "game updates")) return "FRAME";
+    if (!strcmp(event, "someone taps")) return "TAP";
+    if (!strcmp(event, "someone presses and holds")) return "LONG_PRESS";
     char name[64], extra;
     if (sscanf(event, "player presses %63s%c", name, &extra) == 1) {
         snprintf(translated, size, "KEY:%s", name); return translated;

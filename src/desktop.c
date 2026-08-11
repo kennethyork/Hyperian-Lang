@@ -22,7 +22,7 @@ struct DesktopContext {
     DesktopButton buttons[HYPERIAN_STATE_MAX]; int button_count;
     DesktopTimer timers[HYPERIAN_STATE_MAX]; int timer_count;
     int handling_event;
-    double swipe_x, swipe_y; int tracking_swipe;
+    double swipe_x, swipe_y; guint32 gesture_started_at; int tracking_swipe;
 };
 
 static int show_interface_view(DesktopContext *context, const char *name);
@@ -211,24 +211,33 @@ static gboolean window_blurred(GtkWidget *window, GdkEventFocus *event, gpointer
     (void)window; (void)event; return dispatch_window_event((DesktopContext *)data, "BLUR");
 }
 
-static void recognize_swipe(DesktopContext *context, double horizontal, double vertical) {
-    if (horizontal > -50 && horizontal < 50 && vertical > -50 && vertical < 50) return;
+static int recognize_swipe(DesktopContext *context, double horizontal, double vertical) {
+    if (horizontal > -50 && horizontal < 50 && vertical > -50 && vertical < 50) return 0;
     const char *direction;
     if (horizontal * horizontal >= vertical * vertical) direction = horizontal < 0 ? "left" : "right";
     else direction = vertical < 0 ? "up" : "down";
-    char event[32]; snprintf(event, sizeof(event), "SWIPE:%s", direction); dispatch_window_event(context, event);
+    char event[32]; snprintf(event, sizeof(event), "SWIPE:%s", direction); dispatch_window_event(context, event); return 1;
+}
+
+static void recognize_press(DesktopContext *context, guint32 duration) {
+    dispatch_window_event(context, duration >= 500 ? "LONG_PRESS" : "TAP");
 }
 
 static gboolean swipe_started(GtkWidget *window, GdkEventButton *event, gpointer data) {
     (void)window; DesktopContext *context = data;
-    if (event->button == 1) { context->swipe_x = event->x_root; context->swipe_y = event->y_root; context->tracking_swipe = 1; }
+    if (event->button == 1) {
+        context->swipe_x = event->x_root; context->swipe_y = event->y_root;
+        context->gesture_started_at = event->time; context->tracking_swipe = 1;
+    }
     return FALSE;
 }
 
 static gboolean swipe_finished(GtkWidget *window, GdkEventButton *event, gpointer data) {
     (void)window; DesktopContext *context = data;
     if (event->button == 1 && context->tracking_swipe) {
-        context->tracking_swipe = 0; recognize_swipe(context, event->x_root - context->swipe_x, event->y_root - context->swipe_y);
+        context->tracking_swipe = 0;
+        if (!recognize_swipe(context, event->x_root - context->swipe_x, event->y_root - context->swipe_y))
+            recognize_press(context, event->time - context->gesture_started_at);
     }
     return FALSE;
 }
@@ -292,6 +301,9 @@ static int run_interface_app(const Bytecode *code, const char *name, int mobile)
             else if (!strcmp(test_swipe, "up")) recognize_swipe(&context, 0, -100);
             else if (!strcmp(test_swipe, "down")) recognize_swipe(&context, 0, 100);
         }
+        const char *test_gesture = getenv("HYPERIAN_VISUAL_TEST_GESTURE");
+        if (test_gesture && !strcmp(test_gesture, "tap")) recognize_press(&context, 499);
+        else if (test_gesture && !strcmp(test_gesture, "hold")) recognize_press(&context, 500);
         const char *test_name = getenv("HYPERIAN_VISUAL_TEST_STATE");
         if (test_name) printf("%s=%s\n", test_name, hyperian_state_get(&context.state, test_name) ? hyperian_state_get(&context.state, test_name) : "");
         if (getenv("HYPERIAN_VISUAL_TEST_LABELS")) {

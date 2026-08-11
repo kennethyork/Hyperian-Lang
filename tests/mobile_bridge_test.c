@@ -30,7 +30,11 @@ int main(int argc, char **argv) {
         hyperian_mobile_send_event(mobile, "SWIPE:up", error, sizeof(error)) &&
         !strcmp(hyperian_mobile_value(mobile, "gesture_status"), "Swiped up") &&
         hyperian_mobile_send_event(mobile, "SWIPE:down", error, sizeof(error)) &&
-        !strcmp(hyperian_mobile_value(mobile, "gesture_status"), "Swiped down");
+        !strcmp(hyperian_mobile_value(mobile, "gesture_status"), "Swiped down") &&
+        hyperian_mobile_send_event(mobile, "TAP", error, sizeof(error)) &&
+        !strcmp(hyperian_mobile_value(mobile, "gesture_status"), "Tapped") &&
+        hyperian_mobile_send_event(mobile, "LONG_PRESS", error, sizeof(error)) &&
+        !strcmp(hyperian_mobile_value(mobile, "gesture_status"), "Pressed and held");
     if (okay) okay = hyperian_mobile_set(mobile, "title", "Coffee \"and\" tea", error, sizeof(error)) &&
         hyperian_mobile_send_event(mobile, "CHANGE:title", error, sizeof(error)) &&
         hyperian_mobile_value(mobile, "live_preview") && !strcmp(hyperian_mobile_value(mobile, "live_preview"), "Typing:Coffee \"and\" tea") &&

@@ -302,8 +302,9 @@ static int validate(Bytecode *code, const char *path) {
         }
     if (strcmp(target, "mobile")) for (size_t i = 0; i < code->count; i++)
         if (code->items[i].opcode == OP_EVENT && (!strcmp(code->items[i].args[0], "PAUSE") || !strcmp(code->items[i].args[0], "RESUME") ||
+            !strcmp(code->items[i].args[0], "TAP") || !strcmp(code->items[i].args[0], "LONG_PRESS") ||
             !strncmp(code->items[i].args[0], "SWIPE:", 6))) {
-            source_error(path, code->items[i].line, "application pause, resume, and swipe events require a mobile application"); return 0;
+            source_error(path, code->items[i].line, "application pause, resume, tap, hold, and swipe events require a mobile application"); return 0;
         }
     if (!strcmp(target, "web") || !strcmp(target, "pwa")) {
         int routes = 0;
@@ -535,6 +536,13 @@ int compile_file(const char *source_path, const char *output_path) {
                 }
                 char event[32]; snprintf(event, sizeof(event), "SWIPE:%s", w[3]); char *arg = event;
                 okay = emit(&code, OP_EVENT, 1, &arg, number); stack[depth++] = BLOCK_ROUTE; continue;
+            }
+            if (n == 3 && !strcmp(w[0], "when") && !strcmp(w[1], "someone") && !strcmp(w[2], "taps")) {
+                char *event = "TAP"; okay = emit(&code, OP_EVENT, 1, &event, number); stack[depth++] = BLOCK_ROUTE; continue;
+            }
+            if (n == 5 && !strcmp(w[0], "when") && !strcmp(w[1], "someone") && !strcmp(w[2], "presses") &&
+                !strcmp(w[3], "and") && !strcmp(w[4], "holds")) {
+                char *event = "LONG_PRESS"; okay = emit(&code, OP_EVENT, 1, &event, number); stack[depth++] = BLOCK_ROUTE; continue;
             }
             if (n == 3 && !strcmp(w[0], "every")) {
                 char *end; long amount = strtol(w[1], &end, 10), multiplier = 0;

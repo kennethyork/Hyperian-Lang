@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(Hyperian VERSION 0.33.0 LANGUAGES C)
+project(Hyperian VERSION 0.34.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -234,6 +234,14 @@ if(GTK3_FOUND AND XVFB_RUN)
         COMMAND ${XVFB_RUN} -a ${CMAKE_COMMAND} -E env HYPERIAN_VISUAL_TEST=1 HYPERIAN_VISUAL_TEST_SWIPE=left HYPERIAN_VISUAL_TEST_STATE=gesture_status
             $<TARGET_FILE:hyperian> run ${CMAKE_SOURCE_DIR}/examples/mobile_tasks.hyp)
     set_tests_properties(run_mobile_preview_swipe PROPERTIES DEPENDS compile_mobile_preview PASS_REGULAR_EXPRESSION "gesture_status=Swiped left")
+    add_test(NAME run_mobile_preview_tap
+        COMMAND ${XVFB_RUN} -a ${CMAKE_COMMAND} -E env HYPERIAN_VISUAL_TEST=1 HYPERIAN_VISUAL_TEST_GESTURE=tap HYPERIAN_VISUAL_TEST_STATE=gesture_status
+            $<TARGET_FILE:hyperian> run ${CMAKE_SOURCE_DIR}/examples/mobile_tasks.hyp)
+    set_tests_properties(run_mobile_preview_tap PROPERTIES DEPENDS compile_mobile_preview PASS_REGULAR_EXPRESSION "gesture_status=Tapped")
+    add_test(NAME run_mobile_preview_hold
+        COMMAND ${XVFB_RUN} -a ${CMAKE_COMMAND} -E env HYPERIAN_VISUAL_TEST=1 HYPERIAN_VISUAL_TEST_GESTURE=hold HYPERIAN_VISUAL_TEST_STATE=gesture_status
+            $<TARGET_FILE:hyperian> run ${CMAKE_SOURCE_DIR}/examples/mobile_tasks.hyp)
+    set_tests_properties(run_mobile_preview_hold PROPERTIES DEPENDS compile_mobile_preview PASS_REGULAR_EXPRESSION "gesture_status=Pressed and held")
 endif()
 add_test(NAME compile_mobile_preview
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/mobile_tasks.hyp -o ${CMAKE_BINARY_DIR}/mobile_tasks.hyc)
@@ -275,6 +283,12 @@ set_tests_properties(debug_english_lifecycle_event PROPERTIES PASS_REGULAR_EXPRE
 add_test(NAME debug_english_swipe_event
     COMMAND hyperian debug ${CMAKE_SOURCE_DIR}/examples/mobile_tasks.hyp --event "someone swipes right")
 set_tests_properties(debug_english_swipe_event PROPERTIES PASS_REGULAR_EXPRESSION "gesture_status is now Swiped right")
+add_test(NAME debug_english_tap_event
+    COMMAND hyperian debug ${CMAKE_SOURCE_DIR}/examples/mobile_tasks.hyp --event "someone taps")
+set_tests_properties(debug_english_tap_event PROPERTIES PASS_REGULAR_EXPRESSION "gesture_status is now Tapped")
+add_test(NAME debug_english_hold_event
+    COMMAND hyperian debug ${CMAKE_SOURCE_DIR}/examples/mobile_tasks.hyp --event "someone presses and holds")
+set_tests_properties(debug_english_hold_event PROPERTIES PASS_REGULAR_EXPRESSION "gesture_status is now Pressed and held")
 add_test(NAME reject_missing_desktop_action
     COMMAND hyperian check ${CMAKE_SOURCE_DIR}/tests/bad_desktop_action.hyp)
 set_tests_properties(reject_missing_desktop_action PROPERTIES WILL_FAIL TRUE)
@@ -302,6 +316,12 @@ set_tests_properties(reject_swipe_outside_mobile PROPERTIES WILL_FAIL TRUE)
 add_test(NAME reject_bad_swipe_direction
     COMMAND hyperian check ${CMAKE_SOURCE_DIR}/tests/bad_swipe_direction.hyp)
 set_tests_properties(reject_bad_swipe_direction PROPERTIES WILL_FAIL TRUE)
+add_test(NAME reject_tap_outside_mobile
+    COMMAND hyperian check ${CMAKE_SOURCE_DIR}/tests/bad_tap_target.hyp)
+set_tests_properties(reject_tap_outside_mobile PROPERTIES WILL_FAIL TRUE)
+add_test(NAME reject_hold_outside_mobile
+    COMMAND hyperian check ${CMAKE_SOURCE_DIR}/tests/bad_hold_target.hyp)
+set_tests_properties(reject_hold_outside_mobile PROPERTIES WILL_FAIL TRUE)
 add_test(NAME compile_native_game
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/blocks_game.hyp -o ${CMAKE_BINARY_DIR}/blocks_game.hyc)
 add_test(NAME compile_game_physics

@@ -36,7 +36,9 @@ if [ "$platform" = android ]; then
     grep 'sendLifecycleEvent("PAUSE"' "$android/app/src/main/java/com/hyperian/generated/MainActivity.java"
     grep 'onWindowFocusChanged' "$android/app/src/main/java/com/hyperian/generated/MainActivity.java"
     grep 'GestureDetector.SimpleOnGestureListener' "$android/app/src/main/java/com/hyperian/generated/MainActivity.java"
-    grep 'sendSwipeEvent(direction)' "$android/app/src/main/java/com/hyperian/generated/MainActivity.java"
+    grep 'onSingleTapConfirmed' "$android/app/src/main/java/com/hyperian/generated/MainActivity.java"
+    grep 'onLongPress' "$android/app/src/main/java/com/hyperian/generated/MainActivity.java"
+    grep 'sendGestureEvent("SWIPE:" + direction)' "$android/app/src/main/java/com/hyperian/generated/MainActivity.java"
     grep '<string name="app_name">Mobile Tasks</string>' "$android/app/src/main/res/values/strings.xml"
 fi
 
@@ -61,7 +63,10 @@ if [ "$platform" = ios ]; then
     grep '\["RESUME", "FOCUS"\]' "$ios/HyperianIOS/ContentView.swift"
     grep '\["BLUR", "PAUSE"\]' "$ios/HyperianIOS/ContentView.swift"
     grep 'DragGesture(minimumDistance: 50)' "$ios/HyperianIOS/ContentView.swift"
-    grep 'bridge.sendEvent("SWIPE:' "$ios/HyperianIOS/ContentView.swift"
+    grep 'gesture("SWIPE:' "$ios/HyperianIOS/ContentView.swift"
+    grep 'LongPressGesture(minimumDuration: 0.5)' "$ios/HyperianIOS/ContentView.swift"
+    grep 'application.gesture("TAP")' "$ios/HyperianIOS/ContentView.swift"
+    grep 'application.gesture("LONG_PRESS")' "$ios/HyperianIOS/ContentView.swift"
     grep '<string>Mobile Tasks</string>' "$ios/HyperianIOS/Info.plist"
     grep -Eq 'rootObject = [0-9A-F]{24};' "$ios/HyperianIOS.xcodeproj/project.pbxproj"
     if command -v xmllint >/dev/null 2>&1; then xmllint --noout "$ios/HyperianIOS/Info.plist"; fi
