@@ -1,0 +1,19 @@
+application "Bad Timer" is service
+
+model Job
+    field name is text
+end
+
+controller Work
+    when application starts
+        show view "status"
+    end
+
+    every 0 seconds
+        set runs to runs plus 1
+    end
+end
+
+view "status"
+    text "Invalid timer"
+end

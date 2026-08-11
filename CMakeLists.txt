@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(Hyperian VERSION 0.19.0 LANGUAGES C)
+project(Hyperian VERSION 0.20.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -85,6 +85,14 @@ add_test(NAME compile_english_logic
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/english_logic.hyp -o ${CMAKE_BINARY_DIR}/english_logic.hyc)
 add_test(NAME run_service
     COMMAND hyperian run ${CMAKE_SOURCE_DIR}/examples/report_service.hyp)
+add_test(NAME compile_scheduled_service
+    COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/scheduled_service.hyp -o ${CMAKE_BINARY_DIR}/scheduled_service.hyc)
+add_test(NAME run_scheduled_service
+    COMMAND ${CMAKE_COMMAND} -E env HYPERIAN_SERVICE_TEST_TICKS=3 HYPERIAN_SERVICE_TEST_STATE=runs
+        $<TARGET_FILE:hyperian> run ${CMAKE_BINARY_DIR}/scheduled_service.hyc)
+set_tests_properties(run_scheduled_service PROPERTIES DEPENDS compile_scheduled_service PASS_REGULAR_EXPRESSION "runs=6")
+add_test(NAME reject_bad_timer COMMAND hyperian check ${CMAKE_SOURCE_DIR}/tests/bad_timer.hyp)
+set_tests_properties(reject_bad_timer PROPERTIES WILL_FAIL TRUE)
 add_test(NAME build_standalone_service
     COMMAND hyperian build ${CMAKE_SOURCE_DIR}/examples/report_service.hyp -o ${CMAKE_BINARY_DIR}/standalone_report)
 add_test(NAME run_standalone_service

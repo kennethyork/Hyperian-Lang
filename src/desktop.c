@@ -12,12 +12,14 @@ typedef struct { const char *name; GtkWidget *widget; DesktopInputKind kind; } D
 typedef struct { const char *expression; GtkWidget *label; } DesktopOutput;
 typedef struct DesktopContext DesktopContext;
 typedef struct { DesktopContext *context; const char *action; } DesktopButton;
+typedef struct { DesktopContext *context; const char *event; } DesktopTimer;
 struct DesktopContext {
     const Bytecode *code; HyperianState state;
     GtkWidget *box;
     DesktopInput inputs[HYPERIAN_STATE_MAX]; int input_count;
     DesktopOutput outputs[HYPERIAN_STATE_MAX]; int output_count;
     DesktopButton buttons[HYPERIAN_STATE_MAX]; int button_count;
+    DesktopTimer timers[HYPERIAN_STATE_MAX]; int timer_count;
 };
 
 static int show_interface_view(DesktopContext *context, const char *name);
@@ -55,15 +57,26 @@ static void refresh_outputs(DesktopContext *context) {
     }
 }
 
+static void apply_state_transition(DesktopContext *context) {
+    const char *next = hyperian_state_get(&context->state, "__hyperian_open_view");
+    if (next && *next) {
+        char name[256]; snprintf(name, sizeof(name), "%s", next); hyperian_state_set(&context->state, "__hyperian_open_view", "");
+        if (!show_interface_view(context, name)) hyperian_state_set(&context->state, "error", "the requested view could not be opened");
+    } else refresh_outputs(context);
+}
+
 static void action_clicked(GtkButton *button, gpointer data) {
     (void)button; DesktopButton *binding = data; char error[256] = {0}; sync_inputs(binding->context);
     if (!hyperian_execute_action(binding->context->code, binding->action, NULL, &binding->context->state, error, sizeof(error)))
         hyperian_state_set(&binding->context->state, "error", error);
-    const char *next = hyperian_state_get(&binding->context->state, "__hyperian_open_view");
-    if (next && *next) {
-        char name[256]; snprintf(name, sizeof(name), "%s", next); hyperian_state_set(&binding->context->state, "__hyperian_open_view", "");
-        if (!show_interface_view(binding->context, name)) hyperian_state_set(&binding->context->state, "error", "the requested view could not be opened");
-    } else refresh_outputs(binding->context);
+    apply_state_transition(binding->context);
+}
+
+static gboolean timer_fired(gpointer data) {
+    DesktopTimer *timer = data; char error[256] = {0}; sync_inputs(timer->context);
+    if (!hyperian_execute_event(timer->context->code, timer->event, &timer->context->state, error, sizeof(error)))
+        hyperian_state_set(&timer->context->state, "error", error);
+    apply_state_transition(timer->context); return G_SOURCE_CONTINUE;
 }
 
 static void remember_input(DesktopContext *context, const char *name, GtkWidget *widget, DesktopInputKind kind) {
@@ -127,11 +140,21 @@ static int run_interface_app(const Bytecode *code, const char *name, int mobile)
     gtk_container_set_border_width(GTK_CONTAINER(window), mobile ? 16 : 20); gtk_box_set_spacing(GTK_BOX(box), mobile ? 12 : 8); gtk_container_add(GTK_CONTAINER(window), box);
     g_signal_connect(window, "delete-event", G_CALLBACK(window_closing), &context);
     if (!show_interface_view(&context, view_name)) { fprintf(stderr, "error: starting view does not exist\n"); gtk_widget_destroy(window); return 1; }
+    for (size_t i = 0; i < code->count && context.timer_count < HYPERIAN_STATE_MAX; i++)
+        if (code->items[i].opcode == OP_EVENT && !strncmp(code->items[i].args[0], "TIMER:", 6)) {
+            int known = 0; for (int at = 0; at < context.timer_count; at++) if (!strcmp(context.timers[at].event, code->items[i].args[0])) known = 1;
+            if (!known) {
+                DesktopTimer *timer = &context.timers[context.timer_count++]; *timer = (DesktopTimer){&context, code->items[i].args[0]};
+                g_timeout_add((guint)strtoul(code->items[i].args[0] + 6, NULL, 10), timer_fired, timer);
+            }
+        }
     gtk_widget_show_all(window);
     if (getenv("HYPERIAN_VISUAL_TEST")) {
         const char *wanted_action = getenv("HYPERIAN_VISUAL_TEST_ACTION"); DesktopButton *chosen = context.button_count ? &context.buttons[0] : NULL;
         for (int i = 0; wanted_action && i < context.button_count; i++) if (!strcmp(context.buttons[i].action, wanted_action)) chosen = &context.buttons[i];
         if (chosen) action_clicked(NULL, chosen);
+        const char *test_timer = getenv("HYPERIAN_VISUAL_TEST_TIMER");
+        for (int i = 0; test_timer && i < context.timer_count; i++) if (!strcmp(context.timers[i].event, test_timer)) timer_fired(&context.timers[i]);
         const char *test_name = getenv("HYPERIAN_VISUAL_TEST_STATE");
         if (test_name) printf("%s=%s\n", test_name, hyperian_state_get(&context.state, test_name) ? hyperian_state_get(&context.state, test_name) : "");
         gtk_main_iteration_do(FALSE);

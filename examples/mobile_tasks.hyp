@@ -7,6 +7,7 @@ end
 controller Tasks
     action initialize
         set status to "Ready on mobile"
+        set heartbeat to 0
     end
 
     action "add task"
@@ -24,6 +25,10 @@ controller Tasks
     when application starts
         run action initialize
         show view "home"
+    end
+
+    every 1 second
+        set heartbeat to heartbeat plus 1
     end
 end
 

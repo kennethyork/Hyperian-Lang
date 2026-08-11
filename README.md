@@ -510,6 +510,20 @@ end
 
 Opening a view rebuilds the native controls while keeping controller state. The close event can run ordinary action logic for cleanup or saving.
 
+Services, desktop apps, and mobile previews can schedule recurring controller work:
+
+```hyperian
+action "check for work"
+    set checks to checks plus 1
+end
+
+every 5 seconds
+    run action "check for work"
+end
+```
+
+Intervals may use milliseconds, seconds, or minutes and can be at most one day. Service applications remain alive while scheduled work exists and stop cleanly on Ctrl+C or termination. Native interface timers update reactive values and may open another view.
+
 Game views are rendered in a native SDL2 window and event loop:
 
 ```hyperian
@@ -660,6 +674,6 @@ Quoted text may contain spaces. `#` starts a comment. Indentation is optional bu
 
 ## Project status
 
-Version 0.19 is a small but real MVC platform: custom bytecode, a native VM, standalone executable and asset-bundle creation, native backend diagnostics, seven compiler targets, an English source-line debugger, interactive multi-view GTK desktop and phone-sized mobile preview interfaces with close events, SDL2 keyboard/frame events, frame timing, BMP sprites, WAV sound, and state-driven rendering, native lists and maps, selectable HDB or transactional SQLite storage, recoverable runtime errors, an HTTP/HTTPS client, local packages, reusable actions, native file access, foldered project generation, versioned migrations, persistent CRUD models, safe HTML and typed JSON, authentication and authorization, middleware, formatting, and English tests.
+Version 0.20 is a small but real MVC platform: custom bytecode, a native VM, standalone executable and asset-bundle creation, native backend diagnostics, seven compiler targets, an English source-line debugger, recurring service and native-interface timers, interactive multi-view GTK desktop and phone-sized mobile preview interfaces with close events, SDL2 keyboard/frame events, frame timing, BMP sprites, WAV sound, and state-driven rendering, native lists and maps, selectable HDB or transactional SQLite storage, recoverable runtime errors, an HTTP/HTTPS client, local packages, reusable actions, native file access, foldered project generation, versioned migrations, persistent CRUD models, safe HTML and typed JSON, authentication and authorization, middleware, formatting, and English tests.
 
 The next major layers are richer desktop and mobile events, Android/iOS export, game animation and physics helpers, more media formats, and automated cross-compilation. Those are not claimed as complete yet.

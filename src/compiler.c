@@ -459,6 +459,17 @@ int compile_file(const char *source_path, const char *output_path) {
             if (n == 3 && !strcmp(w[0], "when") && !strcmp(w[1], "window") && !strcmp(w[2], "closes")) {
                 char *event = "CLOSE"; okay = emit(&code, OP_EVENT, 1, &event, number); stack[depth++] = BLOCK_ROUTE; continue;
             }
+            if (n == 3 && !strcmp(w[0], "every")) {
+                char *end; long amount = strtol(w[1], &end, 10), multiplier = 0;
+                if (!strcmp(w[2], "millisecond") || !strcmp(w[2], "milliseconds")) multiplier = 1;
+                else if (!strcmp(w[2], "second") || !strcmp(w[2], "seconds")) multiplier = 1000;
+                else if (!strcmp(w[2], "minute") || !strcmp(w[2], "minutes")) multiplier = 60000;
+                if (*end || amount < 1 || !multiplier || amount > 86400000 / multiplier) {
+                    source_error(source_path, number, "say: every 5 seconds; the interval can be at most one day"); okay = 0; continue;
+                }
+                char event[64]; snprintf(event, sizeof(event), "TIMER:%ld", amount * multiplier); char *arg = event;
+                okay = emit(&code, OP_EVENT, 1, &arg, number); stack[depth++] = BLOCK_ROUTE; continue;
+            }
             if (n == 4 && !strcmp(w[0], "when") && !strcmp(w[1], "someone")) {
                 if (!strcmp(w[2], "visits")) method = "GET";
                 else if (!strcmp(w[2], "submits")) method = "POST";

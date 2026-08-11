@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <time.h>
 #include <unistd.h>
 
 #ifdef HYPERIAN_HAVE_SQLITE3
@@ -544,7 +545,8 @@ int hyperian_execute_action(const Bytecode *code, const char *name, const char *
 int hyperian_execute_event(const Bytecode *code, const char *event, HyperianState *state, char *error, size_t error_size) {
     for (size_t at = 0; at < code->count; at++) if (code->items[at].opcode == OP_EVENT && !strcmp(code->items[at].args[0], event)) {
         Scope scope = {.locals = state}; size_t end = find_end(code, at, OP_EVENT, OP_END_ROUTE);
-        return execute_logic_range(code, at + 1, end, &scope, 0, error, error_size);
+        if (!execute_logic_range(code, at + 1, end, &scope, 0, error, error_size)) return 0;
+        at = end;
     }
     return 1;
 }
@@ -1349,7 +1351,12 @@ static int console_render_range(const Bytecode *code, size_t from, size_t to, Sc
     return 1;
 }
 
-static int run_console(const Bytecode *code, const char *app_name) {
+static uint64_t monotonic_milliseconds(void) {
+    struct timespec time; clock_gettime(CLOCK_MONOTONIC, &time);
+    return (uint64_t)time.tv_sec * 1000 + (uint64_t)time.tv_nsec / 1000000;
+}
+
+static int run_console(const Bytecode *code, const char *app_name, int service) {
     VariableSet locals = {0};
     Scope scope = {.locals = &locals};
     int data_okay; Record *records = load_records(code, &data_okay);
@@ -1378,6 +1385,43 @@ static int run_console(const Bytecode *code, const char *app_name) {
         }
         break;
     }
+    if (service) {
+        typedef struct { const char *event; unsigned interval; uint64_t next; } ServiceTimer;
+        ServiceTimer timers[HYPERIAN_STATE_MAX]; int timer_count = 0;
+        uint64_t now = monotonic_milliseconds();
+        for (size_t i = 0; i < code->count && timer_count < HYPERIAN_STATE_MAX; i++)
+            if (code->items[i].opcode == OP_EVENT && !strncmp(code->items[i].args[0], "TIMER:", 6)) {
+                int known = 0; for (int at = 0; at < timer_count; at++) if (!strcmp(timers[at].event, code->items[i].args[0])) known = 1;
+                if (known) continue;
+                unsigned interval = (unsigned)strtoul(code->items[i].args[0] + 6, NULL, 10);
+                timers[timer_count++] = (ServiceTimer){code->items[i].args[0], interval, now + interval};
+            }
+        if (timer_count) {
+            struct sigaction action; memset(&action, 0, sizeof(action)); action.sa_handler = stop_server; sigemptyset(&action.sa_mask);
+            sigaction(SIGINT, &action, NULL); sigaction(SIGTERM, &action, NULL); keep_running = 1;
+            const char *limit_text = getenv("HYPERIAN_SERVICE_TEST_TICKS"); int limit = limit_text ? atoi(limit_text) : 0, ticks = 0;
+            while (keep_running && (!limit || ticks < limit)) {
+                now = monotonic_milliseconds(); uint64_t nearest = now + 1000;
+                for (int i = 0; i < timer_count; i++) {
+                    if (now >= timers[i].next) {
+                        char error[256] = {0};
+                        if (!hyperian_execute_event(code, timers[i].event, &locals, error, sizeof(error))) {
+                            fprintf(stderr, "error in scheduled service work: %s\n", error); records_free(records); return 1;
+                        }
+                        do timers[i].next += timers[i].interval; while (timers[i].next <= now);
+                        ticks++;
+                    }
+                    if (timers[i].next < nearest) nearest = timers[i].next;
+                }
+                if (keep_running && (!limit || ticks < limit)) {
+                    now = monotonic_milliseconds(); uint64_t wait = nearest > now ? nearest - now : 1;
+                    struct timespec pause = {(time_t)(wait / 1000), (long)(wait % 1000) * 1000000}; nanosleep(&pause, NULL);
+                }
+            }
+            const char *test_name = getenv("HYPERIAN_SERVICE_TEST_STATE");
+            if (test_name) printf("%s=%s\n", test_name, hyperian_state_get(&locals, test_name) ? hyperian_state_get(&locals, test_name) : "");
+        }
+    }
     records_free(records); return 0;
 }
 
@@ -1391,7 +1435,7 @@ int run_bytecode(const char *path, int port_override) {
         if (!port && code.items[i].opcode == OP_PORT) port = atoi(code.items[i].args[0]);
     }
     if (!strcmp(target, "console") || !strcmp(target, "service")) {
-        int result = run_console(&code, name); bytecode_free(&code); return result;
+        int result = run_console(&code, name, !strcmp(target, "service")); bytecode_free(&code); return result;
     }
     if (!strcmp(target, "desktop")) { int result = run_desktop_app(&code, name); bytecode_free(&code); return result; }
     if (!strcmp(target, "mobile")) { int result = run_mobile_app(&code, name); bytecode_free(&code); return result; }
