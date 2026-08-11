@@ -379,6 +379,39 @@ write greeting to file "greeting.txt"
 read file "greeting.txt" as saved_greeting
 ```
 
+## Lists, recoverable errors, and web requests
+
+Lists work in controllers, tests, console views, and web views:
+
+```hyperian
+make list colors
+add red to colors
+add "deep blue" to colors
+count colors as color_count
+take item 2 from colors as second_color
+remove red from colors
+```
+
+Risky work can be recovered without stopping the application:
+
+```hyperian
+try
+    read file "settings.txt" as settings
+when it fails as problem
+    set settings to "default settings"
+end
+```
+
+The native HTTP client supports HTTP, HTTPS, redirects, timeouts, response bodies, and status codes:
+
+```hyperian
+try
+    get "https://example.com/api" from web as response and status as status_code
+when it fails as problem
+    set response to problem
+end
+```
+
 Applications can replace built-in responses for any HTTP error from 400 through 599. The error view can show the numeric `status` value:
 
 ```hyperian
@@ -442,8 +475,11 @@ my_app/
 │   ├── task-list.hyp
 │   └── shared/
 │       └── layouts.hyp
-└── public/
+├── public/
     └── app.css
+└── packages/
+    └── text_tools/
+        └── package.hyp
 ```
 
 The main file stays simple:
@@ -458,6 +494,14 @@ include "views/task-list.hyp"
 ```
 
 An included file can include another nearby file, such as `include "shared/layouts.hyp"`. The compiler combines the whole project into one self-contained `.hyc` program. Public folders are resolved beside the main source file. See [examples/foldered_app/app.hyp](examples/foldered_app/app.hyp).
+
+Reusable local packages live under `packages/<name>/package.hyp`:
+
+```hyperian
+use package "text_tools"
+```
+
+Set `HYPERIAN_PACKAGES` to share a package collection between projects. Package files can declare models, controllers, actions, views, layouts, and components, and can include their own nearby source files. See [examples/core_features](examples/core_features).
 
 ## Static files and richer views
 
@@ -518,6 +562,6 @@ Quoted text may contain spaces. `#` starts a comment. Indentation is optional bu
 
 ## Project status
 
-Version 0.10 is a small but real MVC platform: custom bytecode, a native VM, six executable targets, GTK desktop widgets, SDL2 game rendering, reusable actions with inputs and results, native file access, foldered project generation, versioned data migrations, persistent models, complete CRUD, layouts/components, safe HTML and typed JSON, authentication and authorization, middleware, custom HTTP error views, source formatting, and tests written in English.
+Version 0.11 is a small but real MVC platform: custom bytecode, a native VM, six executable targets, native lists, recoverable runtime errors, an HTTP/HTTPS client, local packages, GTK desktop widgets, SDL2 game rendering, reusable actions with inputs and results, native file access, foldered project generation, versioned migrations, persistent CRUD models, layouts/components, safe HTML and typed JSON, authentication and authorization, middleware, source formatting, and tests written in English.
 
-The next major layers are collections, structured errors, HTTP clients, SQLite adapters, packages, a debugger, richer desktop events, game input/animation/audio/physics, mobile backends, and standalone application packaging. Those are not claimed as complete yet.
+The next major layers are maps and richer collection operations, SQLite adapters, a debugger, richer desktop events, game input/animation/audio/physics, mobile backends, and standalone application packaging. Those are not claimed as complete yet.

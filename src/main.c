@@ -37,7 +37,7 @@ static int create_project(const char *name, const char *target) {
     if (!known) { fprintf(stderr, "error: target must be web, console, api, service, desktop, or game\n"); return 1; }
     char path[1024], source[4096];
     if (!make_project_directory(name)) return 1;
-    const char *folders[] = {"models", "controllers", "views", "public"};
+    const char *folders[] = {"models", "controllers", "views", "public", "packages"};
     for (size_t i = 0; i < sizeof(folders) / sizeof(folders[0]); i++) {
         snprintf(path, sizeof(path), "%s/%s", name, folders[i]); if (!make_project_directory(path)) return 1;
     }
@@ -73,15 +73,17 @@ static int format_source(const char *path) {
         char *start = line; while (*start == ' ' || *start == '\t') start++;
         start[strcspn(start, "\r\n")] = 0;
         if (!*start) { putchar('\n'); continue; }
-        int closing = !strcmp(start, "end") || !strcmp(start, "otherwise");
+        int closing = !strcmp(start, "end") || !strcmp(start, "otherwise") || starts_with(start, "when it fails as ");
         if (closing && indentation) indentation--;
         for (int i = 0; i < indentation * 4; i++) putchar(' ');
         puts(start);
         int opening = starts_with(start, "model ") || starts_with(start, "controller ") || starts_with(start, "view ") ||
             starts_with(start, "layout ") || starts_with(start, "component ") || starts_with(start, "action ") ||
+            starts_with(start, "test ") ||
             starts_with(start, "when data changes from ") ||
             starts_with(start, "when someone ") || !strcmp(start, "when application starts") || starts_with(start, "form ") ||
-            starts_with(start, "for each ") || starts_with(start, "if ") || starts_with(start, "repeat ") || !strcmp(start, "otherwise");
+            starts_with(start, "for each ") || starts_with(start, "if ") || starts_with(start, "repeat ") || !strcmp(start, "try") ||
+            !strcmp(start, "otherwise") || starts_with(start, "when it fails as ");
         if (opening) indentation++;
     }
     int failed = ferror(file); fclose(file); return failed ? 1 : 0;

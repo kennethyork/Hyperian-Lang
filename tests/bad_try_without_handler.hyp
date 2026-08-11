@@ -1,0 +1,18 @@
+application BadTry is service
+
+model Thing
+    field name is text
+end
+
+controller Things
+    when application starts
+        try
+            read file "missing.txt" as missing
+        end
+        show view "main"
+    end
+end
+
+view "main"
+    text "This should not compile"
+end

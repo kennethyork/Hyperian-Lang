@@ -1,0 +1,7 @@
+controller TextTools
+    action "decorate text" using value
+        set decorated to "[" joined with value
+        set decorated to decorated joined with "]"
+        return decorated
+    end
+end

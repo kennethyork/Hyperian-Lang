@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#define HYPERIAN_VERSION "0.10.0"
+#define HYPERIAN_VERSION "0.11.0"
 #define HYC_MAGIC "HYC1"
 #define HYC_MAX_ARGS 9
 
@@ -28,7 +28,9 @@ typedef enum {
     OP_TEST, OP_EXPECT, OP_END_TEST, OP_BEFORE_ACTION, OP_ERROR_VIEW,
     OP_STATIC_FILES, OP_STYLE, OP_SCRIPT, OP_IMAGE, OP_TEXTAREA, OP_CHECKBOX,
     OP_DATA_VERSION, OP_MIGRATION, OP_RENAME_FIELD, OP_END_MIGRATION,
-    OP_RETURN_VALUE, OP_READ_FILE, OP_WRITE_FILE, OP_BACKGROUND, OP_RECTANGLE
+    OP_RETURN_VALUE, OP_READ_FILE, OP_WRITE_FILE, OP_BACKGROUND, OP_RECTANGLE,
+    OP_MAKE_LIST, OP_LIST_ADD, OP_LIST_REMOVE, OP_LIST_COUNT, OP_LIST_ITEM,
+    OP_TRY, OP_CATCH, OP_END_TRY, OP_HTTP_GET
 } OpCode;
 
 typedef struct {
@@ -58,5 +60,6 @@ int test_bytecode(const char *path);
 int migrate_bytecode(const char *path);
 int run_desktop_app(const Bytecode *code, const char *name);
 int run_game_app(const Bytecode *code, const char *name);
+int hyperian_http_get(const char *url, char *body, size_t body_size, long *status, char *error, size_t error_size);
 
 #endif

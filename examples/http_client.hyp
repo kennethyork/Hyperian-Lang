@@ -1,0 +1,25 @@
+application "HTTP Reader" is service
+
+model Response
+    field body is text
+end
+
+controller Reader
+    when application starts
+        try
+            get "https://example.com" from web as response and status as status_code
+        when it fails as problem
+            set response to problem
+            set status_code to failed
+        end
+        show view "result"
+    end
+end
+
+view "result"
+    heading "Native HTTP request finished"
+    text "Status:"
+    show status_code
+    text "Response:"
+    show response
+end

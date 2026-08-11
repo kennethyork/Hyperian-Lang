@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(Hyperian VERSION 0.10.0 LANGUAGES C)
+project(Hyperian VERSION 0.11.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -12,6 +12,7 @@ add_executable(hyperian
     src/runtime.c
     src/desktop.c
     src/game.c
+    src/network.c
     src/security.c
 )
 target_include_directories(hyperian PRIVATE src)
@@ -21,6 +22,11 @@ find_package(PkgConfig QUIET)
 if(PkgConfig_FOUND)
     pkg_check_modules(GTK3 QUIET IMPORTED_TARGET gtk+-3.0)
     pkg_check_modules(SDL2 QUIET IMPORTED_TARGET sdl2)
+    pkg_check_modules(CURL QUIET IMPORTED_TARGET libcurl)
+endif()
+if(CURL_FOUND)
+    target_compile_definitions(hyperian PRIVATE HYPERIAN_HAVE_CURL=1)
+    target_link_libraries(hyperian PRIVATE PkgConfig::CURL)
 endif()
 if(GTK3_FOUND)
     target_compile_definitions(hyperian PRIVATE HYPERIAN_HAVE_GTK3=1)
@@ -73,6 +79,17 @@ add_test(NAME format_source
     COMMAND hyperian format ${CMAKE_SOURCE_DIR}/examples/english_logic.hyp)
 add_test(NAME english_language_tests
     COMMAND hyperian test ${CMAKE_SOURCE_DIR}/examples/english_logic.hyp)
+add_test(NAME compile_general_purpose_core
+    COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/core_features/app.hyp -o ${CMAKE_BINARY_DIR}/core_features.hyc)
+if(CURL_FOUND)
+    add_test(NAME general_purpose_english_tests
+        COMMAND hyperian test ${CMAKE_SOURCE_DIR}/examples/core_features/app.hyp)
+    add_test(NAME compile_http_client
+        COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/http_client.hyp -o ${CMAKE_BINARY_DIR}/http_client.hyc)
+endif()
+add_test(NAME reject_try_without_handler
+    COMMAND hyperian check ${CMAKE_SOURCE_DIR}/tests/bad_try_without_handler.hyp)
+set_tests_properties(reject_try_without_handler PROPERTIES WILL_FAIL TRUE)
 add_test(NAME compile_multi_file_program
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/modular/app.hyp -o ${CMAKE_BINARY_DIR}/modular.hyc)
 add_test(NAME compile_foldered_mvc_program

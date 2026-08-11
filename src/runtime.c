@@ -104,6 +104,42 @@ static void local_set(VariableSet *locals, const char *name, const char *value) 
     snprintf(locals->values[at], sizeof(locals->values[at]), "%s", value);
 }
 
+static int list_next(const char **cursor, char *value, size_t value_size) {
+    if (!**cursor) return 0;
+    char *end; unsigned long length = strtoul(*cursor, &end, 10);
+    if (end == *cursor || *end != ':' || length >= value_size || strlen(end + 1) < length) return -1;
+    memcpy(value, end + 1, length); value[length] = 0; *cursor = end + 1 + length; return 1;
+}
+
+static int list_add_value(const char *encoded, const char *value, char *output, size_t size) {
+    int written = snprintf(output, size, "%s%zu:%s", encoded ? encoded : "", strlen(value), value);
+    return written >= 0 && (size_t)written < size;
+}
+
+static int list_count_values(const char *encoded) {
+    const char *cursor = encoded ? encoded : ""; char value[2048]; int count = 0, result;
+    while ((result = list_next(&cursor, value, sizeof(value))) > 0) count++;
+    return result < 0 ? -1 : count;
+}
+
+static int list_item_value(const char *encoded, int wanted, char *output, size_t size) {
+    const char *cursor = encoded ? encoded : ""; char value[2048]; int at = 1, result;
+    while ((result = list_next(&cursor, value, sizeof(value))) > 0) {
+        if (at++ == wanted) { snprintf(output, size, "%s", value); return 1; }
+    }
+    return 0;
+}
+
+static int list_remove_value(const char *encoded, const char *removed, char *output, size_t size) {
+    const char *cursor = encoded ? encoded : ""; char value[2048]; int result, found = 0; output[0] = 0;
+    while ((result = list_next(&cursor, value, sizeof(value))) > 0) {
+        if (!found && !strcmp(value, removed)) { found = 1; continue; }
+        char combined[2048]; if (!list_add_value(output, value, combined, sizeof(combined))) return 0;
+        snprintf(output, size, "%s", combined);
+    }
+    return result >= 0;
+}
+
 static void url_decode(char *text) {
     char *read = text, *write = text;
     while (*read) {
@@ -233,6 +269,23 @@ static size_t logic_otherwise(const Bytecode *code, size_t start, size_t end) {
     return end;
 }
 
+static size_t logic_catch(const Bytecode *code, size_t start, size_t end) {
+    int depth = 0;
+    for (size_t i = start + 1; i < end; i++) {
+        if (code->items[i].opcode == OP_TRY) depth++;
+        else if (code->items[i].opcode == OP_END_TRY) depth--;
+        else if (code->items[i].opcode == OP_CATCH && depth == 0) return i;
+    }
+    return end;
+}
+
+static int is_logic_instruction(uint8_t opcode) {
+    return opcode == OP_SET_VALUE || opcode == OP_LOGIC_IF || opcode == OP_REPEAT || opcode == OP_RUN_ACTION ||
+        opcode == OP_RETURN_VALUE || opcode == OP_READ_FILE || opcode == OP_WRITE_FILE || opcode == OP_TRY ||
+        opcode == OP_MAKE_LIST || opcode == OP_LIST_ADD || opcode == OP_LIST_REMOVE || opcode == OP_LIST_COUNT ||
+        opcode == OP_LIST_ITEM || opcode == OP_HTTP_GET;
+}
+
 static int execute_logic_range(const Bytecode *code, size_t from, size_t to, Scope *scope, int depth, char *error, size_t error_size);
 
 static int execute_logic_at(const Bytecode *code, size_t *position, Scope *scope, int depth, char *error, size_t error_size) {
@@ -251,6 +304,15 @@ static int execute_logic_at(const Bytecode *code, size_t *position, Scope *scope
         size_t end = find_end(code, *position, OP_REPEAT, OP_END_REPEAT); char value[128]; evaluate(scope, in->args[0], value, sizeof(value));
         long times = strtol(value, NULL, 10); if (times < 0 || times > 100000) { snprintf(error, error_size, "repeat must be between 0 and 100000 times"); return 0; }
         for (long count = 0; count < times; count++) if (!execute_logic_range(code, *position + 1, end, scope, depth + 1, error, error_size)) return 0;
+        *position = end;
+    } else if (in->opcode == OP_TRY) {
+        size_t end = find_end(code, *position, OP_TRY, OP_END_TRY), caught_at = logic_catch(code, *position, end);
+        char caught[256] = {0};
+        if (!execute_logic_range(code, *position + 1, caught_at, scope, depth + 1, caught, sizeof(caught))) {
+            if (caught_at == end) { snprintf(error, error_size, "%s", caught); return 0; }
+            local_set(scope->locals, code->items[caught_at].args[0], caught);
+            if (!execute_logic_range(code, caught_at + 1, end, scope, depth + 1, error, error_size)) return 0;
+        }
         *position = end;
     } else if (in->opcode == OP_RUN_ACTION) {
         for (size_t action = 0; action < code->count; action++) if (code->items[action].opcode == OP_ACTION && !strcmp(code->items[action].args[0], in->args[0])) {
@@ -293,15 +355,44 @@ static int execute_logic_at(const Bytecode *code, size_t *position, Scope *scope
         if (fclose(file)) okay = 0;
         if (okay) okay = rename(temporary, path) == 0;
         if (!okay) { remove(temporary); snprintf(error, error_size, "could not finish writing file %s", path); return 0; }
+    } else if (in->opcode == OP_MAKE_LIST) {
+        local_set(scope->locals, in->args[0], "");
+    } else if (in->opcode == OP_LIST_ADD) {
+        char value[2048], encoded[2048]; evaluate(scope, in->args[0], value, sizeof(value));
+        const char *current = local_value(scope->locals, in->args[1]);
+        if (!current) { snprintf(error, error_size, "list %s does not exist", in->args[1]); return 0; }
+        if (!list_add_value(current, value, encoded, sizeof(encoded))) { snprintf(error, error_size, "list %s is full", in->args[1]); return 0; }
+        local_set(scope->locals, in->args[1], encoded);
+    } else if (in->opcode == OP_LIST_REMOVE) {
+        char value[2048], encoded[2048]; evaluate(scope, in->args[0], value, sizeof(value));
+        const char *current = local_value(scope->locals, in->args[1]);
+        if (!current || !list_remove_value(current, value, encoded, sizeof(encoded))) { snprintf(error, error_size, "list %s is not valid", in->args[1]); return 0; }
+        local_set(scope->locals, in->args[1], encoded);
+    } else if (in->opcode == OP_LIST_COUNT) {
+        const char *current = local_value(scope->locals, in->args[0]);
+        if (!current) { snprintf(error, error_size, "list %s does not exist", in->args[0]); return 0; }
+        int count = list_count_values(current); char value[32];
+        if (count < 0) { snprintf(error, error_size, "list %s is not valid", in->args[0]); return 0; }
+        snprintf(value, sizeof(value), "%d", count); local_set(scope->locals, in->args[1], value);
+    } else if (in->opcode == OP_LIST_ITEM) {
+        char index[64], value[2048]; evaluate(scope, in->args[0], index, sizeof(index)); int wanted = atoi(index);
+        const char *current = local_value(scope->locals, in->args[1]);
+        if (!current) { snprintf(error, error_size, "list %s does not exist", in->args[1]); return 0; }
+        if (wanted < 1 || !list_item_value(current, wanted, value, sizeof(value))) {
+            snprintf(error, error_size, "list %s has no item %d", in->args[1], wanted); return 0;
+        }
+        local_set(scope->locals, in->args[2], value);
+    } else if (in->opcode == OP_HTTP_GET) {
+        char url[2048], body[2048], status_text[32]; long status = 0; evaluate(scope, in->args[0], url, sizeof(url));
+        if (!hyperian_http_get(url, body, sizeof(body), &status, error, error_size)) return 0;
+        snprintf(status_text, sizeof(status_text), "%ld", status); local_set(scope->locals, in->args[1], body); local_set(scope->locals, in->args[2], status_text);
     }
     return 1;
 }
 
 static int execute_logic_range(const Bytecode *code, size_t from, size_t to, Scope *scope, int depth, char *error, size_t error_size) {
     for (size_t i = from; i < to; i++)
-        if (code->items[i].opcode == OP_SET_VALUE || code->items[i].opcode == OP_LOGIC_IF ||
-            code->items[i].opcode == OP_REPEAT || code->items[i].opcode == OP_RUN_ACTION || code->items[i].opcode == OP_RETURN_VALUE ||
-            code->items[i].opcode == OP_READ_FILE || code->items[i].opcode == OP_WRITE_FILE)
+        if (is_logic_instruction(code->items[i].opcode))
             if (!execute_logic_at(code, &i, scope, depth, error, error_size)) return 0;
     return 1;
 }
@@ -369,6 +460,15 @@ static int render_range(const Bytecode *code, size_t from, size_t to, Buffer *bo
                         buffer_add(body, "<li>"); render_range(code, i + 1, end, body, &child, records); buffer_add(body, "</li>");
                     }
                     free(matches);
+                } else {
+                    const char *encoded = local_value(scope->locals, in->args[1]);
+                    if (encoded) {
+                        const char *cursor = encoded; char value[2048]; int next;
+                        while ((next = list_next(&cursor, value, sizeof(value))) > 0) {
+                            Scope child = *scope; local_set(child.locals, in->args[0], value);
+                            buffer_add(body, "<li>"); render_range(code, i + 1, end, body, &child, records); buffer_add(body, "</li>");
+                        }
+                    }
                 }
                 buffer_add(body, "</ul>"); i = end; break;
             }
@@ -673,8 +773,7 @@ static Response execute_route(const Bytecode *code, size_t route_at, Form *form,
             const char *value = pair_value(form->pairs, form->count, in->args[0]); local_set(&locals, in->args[1], value ? value : "");
             continue;
         }
-        if (in->opcode == OP_SET_VALUE || in->opcode == OP_LOGIC_IF || in->opcode == OP_REPEAT || in->opcode == OP_RUN_ACTION ||
-            in->opcode == OP_RETURN_VALUE || in->opcode == OP_READ_FILE || in->opcode == OP_WRITE_FILE) {
+        if (is_logic_instruction(in->opcode)) {
             if (!execute_logic_at(code, &i, &scope, 0, error, sizeof(error)))
                 return (Response){500, error_page(error), NULL, "text/html; charset=utf-8", response_cookie, 0};
             continue;
@@ -947,6 +1046,15 @@ static int console_render_range(const Bytecode *code, size_t from, size_t to, Sc
                         Scope child = *scope; child.item_alias = in->args[0]; child.item = record;
                         fputs("- ", stdout); console_render_range(code, i + 1, end, &child, records);
                     }
+                } else {
+                    const char *encoded = local_value(scope->locals, in->args[1]);
+                    if (encoded) {
+                        const char *cursor = encoded; char value[2048]; int next;
+                        while ((next = list_next(&cursor, value, sizeof(value))) > 0) {
+                            Scope child = *scope; local_set(child.locals, in->args[0], value);
+                            fputs("- ", stdout); console_render_range(code, i + 1, end, &child, records);
+                        }
+                    }
                 }
                 i = end; break;
             }
@@ -975,8 +1083,7 @@ static int run_console(const Bytecode *code, const char *app_name) {
                 if (!fgets(answer, sizeof(answer), stdin)) answer[0] = 0;
                 answer[strcspn(answer, "\r\n")] = 0;
                 local_set(&locals, in->args[1], answer);
-            } else if (in->opcode == OP_SET_VALUE || in->opcode == OP_LOGIC_IF || in->opcode == OP_REPEAT || in->opcode == OP_RUN_ACTION ||
-                in->opcode == OP_RETURN_VALUE || in->opcode == OP_READ_FILE || in->opcode == OP_WRITE_FILE) {
+            } else if (is_logic_instruction(in->opcode)) {
                 char error[256];
                 if (!execute_logic_at(code, &i, &scope, 0, error, sizeof(error))) { fprintf(stderr, "error: %s\n", error); records_free(records); return 1; }
             } else if (in->opcode == OP_FIND_ALL) {
@@ -1052,9 +1159,7 @@ int test_bytecode(const char *path) {
         tests++; VariableSet locals = {0}; Scope scope = {.locals = &locals};
         size_t end = find_end(&code, i, OP_TEST, OP_END_TEST); int failed = 0;
         for (size_t at = i + 1; at < end; at++) {
-            if (code.items[at].opcode == OP_SET_VALUE || code.items[at].opcode == OP_LOGIC_IF ||
-                code.items[at].opcode == OP_REPEAT || code.items[at].opcode == OP_RUN_ACTION || code.items[at].opcode == OP_RETURN_VALUE ||
-                code.items[at].opcode == OP_READ_FILE || code.items[at].opcode == OP_WRITE_FILE) {
+            if (is_logic_instruction(code.items[at].opcode)) {
                 if (!execute_logic_at(&code, &at, &scope, 0, error, sizeof(error))) {
                     printf("FAIL  %s — %s\n", code.items[i].args[0], error); failed = 1; break;
                 }

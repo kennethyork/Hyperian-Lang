@@ -11,7 +11,7 @@
 #define MAX_DEPTH 64
 
 typedef enum { BLOCK_ROOT, BLOCK_MODEL, BLOCK_CONTROLLER, BLOCK_ROUTE, BLOCK_VIEW, BLOCK_FORM, BLOCK_EACH, BLOCK_IF,
-    BLOCK_LAYOUT, BLOCK_COMPONENT, BLOCK_ACTION, BLOCK_LOGIC_IF, BLOCK_REPEAT, BLOCK_TEST, BLOCK_MIGRATION } Block;
+    BLOCK_LAYOUT, BLOCK_COMPONENT, BLOCK_ACTION, BLOCK_LOGIC_IF, BLOCK_REPEAT, BLOCK_TEST, BLOCK_MIGRATION, BLOCK_TRY } Block;
 
 static void source_error(const char *path, unsigned line, const char *message) {
     fprintf(stderr, "%s:%u: error: %s\n", path, line, message);
@@ -198,6 +198,20 @@ static int validate(Bytecode *code, const char *path) {
             for (size_t at = i + 1; at < code->count && code->items[at].opcode != OP_END_LAYOUT; at++) contents += code->items[at].opcode == OP_CONTENT;
             if (contents != 1) { source_error(path, in->line, "a layout must contain exactly one content instruction"); return 0; }
         }
+        if (in->opcode == OP_TRY) {
+            size_t end = code->count; int open = 1;
+            for (size_t at = i + 1; at < code->count; at++) {
+                if (code->items[at].opcode == OP_TRY) open++;
+                else if (code->items[at].opcode == OP_END_TRY && --open == 0) { end = at; break; }
+            }
+            int nesting = 0, catches = 0;
+            for (size_t at = i + 1; at < end; at++) {
+                if (code->items[at].opcode == OP_TRY) nesting++;
+                else if (code->items[at].opcode == OP_END_TRY) nesting--;
+                else if (code->items[at].opcode == OP_CATCH && nesting == 0) catches++;
+            }
+            if (catches != 1) { source_error(path, in->line, "try must contain exactly one: when it fails as problem"); return 0; }
+        }
         if ((in->opcode == OP_FIND_ONE || in->opcode == OP_FIND_WHERE || in->opcode == OP_UPDATE || in->opcode == OP_DELETE)) {
             size_t route = i;
             while (route && code->items[route].opcode != OP_ROUTE) route--;
@@ -248,7 +262,7 @@ static int validate(Bytecode *code, const char *path) {
     return 1;
 }
 
-static int expand_source(const char *path, FILE *output, int depth) {
+static int expand_source(const char *path, FILE *output, int depth, const char *project_directory) {
     if (depth > 32) { fprintf(stderr, "error: includes are nested too deeply near %s\n", path); return 0; }
     FILE *input = fopen(path, "r");
     if (!input) { fprintf(stderr, "error: cannot open included source %s: %s\n", path, strerror(errno)); return 0; }
@@ -264,7 +278,13 @@ static int expand_source(const char *path, FILE *output, int depth) {
             if (directory + strlen(parts[1]) + 1 > sizeof(included)) { source_error(path, number, "the included path is too long"); okay = 0; break; }
             if (directory) memcpy(included, path, directory);
             strcpy(included + directory, parts[1]);
-            okay = expand_source(included, output, depth + 1);
+            okay = expand_source(included, output, depth + 1, project_directory);
+        } else if (count && !strcmp(parts[0], "use") && count >= 2 && !strcmp(parts[1], "package")) {
+            if (count != 3 || !is_name(parts[2])) { source_error(path, number, "say: use package \"text_tools\""); okay = 0; break; }
+            char package[PATH_MAX]; const char *collection = getenv("HYPERIAN_PACKAGES");
+            if (collection && *collection) snprintf(package, sizeof(package), "%s/%s/package.hyp", collection, parts[2]);
+            else snprintf(package, sizeof(package), "%spackages/%s/package.hyp", project_directory, parts[2]);
+            okay = expand_source(package, output, depth + 1, project_directory);
         } else if (fputs(line, output) == EOF) okay = 0;
     }
     if (ferror(input)) okay = 0;
@@ -274,7 +294,12 @@ static int expand_source(const char *path, FILE *output, int depth) {
 int compile_file(const char *source_path, const char *output_path) {
     FILE *file = tmpfile();
     if (!file) { fprintf(stderr, "error: cannot create compiler workspace: %s\n", strerror(errno)); return 1; }
-    if (!expand_source(source_path, file, 0)) { fclose(file); return 1; }
+    char project_directory[PATH_MAX]; const char *source_slash = strrchr(source_path, '/');
+    size_t project_prefix = source_slash ? (size_t)(source_slash - source_path + 1) : 0;
+    if (project_prefix >= sizeof(project_directory)) { fclose(file); fprintf(stderr, "error: project path is too long\n"); return 1; }
+    if (project_prefix) memcpy(project_directory, source_path, project_prefix);
+    project_directory[project_prefix] = 0;
+    if (!expand_source(source_path, file, 0, project_directory)) { fclose(file); return 1; }
     rewind(file);
     Bytecode code; bytecode_init(&code);
     Block stack[MAX_DEPTH] = {BLOCK_ROOT}; int depth = 1;
@@ -294,7 +319,8 @@ int compile_file(const char *source_path, const char *output_path) {
                 current == BLOCK_FORM ? OP_END_FORM : current == BLOCK_EACH ? OP_END_EACH : current == BLOCK_IF ? OP_END_IF :
                 current == BLOCK_LAYOUT ? OP_END_LAYOUT : current == BLOCK_COMPONENT ? OP_END_COMPONENT :
                 current == BLOCK_ACTION ? OP_END_ACTION : current == BLOCK_LOGIC_IF ? OP_END_LOGIC_IF :
-                current == BLOCK_REPEAT ? OP_END_REPEAT : current == BLOCK_MIGRATION ? OP_END_MIGRATION : OP_END_TEST;
+                current == BLOCK_REPEAT ? OP_END_REPEAT : current == BLOCK_MIGRATION ? OP_END_MIGRATION :
+                current == BLOCK_TRY ? OP_END_TRY : OP_END_TEST;
             okay = emit(&code, op, 0, NULL, number); depth--; continue;
         }
         if (current == BLOCK_ROOT) {
@@ -413,7 +439,7 @@ int compile_file(const char *source_path, const char *output_path) {
             }
             if (!method || w[3][0] != '/') { source_error(source_path, number, "say: when someone visits \"/path\""); okay = 0; }
             else { char *args[2] = {(char *)method, w[3]}; okay = emit(&code, OP_ROUTE, 2, args, number); stack[depth++] = BLOCK_ROUTE; }
-        } else if (current == BLOCK_ROUTE || current == BLOCK_ACTION || current == BLOCK_LOGIC_IF || current == BLOCK_REPEAT || current == BLOCK_TEST) {
+        } else if (current == BLOCK_ROUTE || current == BLOCK_ACTION || current == BLOCK_LOGIC_IF || current == BLOCK_REPEAT || current == BLOCK_TEST || current == BLOCK_TRY) {
             if (n == 5 && !strcmp(w[0], "find") && !strcmp(w[1], "all") && !strcmp(w[3], "as")) {
                 char *args[2] = {w[2], w[4]}; okay = emit(&code, OP_FIND_ALL, 2, args, number);
             } else if (n == 8 && !strcmp(w[0], "find") && !strcmp(w[1], "all") && !strcmp(w[3], "ordered") &&
@@ -458,6 +484,11 @@ int compile_file(const char *source_path, const char *output_path) {
             } else if (n >= 3 && !strcmp(w[0], "repeat") && !strcmp(w[n - 1], "times")) {
                 char expression[MAX_LINE]; join_words(expression, sizeof(expression), w, 1, n - 1);
                 char *arg = expression; okay = emit(&code, OP_REPEAT, 1, &arg, number); stack[depth++] = BLOCK_REPEAT;
+            } else if (n == 1 && !strcmp(w[0], "try")) {
+                okay = emit(&code, OP_TRY, 0, NULL, number); stack[depth++] = BLOCK_TRY;
+            } else if (n == 5 && !strcmp(w[0], "when") && !strcmp(w[1], "it") && !strcmp(w[2], "fails") &&
+                !strcmp(w[3], "as") && is_name(w[4]) && current == BLOCK_TRY) {
+                okay = emit(&code, OP_CATCH, 1, &w[4], number);
             } else if (n == 3 && !strcmp(w[0], "run") && !strcmp(w[1], "action")) {
                 okay = emit(&code, OP_RUN_ACTION, 1, &w[2], number);
             } else if (n == 7 && !strcmp(w[0], "run") && !strcmp(w[1], "action") && !strcmp(w[3], "using") &&
@@ -470,6 +501,21 @@ int compile_file(const char *source_path, const char *output_path) {
                 char *args[2] = {w[2], w[4]}; okay = emit(&code, OP_READ_FILE, 2, args, number);
             } else if (n == 5 && !strcmp(w[0], "write") && !strcmp(w[2], "to") && !strcmp(w[3], "file")) {
                 char *args[2] = {w[1], w[4]}; okay = emit(&code, OP_WRITE_FILE, 2, args, number);
+            } else if (n == 3 && !strcmp(w[0], "make") && !strcmp(w[1], "list") && is_name(w[2])) {
+                okay = emit(&code, OP_MAKE_LIST, 1, &w[2], number);
+            } else if (n == 4 && !strcmp(w[0], "add") && !strcmp(w[2], "to") && is_name(w[3])) {
+                char *args[2] = {w[1], w[3]}; okay = emit(&code, OP_LIST_ADD, 2, args, number);
+            } else if (n == 4 && !strcmp(w[0], "remove") && !strcmp(w[2], "from") && is_name(w[3])) {
+                char *args[2] = {w[1], w[3]}; okay = emit(&code, OP_LIST_REMOVE, 2, args, number);
+            } else if (n == 4 && !strcmp(w[0], "count") && !strcmp(w[2], "as") && is_name(w[1]) && is_name(w[3])) {
+                char *args[2] = {w[1], w[3]}; okay = emit(&code, OP_LIST_COUNT, 2, args, number);
+            } else if (n == 7 && !strcmp(w[0], "take") && !strcmp(w[1], "item") && !strcmp(w[3], "from") &&
+                !strcmp(w[5], "as") && is_name(w[4]) && is_name(w[6])) {
+                char *args[3] = {w[2], w[4], w[6]}; okay = emit(&code, OP_LIST_ITEM, 3, args, number);
+            } else if (n == 10 && !strcmp(w[0], "get") && !strcmp(w[2], "from") && !strcmp(w[3], "web") &&
+                !strcmp(w[4], "as") && !strcmp(w[6], "and") && !strcmp(w[7], "status") && !strcmp(w[8], "as") &&
+                is_name(w[5]) && is_name(w[9])) {
+                char *args[3] = {w[1], w[5], w[9]}; okay = emit(&code, OP_HTTP_GET, 3, args, number);
             } else if (n >= 5 && !strcmp(w[0], "expect") && !strcmp(w[2], "to") && !strcmp(w[3], "be") && current == BLOCK_TEST) {
                 char expected[MAX_LINE], condition[MAX_LINE]; join_words(expected, sizeof(expected), w, 4, n);
                 if (strlen(w[1]) + strlen(expected) + 5 >= sizeof(condition)) {
