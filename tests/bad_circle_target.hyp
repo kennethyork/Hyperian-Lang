@@ -1,0 +1,16 @@
+application "Wrong Circle Target" is console
+
+model Setting
+    field name is text
+end
+
+controller Main
+    when application starts
+        check whether circle centered at 10 10 with radius 5 touches circle centered at 20 20 with radius 5 as touching
+        show view "main"
+    end
+end
+
+view "main"
+    show touching
+end

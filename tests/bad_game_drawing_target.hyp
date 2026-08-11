@@ -1,0 +1,16 @@
+application "Wrong Drawing Target" is console
+
+model Setting
+    field name is text
+end
+
+controller Main
+    when application starts
+        show view "main"
+    end
+end
+
+view "main"
+    fill background with color 18 24 38
+    draw circle centered at 20 20 with radius 10 and color 255 220 70
+end

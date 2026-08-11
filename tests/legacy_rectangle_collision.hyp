@@ -1,0 +1,19 @@
+application "Compatible Rectangle Collision" is game
+
+model Setting
+    field name is text
+end
+
+controller World
+    when application starts
+        show view "world"
+    end
+
+    when game updates
+        check collision between 10 10 sized 20 by 20 and 15 15 sized 5 by 5 as touched
+    end
+end
+
+view "world"
+    show touched
+end

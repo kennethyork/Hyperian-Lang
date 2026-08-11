@@ -16,6 +16,16 @@ controller World
         set glow to 0
         set shrink to 2
         set animation_frame to 1
+        set ball_x to 10
+        set ball_y to 10
+        set ball_radius to 5
+        set coin_x to 18
+        set coin_y to 10
+        set coin_radius to 3
+        set wall_x to 12
+        set wall_y to 14
+        set far_x to 30
+        set far_y to 30
     end
 
     when application starts
@@ -30,7 +40,10 @@ controller World
         apply gravity 200 to player_velocity_y
         move position player_x player_y using velocity player_velocity_x player_velocity_y
         keep position player_x player_y inside 40 by 40 sized 10 by 10
-        check collision between player_x player_y sized 10 by 10 and obstacle_x obstacle_y sized 30 by 30 as player_hit
+        check whether rectangle at player_x player_y sized 10 by 10 touches rectangle at obstacle_x obstacle_y sized 30 by 30 as player_hit
+        check whether circle centered at ball_x ball_y with radius ball_radius touches circle centered at coin_x coin_y with radius coin_radius as coin_hit
+        check whether circle centered at ball_x ball_y with radius ball_radius touches rectangle at wall_x wall_y sized 4 by 6 as wall_hit
+        check whether rectangle at far_x far_y sized 4 by 4 touches circle centered at ball_x ball_y with radius ball_radius as far_hit
     end
 end
 
@@ -38,4 +51,5 @@ view "world"
     fill background with color 18 24 38
     draw rectangle at player_x player_y sized 10 by 10 with color 70 170 255
     draw rectangle at obstacle_x obstacle_y sized 30 by 30 with color 255 110 90
+    draw circle centered at ball_x ball_y with radius ball_radius and color 255 220 70
 end

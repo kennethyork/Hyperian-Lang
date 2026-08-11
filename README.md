@@ -709,12 +709,20 @@ Game views are rendered in a native SDL2 window and event loop:
 ```hyperian
 application "Blocks" is game
 
+model Score
+    field points is number default 0
+end
+
 controller Game
     action initialize
         set player_x to 100
         set player_y to 100
         set player_velocity_x to 200
         set player_velocity_y to 0
+        set ball_x to 500
+        set ball_y to 320
+        set coin_x to 540
+        set coin_y to 320
         set glow to 0
         set animation_frame to 1
     end
@@ -730,18 +738,21 @@ controller Game
         apply gravity 300 to player_velocity_y
         move position player_x player_y using velocity player_velocity_x player_velocity_y
         keep position player_x player_y inside 960 by 540 sized 64 by 64
-        check collision between player_x player_y sized 64 by 64 and 400 260 sized 120 by 120 as player_hit
+        check whether rectangle at player_x player_y sized 64 by 64 touches rectangle at 400 260 sized 120 by 120 as player_hit
+        check whether circle centered at ball_x ball_y with radius 24 touches circle centered at coin_x coin_y with radius 12 as coin_hit
+        check whether rectangle at 400 260 sized 120 by 120 touches circle centered at ball_x ball_y with radius 24 as wall_hit
     end
 end
 
 view "playfield"
     fill background with color 18 24 38
-    draw rectangle at player_x player_y sized 180 by 80 with color 70 170 255
+    draw rectangle at player_x player_y sized 64 by 64 with color 70 170 255
+    draw circle centered at ball_x ball_y with radius 24 and color 255 220 70
     draw image "assets/player.bmp" at player_x player_y sized 64 by 64
 end
 ```
 
-The SDL2 backend dispatches arrow, space, and enter keys through `when player presses ...`, runs `when game updates` every frame, and exposes elapsed time as `seconds_since_last_frame`. English physics instructions apply frame-rate-independent velocity and gravity, clamp an object inside its play area, and test axis-aligned rectangle collisions.
+The SDL2 backend dispatches arrow, space, and enter keys through `when player presses ...`, runs `when game updates` every frame, and exposes elapsed time as `seconds_since_last_frame`. English physics instructions apply frame-rate-independent velocity and gravity, clamp an object inside its play area, and test rectangle-to-rectangle, circle-to-circle, and circle-to-rectangle collisions. Either shape may be written first in a mixed collision phrase. Rectangle positions name their upper-left corner; circle positions name their center. Touching circle edges count as contact, and negative sizes or radii stop with a readable error.
 
 Animation needs no manual frame-time arithmetic. `move value` approaches its target without overshooting, whether the target is above or below the current value. `advance animation` changes a whole-number frame at the requested millisecond, second, or minute interval, keeps leftover time, catches up after a slow frame, and wraps from the final frame back to the first. The native VM performs both operations deterministically from elapsed frame time. The compiler restricts them to game applications, and invalid speeds, time, frames, or intervals stop with friendly errors.
 
@@ -889,6 +900,6 @@ Quoted text may contain spaces. `#` starts a comment. Indentation is optional bu
 
 ## Project status
 
-Version 0.36 is a small but real MVC platform: custom bytecode, a native VM, standalone executable and asset-bundle creation, versioned Android/iOS mobile deployment packages, automated signed APK/AAB/IPA orchestration, a linkable native mobile runtime bridge, self-contained native Android Studio and SwiftUI Xcode project generation, native phone HTTPS and SQLite integration, native backend diagnostics, eight compiler targets including installable offline web applications, parallel-safe compiler tooling, an English source-line debugger, persistent model CRUD plus filtered and ordered collection queries inside native controller actions, repeated native collection views, recurring service and native-interface timers, interactive multi-view GTK desktop and phone-sized mobile preview interfaces with close, live-input-change, keyboard-submission, focus, pause, resume, tap, press-and-hold, and four-direction swipe events, matching generated Android/iOS lifecycle and gesture events, SDL2 keyboard/frame events, frame-rate-independent movement, gravity, smooth value transitions, timed animation frames, boundaries, rectangle collision detection, BMP sprites, WAV sound, and state-driven rendering, native lists and maps, selectable HDB or transactional SQLite storage, recoverable runtime errors, an HTTP/HTTPS client, local packages, reusable actions, native file access, foldered project generation, versioned migrations, persistent CRUD models, safe HTML and typed JSON, authentication and authorization, middleware, formatting, and English tests.
+Version 0.37 is a small but real MVC platform: custom bytecode, a native VM, standalone executable and asset-bundle creation, versioned Android/iOS mobile deployment packages, automated signed APK/AAB/IPA orchestration, a linkable native mobile runtime bridge, self-contained native Android Studio and SwiftUI Xcode project generation, native phone HTTPS and SQLite integration, native backend diagnostics, eight compiler targets including installable offline web applications, parallel-safe compiler tooling, an English source-line debugger, persistent model CRUD plus filtered and ordered collection queries inside native controller actions, repeated native collection views, recurring service and native-interface timers, interactive multi-view GTK desktop and phone-sized mobile preview interfaces with close, live-input-change, keyboard-submission, focus, pause, resume, tap, press-and-hold, and four-direction swipe events, matching generated Android/iOS lifecycle and gesture events, SDL2 keyboard/frame events, frame-rate-independent movement, gravity, smooth value transitions, timed animation frames, boundaries, rectangle and circle drawing and collision detection, BMP sprites, WAV sound, and state-driven rendering, native lists and maps, selectable HDB or transactional SQLite storage, recoverable runtime errors, an HTTP/HTTPS client, local packages, reusable actions, native file access, foldered project generation, versioned migrations, persistent CRUD models, safe HTML and typed JSON, authentication and authorization, middleware, formatting, and English tests.
 
-The next major layers are more collision shapes, more media formats, and broader cross-compilation. Those are not claimed as complete yet.
+The next major layers are polygon and line collision shapes, more media formats, and broader cross-compilation. Those are not claimed as complete yet.

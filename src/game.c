@@ -69,6 +69,20 @@ static int evaluated_channel(HyperianState *state, const char *expression) {
     char value[128]; hyperian_state_evaluate(state, expression, value, sizeof(value)); return channel(value);
 }
 
+static void draw_filled_circle(SDL_Renderer *renderer, int center_x, int center_y, int radius) {
+    if (radius < 0) return;
+    int x = radius, y = 0, decision = 1 - radius;
+    while (y <= x) {
+        SDL_RenderDrawLine(renderer, center_x - x, center_y + y, center_x + x, center_y + y);
+        SDL_RenderDrawLine(renderer, center_x - x, center_y - y, center_x + x, center_y - y);
+        SDL_RenderDrawLine(renderer, center_x - y, center_y + x, center_x + y, center_y + x);
+        SDL_RenderDrawLine(renderer, center_x - y, center_y - x, center_x + y, center_y - x);
+        y++;
+        if (decision <= 0) decision += 2 * y + 1;
+        else { x--; decision += 2 * (y - x) + 1; }
+    }
+}
+
 int run_game_app(const Bytecode *code, const char *name) {
     size_t view_from, view_to;
     if (!game_view_range(code, &view_from, &view_to)) { fprintf(stderr, "error: game application needs a starting view\n"); return 1; }
@@ -111,6 +125,11 @@ int run_game_app(const Bytecode *code, const char *name) {
                 evaluated_number(&state, code->items[i].args[2]), evaluated_number(&state, code->items[i].args[3])};
             SDL_SetRenderDrawColor(renderer, (Uint8)evaluated_channel(&state, code->items[i].args[4]), (Uint8)evaluated_channel(&state, code->items[i].args[5]),
                 (Uint8)evaluated_channel(&state, code->items[i].args[6]), 255); SDL_RenderFillRect(renderer, &rectangle);
+        } else if (code->items[i].opcode == OP_CIRCLE) {
+            SDL_SetRenderDrawColor(renderer, (Uint8)evaluated_channel(&state, code->items[i].args[3]), (Uint8)evaluated_channel(&state, code->items[i].args[4]),
+                (Uint8)evaluated_channel(&state, code->items[i].args[5]), 255);
+            draw_filled_circle(renderer, evaluated_number(&state, code->items[i].args[0]), evaluated_number(&state, code->items[i].args[1]),
+                evaluated_number(&state, code->items[i].args[2]));
         } else if (code->items[i].opcode == OP_SPRITE) {
             char path[2048]; hyperian_state_evaluate(&state, code->items[i].args[0], path, sizeof(path)); SDL_Texture *texture = NULL;
             for (int at = 0; at < sprite_count; at++) if (!strcmp(sprites[at].path, path)) texture = sprites[at].texture;

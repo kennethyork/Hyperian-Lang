@@ -291,8 +291,11 @@ static int validate(Bytecode *code, const char *path) {
     if (strcmp(target, "game")) for (size_t i = 0; i < code->count; i++)
         if (code->items[i].opcode == OP_MOVE_POSITION || code->items[i].opcode == OP_APPLY_GRAVITY ||
             code->items[i].opcode == OP_KEEP_INSIDE || code->items[i].opcode == OP_CHECK_COLLISION ||
-            code->items[i].opcode == OP_MOVE_VALUE_TOWARD || code->items[i].opcode == OP_ADVANCE_ANIMATION) {
-            source_error(path, code->items[i].line, "game physics and animation instructions require an application declared as game"); return 0;
+            code->items[i].opcode == OP_MOVE_VALUE_TOWARD || code->items[i].opcode == OP_ADVANCE_ANIMATION ||
+            code->items[i].opcode == OP_CIRCLE || code->items[i].opcode == OP_CHECK_CIRCLE_COLLISION ||
+            code->items[i].opcode == OP_CHECK_CIRCLE_RECTANGLE_COLLISION || code->items[i].opcode == OP_BACKGROUND ||
+            code->items[i].opcode == OP_RECTANGLE || code->items[i].opcode == OP_SPRITE) {
+            source_error(path, code->items[i].line, "game drawing, physics, and animation instructions require an application declared as game"); return 0;
         }
     if (strcmp(target, "desktop") && strcmp(target, "mobile")) for (size_t i = 0; i < code->count; i++)
         if (code->items[i].opcode == OP_EVENT && (!strncmp(code->items[i].args[0], "CHANGE:", 7) ||
@@ -590,6 +593,30 @@ int compile_file(const char *source_path, const char *output_path) {
                 !strcmp(w[14], "by") && !strcmp(w[16], "as") && is_name(w[17])) {
                 char *args[9] = {w[3], w[4], w[6], w[8], w[10], w[11], w[13], w[15], w[17]};
                 okay = emit(&code, OP_CHECK_COLLISION, 9, args, number);
+            } else if (n == 21 && !strcmp(w[0], "check") && !strcmp(w[1], "whether") && !strcmp(w[2], "rectangle") &&
+                !strcmp(w[3], "at") && !strcmp(w[6], "sized") && !strcmp(w[8], "by") && !strcmp(w[10], "touches") &&
+                !strcmp(w[11], "rectangle") && !strcmp(w[12], "at") && !strcmp(w[15], "sized") && !strcmp(w[17], "by") &&
+                !strcmp(w[19], "as") && is_name(w[20])) {
+                char *args[9] = {w[4], w[5], w[7], w[9], w[13], w[14], w[16], w[18], w[20]};
+                okay = emit(&code, OP_CHECK_COLLISION, 9, args, number);
+            } else if (n == 21 && !strcmp(w[0], "check") && !strcmp(w[1], "whether") && !strcmp(w[2], "circle") &&
+                !strcmp(w[3], "centered") && !strcmp(w[4], "at") && !strcmp(w[7], "with") && !strcmp(w[8], "radius") &&
+                !strcmp(w[10], "touches") && !strcmp(w[11], "circle") && !strcmp(w[12], "centered") && !strcmp(w[13], "at") &&
+                !strcmp(w[16], "with") && !strcmp(w[17], "radius") && !strcmp(w[19], "as") && is_name(w[20])) {
+                char *args[7] = {w[5], w[6], w[9], w[14], w[15], w[18], w[20]};
+                okay = emit(&code, OP_CHECK_CIRCLE_COLLISION, 7, args, number);
+            } else if (n == 21 && !strcmp(w[0], "check") && !strcmp(w[1], "whether") && !strcmp(w[2], "circle") &&
+                !strcmp(w[3], "centered") && !strcmp(w[4], "at") && !strcmp(w[7], "with") && !strcmp(w[8], "radius") &&
+                !strcmp(w[10], "touches") && !strcmp(w[11], "rectangle") && !strcmp(w[12], "at") &&
+                !strcmp(w[15], "sized") && !strcmp(w[17], "by") && !strcmp(w[19], "as") && is_name(w[20])) {
+                char *args[8] = {w[5], w[6], w[9], w[13], w[14], w[16], w[18], w[20]};
+                okay = emit(&code, OP_CHECK_CIRCLE_RECTANGLE_COLLISION, 8, args, number);
+            } else if (n == 21 && !strcmp(w[0], "check") && !strcmp(w[1], "whether") && !strcmp(w[2], "rectangle") &&
+                !strcmp(w[3], "at") && !strcmp(w[6], "sized") && !strcmp(w[8], "by") && !strcmp(w[10], "touches") &&
+                !strcmp(w[11], "circle") && !strcmp(w[12], "centered") && !strcmp(w[13], "at") &&
+                !strcmp(w[16], "with") && !strcmp(w[17], "radius") && !strcmp(w[19], "as") && is_name(w[20])) {
+                char *args[8] = {w[14], w[15], w[18], w[4], w[5], w[7], w[9], w[20]};
+                okay = emit(&code, OP_CHECK_CIRCLE_RECTANGLE_COLLISION, 8, args, number);
             } else if (n == 9 && !strcmp(w[0], "create") && !strcmp(w[1], "a") && !strcmp(w[3], "using") &&
                 !strcmp(w[4], "the") && !strcmp(w[5], "current") && !strcmp(w[6], "values") && !strcmp(w[7], "as") && is_name(w[8])) {
                 char *args[2] = {w[2], w[8]}; okay = emit(&code, OP_CREATE_STATE, 2, args, number);
@@ -747,6 +774,11 @@ int compile_file(const char *source_path, const char *output_path) {
             else if (n == 14 && !strcmp(w[0], "draw") && !strcmp(w[1], "rectangle") && !strcmp(w[2], "at") &&
                 !strcmp(w[5], "sized") && !strcmp(w[7], "by") && !strcmp(w[9], "with") && !strcmp(w[10], "color")) {
                 char *args[7] = {w[3], w[4], w[6], w[8], w[11], w[12], w[13]}; okay = emit(&code, OP_RECTANGLE, 7, args, number);
+            }
+            else if (n == 14 && !strcmp(w[0], "draw") && !strcmp(w[1], "circle") && !strcmp(w[2], "centered") &&
+                !strcmp(w[3], "at") && !strcmp(w[6], "with") && !strcmp(w[7], "radius") && !strcmp(w[9], "and") &&
+                !strcmp(w[10], "color")) {
+                char *args[6] = {w[4], w[5], w[8], w[11], w[12], w[13]}; okay = emit(&code, OP_CIRCLE, 6, args, number);
             }
             else if (n == 10 && !strcmp(w[0], "draw") && !strcmp(w[1], "image") && !strcmp(w[3], "at") &&
                 !strcmp(w[6], "sized") && !strcmp(w[8], "by")) {

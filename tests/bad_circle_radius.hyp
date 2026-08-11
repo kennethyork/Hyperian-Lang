@@ -1,0 +1,19 @@
+application "Bad Circle Radius" is game
+
+model Setting
+    field name is text
+end
+
+controller World
+    when application starts
+        show view "world"
+    end
+
+    when game updates
+        check whether circle centered at 10 10 with radius -1 touches circle centered at 20 20 with radius 5 as touching
+    end
+end
+
+view "world"
+    show touching
+end

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(Hyperian VERSION 0.36.0 LANGUAGES C)
+project(Hyperian VERSION 0.37.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -408,6 +408,14 @@ add_test(NAME reject_hold_outside_mobile
 set_tests_properties(reject_hold_outside_mobile PROPERTIES WILL_FAIL TRUE)
 add_test(NAME compile_native_game
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/blocks_game.hyp -o ${CMAKE_BINARY_DIR}/blocks_game.hyc)
+add_test(NAME clean_generated_circle_game
+    COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}/GeneratedCircleGame)
+add_test(NAME create_generated_circle_game
+    COMMAND $<TARGET_FILE:hyperian> new GeneratedCircleGame --target game)
+set_tests_properties(create_generated_circle_game PROPERTIES DEPENDS clean_generated_circle_game WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+add_test(NAME verify_generated_circle_game
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/generated_game_test.sh ${CMAKE_BINARY_DIR}/GeneratedCircleGame $<TARGET_FILE:hyperian>)
+set_tests_properties(verify_generated_circle_game PROPERTIES DEPENDS create_generated_circle_game)
 add_test(NAME compile_game_physics
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/physics_game.hyp -o ${CMAKE_BINARY_DIR}/physics_game.hyc)
 add_executable(hyperian_game_physics_test tests/game_physics_test.c)
@@ -417,9 +425,27 @@ target_link_libraries(hyperian_game_physics_test PRIVATE hyperian_mobile_runtime
 add_test(NAME run_game_physics
     COMMAND hyperian_game_physics_test ${CMAKE_BINARY_DIR}/physics_game.hyc)
 set_tests_properties(run_game_physics PROPERTIES DEPENDS compile_game_physics)
+add_test(NAME inspect_circle_collision
+    COMMAND hyperian inspect ${CMAKE_BINARY_DIR}/physics_game.hyc)
+set_tests_properties(inspect_circle_collision PROPERTIES DEPENDS compile_game_physics PASS_REGULAR_EXPRESSION "CHECK_CIRCLE_COLLISION ball_x ball_y ball_radius coin_x coin_y coin_radius coin_hit")
+add_test(NAME debug_circle_collision
+    COMMAND hyperian debug ${CMAKE_SOURCE_DIR}/examples/physics_game.hyp --event FRAME)
+set_tests_properties(debug_circle_collision PROPERTIES PASS_REGULAR_EXPRESSION "check whether circle centered at ball_x ball_y with radius ball_radius touches circle centered at coin_x coin_y with radius coin_radius as coin_hit")
+add_test(NAME preserve_legacy_rectangle_collision
+    COMMAND hyperian debug ${CMAKE_SOURCE_DIR}/tests/legacy_rectangle_collision.hyp --event FRAME)
+set_tests_properties(preserve_legacy_rectangle_collision PROPERTIES PASS_REGULAR_EXPRESSION "touched = true")
 add_test(NAME reject_physics_outside_game
     COMMAND hyperian check ${CMAKE_SOURCE_DIR}/tests/bad_physics_target.hyp)
 set_tests_properties(reject_physics_outside_game PROPERTIES WILL_FAIL TRUE)
+add_test(NAME reject_circle_outside_game
+    COMMAND hyperian check ${CMAKE_SOURCE_DIR}/tests/bad_circle_target.hyp)
+set_tests_properties(reject_circle_outside_game PROPERTIES WILL_FAIL TRUE)
+add_test(NAME reject_game_drawing_outside_game
+    COMMAND hyperian check ${CMAKE_SOURCE_DIR}/tests/bad_game_drawing_target.hyp)
+set_tests_properties(reject_game_drawing_outside_game PROPERTIES WILL_FAIL TRUE)
+add_test(NAME reject_negative_circle_radius
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/reject_with_message_test.sh "circle radius cannot be negative"
+        $<TARGET_FILE:hyperian> debug ${CMAKE_SOURCE_DIR}/tests/bad_circle_radius.hyp --event FRAME)
 add_test(NAME reject_animation_outside_game
     COMMAND hyperian check ${CMAKE_SOURCE_DIR}/tests/bad_animation_target.hyp)
 set_tests_properties(reject_animation_outside_game PROPERTIES WILL_FAIL TRUE)

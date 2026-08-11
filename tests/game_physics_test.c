@@ -19,6 +19,7 @@ int main(int argc, char **argv) {
     if (okay) okay = hyperian_execute_event(&code, "FRAME", &state, error, sizeof(error));
     if (okay) okay = expected(&state, "player_velocity_y", "50") && expected(&state, "player_x", "30") &&
         expected(&state, "player_y", "22.5") && expected(&state, "player_hit", "true") &&
+        expected(&state, "coin_hit", "true") && expected(&state, "wall_hit", "true") && expected(&state, "far_hit", "false") &&
         expected(&state, "glow", "0.5") && expected(&state, "shrink", "1.5") && expected(&state, "animation_frame", "3");
     hyperian_state_set(&state, "seconds_since_last_frame", "0.2");
     if (okay) okay = hyperian_execute_event(&code, "FRAME", &state, error, sizeof(error));

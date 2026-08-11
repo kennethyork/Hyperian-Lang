@@ -355,7 +355,8 @@ static int is_logic_instruction(uint8_t opcode) {
         opcode == OP_MAP_GET || opcode == OP_MAP_REMOVE || opcode == OP_MAP_COUNT || opcode == OP_PLAY_SOUND || opcode == OP_OPEN_VIEW ||
         opcode == OP_CREATE_STATE || opcode == OP_FIND_STATE || opcode == OP_UPDATE_STATE || opcode == OP_DELETE_STATE || opcode == OP_COUNT_RECORDS || opcode == OP_COLLECT_FIELD ||
         opcode == OP_MOVE_POSITION || opcode == OP_APPLY_GRAVITY || opcode == OP_KEEP_INSIDE || opcode == OP_CHECK_COLLISION || opcode == OP_COLLECT_QUERY ||
-        opcode == OP_MOVE_VALUE_TOWARD || opcode == OP_ADVANCE_ANIMATION;
+        opcode == OP_MOVE_VALUE_TOWARD || opcode == OP_ADVANCE_ANIMATION ||
+        opcode == OP_CHECK_CIRCLE_COLLISION || opcode == OP_CHECK_CIRCLE_RECTANGLE_COLLISION;
 }
 
 static HyperianSoundHandler sound_handler = NULL;
@@ -405,6 +406,9 @@ static void debug_instruction(const Instruction *in, int depth) {
             printf(" as %s", in->args[6]); break;
         case OP_MOVE_VALUE_TOWARD: printf("move value %s toward %s at %s per second", in->args[0], in->args[1], in->args[2]); break;
         case OP_ADVANCE_ANIMATION: printf("advance animation %s from %s through %s every %s milliseconds", in->args[0], in->args[1], in->args[2], in->args[3]); break;
+        case OP_CIRCLE: printf("draw circle centered at %s %s with radius %s and color %s %s %s", in->args[0], in->args[1], in->args[2], in->args[3], in->args[4], in->args[5]); break;
+        case OP_CHECK_CIRCLE_COLLISION: printf("check whether circle centered at %s %s with radius %s touches circle centered at %s %s with radius %s as %s", in->args[0], in->args[1], in->args[2], in->args[3], in->args[4], in->args[5], in->args[6]); break;
+        case OP_CHECK_CIRCLE_RECTANGLE_COLLISION: printf("check whether circle centered at %s %s with radius %s touches rectangle at %s %s sized %s by %s as %s", in->args[0], in->args[1], in->args[2], in->args[3], in->args[4], in->args[5], in->args[6], in->args[7]); break;
         default: printf("execute %s", opcode_name(in->opcode)); break;
     }
     putchar('\n');
@@ -539,6 +543,25 @@ static int execute_logic_at(const Bytecode *code, size_t *position, Scope *scope
             !physics_number(scope, in->args[6], &width2, error, error_size) || !physics_number(scope, in->args[7], &height2, error, error_size)) return 0;
         if (width1 < 0 || height1 < 0 || width2 < 0 || height2 < 0) { snprintf(error, error_size, "collision sizes cannot be negative"); return 0; }
         local_set(scope->locals, in->args[8], x1 < x2 + width2 && x1 + width1 > x2 && y1 < y2 + height2 && y1 + height1 > y2 ? "true" : "false");
+    } else if (in->opcode == OP_CHECK_CIRCLE_COLLISION) {
+        double x1, y1, radius1, x2, y2, radius2;
+        if (!physics_number(scope, in->args[0], &x1, error, error_size) || !physics_number(scope, in->args[1], &y1, error, error_size) ||
+            !physics_number(scope, in->args[2], &radius1, error, error_size) || !physics_number(scope, in->args[3], &x2, error, error_size) ||
+            !physics_number(scope, in->args[4], &y2, error, error_size) || !physics_number(scope, in->args[5], &radius2, error, error_size)) return 0;
+        if (radius1 < 0 || radius2 < 0) { snprintf(error, error_size, "circle radius cannot be negative"); return 0; }
+        double difference_x = x1 - x2, difference_y = y1 - y2, combined_radius = radius1 + radius2;
+        local_set(scope->locals, in->args[6], difference_x * difference_x + difference_y * difference_y <= combined_radius * combined_radius ? "true" : "false");
+    } else if (in->opcode == OP_CHECK_CIRCLE_RECTANGLE_COLLISION) {
+        double circle_x, circle_y, radius, rectangle_x, rectangle_y, rectangle_width, rectangle_height;
+        if (!physics_number(scope, in->args[0], &circle_x, error, error_size) || !physics_number(scope, in->args[1], &circle_y, error, error_size) ||
+            !physics_number(scope, in->args[2], &radius, error, error_size) || !physics_number(scope, in->args[3], &rectangle_x, error, error_size) ||
+            !physics_number(scope, in->args[4], &rectangle_y, error, error_size) || !physics_number(scope, in->args[5], &rectangle_width, error, error_size) ||
+            !physics_number(scope, in->args[6], &rectangle_height, error, error_size)) return 0;
+        if (radius < 0 || rectangle_width < 0 || rectangle_height < 0) { snprintf(error, error_size, "circle radius and rectangle size cannot be negative"); return 0; }
+        double nearest_x = circle_x < rectangle_x ? rectangle_x : circle_x > rectangle_x + rectangle_width ? rectangle_x + rectangle_width : circle_x;
+        double nearest_y = circle_y < rectangle_y ? rectangle_y : circle_y > rectangle_y + rectangle_height ? rectangle_y + rectangle_height : circle_y;
+        double difference_x = circle_x - nearest_x, difference_y = circle_y - nearest_y;
+        local_set(scope->locals, in->args[7], difference_x * difference_x + difference_y * difference_y <= radius * radius ? "true" : "false");
     } else if (in->opcode == OP_LOGIC_IF) {
         size_t end = find_end(code, *position, OP_LOGIC_IF, OP_END_LOGIC_IF), otherwise = logic_otherwise(code, *position, end);
         if (end == code->count) { snprintf(error, error_size, "an if instruction is missing its end"); return 0; }
