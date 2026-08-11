@@ -90,6 +90,7 @@ Trace an application in plain English and see every state change:
 build/hyperian debug examples/blocks_game.hyp
 build/hyperian debug examples/blocks_game.hyp --event "player presses right"
 build/hyperian debug examples/mobile_tasks.hyp --event "input title changes"
+build/hyperian debug examples/mobile_tasks.hyp --event "application resumes"
 build/hyperian debug examples/english_logic.hyp --action greet --input Kenneth
 ```
 
@@ -154,13 +155,13 @@ Each `HYMB1` package contains the compiled `application.hyc`, copied `assets/` a
 
 The generated Android project uses Android Gradle Plugin 9.3, API level 37, CMake, JNI, and the Android NDK. It contains the Hyperian C runtime sources and compiled application bytecode, so it does not depend on Python, JavaScript, a web server, or the desktop compiler at runtime.
 
-Its Java Activity turns the bridge’s current view into native Android headings, text, inputs, text areas, checkboxes, buttons, links, and images. It synchronizes native input values into Hyperian state before button actions, change events, and keyboard submission events; the native VM then executes the English controller behavior, persistent HDB model work, expressions, and view navigation. Repeating Hyperian timers are dispatched on Android’s main event loop.
+Its Java Activity turns the bridge’s current view into native Android headings, text, inputs, text areas, checkboxes, buttons, links, and images. It synchronizes native input values into Hyperian state before button actions, change events, keyboard submission events, and lifecycle events; the native VM then executes the English controller behavior, persistent HDB model work, expressions, and view navigation. Repeating Hyperian timers and pause, resume, focus, and unfocus events are dispatched on Android’s main event loop.
 
 Open the exported `android/` folder in Android Studio and run its `app` configuration. A local Android SDK, NDK, and JDK 17 or newer are required. Store distribution still requires choosing a unique application ID and signing the release with your own key. HTTPS/SQLite integration in the Android runtime and automated APK/AAB signing remain future layers.
 
 ### Native iOS project
 
-The generated iOS project embeds the same C runtime and `.hyc` bytecode. An Objective-C class owns the native Hyperian session and exposes it to Swift through a bridging header. SwiftUI supplies the app entry point and native headings, text, values, fields, text editors, toggles, buttons, links, images, navigation, repeating timers, live input changes, and keyboard submission.
+The generated iOS project embeds the same C runtime and `.hyc` bytecode. An Objective-C class owns the native Hyperian session and exposes it to Swift through a bridging header. SwiftUI supplies the app entry point and native headings, text, values, fields, text editors, toggles, buttons, links, images, navigation, repeating timers, live input changes, keyboard submission, and scene lifecycle events.
 
 Open `ios/HyperianIOS.xcodeproj` in Xcode, choose a development team and unique bundle identifier, and run the `HyperianIOS` scheme. The project targets iOS 16 or newer and stores HDB data in the app's private Documents folder. Store distribution still requires an Apple Developer identity, provisioning, archiving, and signing. Because this development environment is Linux and has no Xcode or Apple SDK, project structure, XML, bridge wiring, runtime behavior, installed export resources, and bytecode identity are tested here, but an iOS simulator/device build is not claimed as locally verified.
 
@@ -552,6 +553,28 @@ end
 
 Change events work with single-line inputs, text areas, and checkboxes. Submission events run when someone submits a single-line field from the keyboard. The GTK desktop and mobile-preview backends, native mobile C bridge, generated Android project, and generated iOS project all dispatch the same compiled controller events. The compiler rejects missing controls, text-area submission handlers, and use outside desktop or mobile applications.
 
+Application and focus lifecycle behavior is English too:
+
+```hyperian
+when application pauses
+    set connection_status to paused
+end
+
+when application resumes
+    run action "refresh data"
+end
+
+when window gains focus
+    set window_status to focused
+end
+
+when window loses focus
+    set window_status to unfocused
+end
+```
+
+Android lifecycle methods and iOS scene phases send pause/resume and focus/unfocus events through the native bridge. GTK windows send the same focus events for desktop applications and mobile previews. Pause and resume are mobile-only; the compiler prevents accidental use on targets that cannot deliver them. The source formatter and debugger understand the complete English phrases.
+
 Desktop and mobile actions can navigate between native MVC views in English:
 
 ```hyperian
@@ -790,6 +813,6 @@ Quoted text may contain spaces. `#` starts a comment. Indentation is optional bu
 
 ## Project status
 
-Version 0.31 is a small but real MVC platform: custom bytecode, a native VM, standalone executable and asset-bundle creation, versioned Android/iOS mobile deployment packages, a linkable native mobile runtime bridge, self-contained native Android Studio and SwiftUI Xcode project generation, native backend diagnostics, eight compiler targets including installable offline web applications, an English source-line debugger, persistent model CRUD plus filtered and ordered collection queries inside native controller actions, repeated native collection views, recurring service and native-interface timers, interactive multi-view GTK desktop and phone-sized mobile preview interfaces with close, live-input-change, and keyboard-submission events, matching generated Android/iOS input events, SDL2 keyboard/frame events, frame-rate-independent movement, gravity, smooth value transitions, timed animation frames, boundaries, rectangle collision detection, BMP sprites, WAV sound, and state-driven rendering, native lists and maps, selectable HDB or transactional SQLite storage, recoverable runtime errors, an HTTP/HTTPS client, local packages, reusable actions, native file access, foldered project generation, versioned migrations, persistent CRUD models, safe HTML and typed JSON, authentication and authorization, middleware, formatting, and English tests.
+Version 0.32 is a small but real MVC platform: custom bytecode, a native VM, standalone executable and asset-bundle creation, versioned Android/iOS mobile deployment packages, a linkable native mobile runtime bridge, self-contained native Android Studio and SwiftUI Xcode project generation, native backend diagnostics, eight compiler targets including installable offline web applications, parallel-safe compiler tooling, an English source-line debugger, persistent model CRUD plus filtered and ordered collection queries inside native controller actions, repeated native collection views, recurring service and native-interface timers, interactive multi-view GTK desktop and phone-sized mobile preview interfaces with close, live-input-change, keyboard-submission, focus, pause, and resume events, matching generated Android/iOS lifecycle events, SDL2 keyboard/frame events, frame-rate-independent movement, gravity, smooth value transitions, timed animation frames, boundaries, rectangle collision detection, BMP sprites, WAV sound, and state-driven rendering, native lists and maps, selectable HDB or transactional SQLite storage, recoverable runtime errors, an HTTP/HTTPS client, local packages, reusable actions, native file access, foldered project generation, versioned migrations, persistent CRUD models, safe HTML and typed JSON, authentication and authorization, middleware, formatting, and English tests.
 
-The next major layers are automated APK/AAB/IPA builds and signing, HTTPS/SQLite phone integration, additional native gestures and lifecycle events, more collision shapes, more media formats, and broader cross-compilation. Those are not claimed as complete yet.
+The next major layers are automated APK/AAB/IPA builds and signing, HTTPS/SQLite phone integration, touch gestures, more collision shapes, more media formats, and broader cross-compilation. Those are not claimed as complete yet.

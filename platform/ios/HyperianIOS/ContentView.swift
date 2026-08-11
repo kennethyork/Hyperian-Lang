@@ -29,6 +29,7 @@ struct HyperianControl: Decodable {
     var values: [String: String] = [:]
     private let bridge = HyperianBridge()
     private var scheduled: Set<Int> = []
+    private var lifecycleIsActive = false
 
     init() {
         guard let bytecode = Bundle.main.path(forResource: "application", ofType: "hyc", inDirectory: "Resources") else {
@@ -63,6 +64,19 @@ struct HyperianControl: Decodable {
         if let event = control.submitEvent { sendInputEvent(event) }
     }
 
+    func lifecycle(_ phase: ScenePhase) {
+        let becomingActive = phase == .active
+        if becomingActive == lifecycleIsActive { return }
+        lifecycleIsActive = becomingActive
+        for (name, value) in values { bridge.setValue(value, named: name) }
+        let events = becomingActive ? ["RESUME", "FOCUS"] : ["BLUR", "PAUSE"]
+        for event in events {
+            let error = bridge.sendEvent(event)
+            if !error.isEmpty { message = error }
+        }
+        refresh()
+    }
+
     private func sendInputEvent(_ event: String) {
         for (name, value) in values { bridge.setValue(value, named: name) }
         let error = bridge.sendEvent(event)
@@ -95,6 +109,7 @@ struct HyperianControl: Decodable {
 
 struct ContentView: View {
     @ObservedObject var application: HyperianApplication
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         NavigationStack {
@@ -106,7 +121,8 @@ struct ContentView: View {
                     if !application.message.isEmpty { Text(application.message).foregroundStyle(.red) }
                 }.padding()
             }
-        }
+        }.onAppear { application.lifecycle(scenePhase) }
+         .onChange(of: scenePhase) { phase in application.lifecycle(phase) }
     }
 
     @ViewBuilder private func controlView(_ control: HyperianControl) -> some View {

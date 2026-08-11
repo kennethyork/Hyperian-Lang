@@ -41,6 +41,7 @@ public final class MainActivity extends Activity {
     private LinearLayout content;
     private final Handler timers = new Handler(Looper.getMainLooper());
     private boolean timersStarted;
+    private boolean mobileReady;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -51,7 +52,7 @@ public final class MainActivity extends Activity {
             File bytecode = copyAsset("application.hyc");
             String error = openMobile(bytecode.getAbsolutePath(), new File(getFilesDir(), "hyperian-data.hdb").getAbsolutePath());
             if (!error.isEmpty()) throw new Exception(error);
-            render();
+            mobileReady = true; render();
         } catch (Exception error) { showError(error.getMessage()); }
     }
 
@@ -133,6 +134,12 @@ public final class MainActivity extends Activity {
         });
     }
 
+    private void sendLifecycleEvent(String event, boolean renderAfterward) {
+        syncInputs(); String error = sendMobileEvent(event);
+        if (!error.isEmpty()) Toast.makeText(this, error, Toast.LENGTH_LONG).show();
+        if (renderAfterward) render();
+    }
+
     private void scheduleTimer(long interval) {
         timers.postDelayed(new Runnable() { @Override public void run() {
             String error = sendMobileEvent("TIMER:" + interval);
@@ -143,5 +150,10 @@ public final class MainActivity extends Activity {
 
     private int pixels(int amount) { return (int)(amount * getResources().getDisplayMetrics().density + 0.5f); }
     private void showError(String message) { content.removeAllViews(); TextView error = new TextView(this); error.setText("Hyperian could not start: " + message); content.addView(error); }
-    @Override protected void onDestroy() { timers.removeCallbacksAndMessages(null); closeMobile(); super.onDestroy(); }
+    @Override protected void onResume() { super.onResume(); if (mobileReady) sendLifecycleEvent("RESUME", true); }
+    @Override protected void onPause() { if (mobileReady) sendLifecycleEvent("PAUSE", false); super.onPause(); }
+    @Override public void onWindowFocusChanged(boolean focused) {
+        super.onWindowFocusChanged(focused); if (mobileReady) sendLifecycleEvent(focused ? "FOCUS" : "BLUR", focused);
+    }
+    @Override protected void onDestroy() { mobileReady = false; timers.removeCallbacksAndMessages(null); closeMobile(); super.onDestroy(); }
 }

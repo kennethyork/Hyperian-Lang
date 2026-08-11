@@ -1,0 +1,19 @@
+application "Wrong Lifecycle Target" is desktop
+
+model Setting
+    field name is text
+end
+
+controller Main
+    when application starts
+        show view "main"
+    end
+
+    when application pauses
+        set status to paused
+    end
+end
+
+view "main"
+    show status
+end

@@ -786,7 +786,11 @@ int hyperian_execute_data_event(HyperianData *data, const char *event, HyperianS
 static const char *english_debug_event(const char *event, char *translated, size_t size) {
     if (!event) return NULL;
     if (!strcmp(event, "application starts")) return "START";
+    if (!strcmp(event, "application pauses")) return "PAUSE";
+    if (!strcmp(event, "application resumes")) return "RESUME";
     if (!strcmp(event, "window closes")) return "CLOSE";
+    if (!strcmp(event, "window gains focus")) return "FOCUS";
+    if (!strcmp(event, "window loses focus")) return "BLUR";
     if (!strcmp(event, "game updates")) return "FRAME";
     char name[64], extra;
     if (sscanf(event, "player presses %63s%c", name, &extra) == 1) {

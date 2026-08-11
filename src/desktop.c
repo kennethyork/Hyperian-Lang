@@ -21,7 +21,7 @@ struct DesktopContext {
     DesktopOutput outputs[HYPERIAN_STATE_MAX]; int output_count;
     DesktopButton buttons[HYPERIAN_STATE_MAX]; int button_count;
     DesktopTimer timers[HYPERIAN_STATE_MAX]; int timer_count;
-    int handling_input_event;
+    int handling_event;
 };
 
 static int show_interface_view(DesktopContext *context, const char *name);
@@ -86,12 +86,12 @@ static int desktop_has_event(const Bytecode *code, const char *kind, const char 
 
 static void dispatch_input_event(DesktopInput *input, const char *kind) {
     DesktopContext *context = input->context;
-    if (context->handling_input_event) return;
-    context->handling_input_event = 1; sync_inputs(context);
+    if (context->handling_event) return;
+    context->handling_event = 1; sync_inputs(context);
     char event[80], error[256] = {0}; snprintf(event, sizeof(event), "%s:%s", kind, input->name);
     if (!hyperian_execute_data_event(context->data, event, &context->state, error, sizeof(error)))
         hyperian_state_set(&context->state, "error", error);
-    apply_state_transition(context); context->handling_input_event = 0;
+    apply_state_transition(context); context->handling_event = 0;
 }
 
 static void input_changed(gpointer widget, gpointer data) {
@@ -194,6 +194,22 @@ static gboolean window_closing(GtkWidget *window, GdkEvent *event, gpointer data
     gtk_main_quit(); return FALSE;
 }
 
+static gboolean dispatch_window_event(DesktopContext *context, const char *event) {
+    if (context->handling_event) return FALSE;
+    context->handling_event = 1; sync_inputs(context); char error[256] = {0};
+    if (!hyperian_execute_data_event(context->data, event, &context->state, error, sizeof(error)))
+        hyperian_state_set(&context->state, "error", error);
+    apply_state_transition(context); context->handling_event = 0; return FALSE;
+}
+
+static gboolean window_focused(GtkWidget *window, GdkEventFocus *event, gpointer data) {
+    (void)window; (void)event; return dispatch_window_event((DesktopContext *)data, "FOCUS");
+}
+
+static gboolean window_blurred(GtkWidget *window, GdkEventFocus *event, gpointer data) {
+    (void)window; (void)event; return dispatch_window_event((DesktopContext *)data, "BLUR");
+}
+
 static int run_interface_app(const Bytecode *code, const char *name, int mobile) {
     if (!gtk_init_check(NULL, NULL)) { fprintf(stderr, "error: cannot open a desktop display\n"); return 1; }
     const char *view_name = starting_view(code); if (!view_name) { fprintf(stderr, "error: desktop application needs a starting view\n"); return 1; }
@@ -208,6 +224,8 @@ static int run_interface_app(const Bytecode *code, const char *name, int mobile)
     gtk_window_set_title(GTK_WINDOW(window), title); gtk_window_set_default_size(GTK_WINDOW(window), mobile ? 390 : 800, mobile ? 780 : 600);
     gtk_container_set_border_width(GTK_CONTAINER(window), mobile ? 16 : 20); gtk_box_set_spacing(GTK_BOX(box), mobile ? 12 : 8); gtk_container_add(GTK_CONTAINER(window), box);
     g_signal_connect(window, "delete-event", G_CALLBACK(window_closing), &context);
+    g_signal_connect(window, "focus-in-event", G_CALLBACK(window_focused), &context);
+    g_signal_connect(window, "focus-out-event", G_CALLBACK(window_blurred), &context);
     if (!show_interface_view(&context, view_name)) { fprintf(stderr, "error: starting view does not exist\n"); gtk_widget_destroy(window); hyperian_data_close(context.data); return 1; }
     for (size_t i = 0; i < code->count && context.timer_count < HYPERIAN_STATE_MAX; i++)
         if (code->items[i].opcode == OP_EVENT && !strncmp(code->items[i].args[0], "TIMER:", 6)) {
@@ -237,6 +255,8 @@ static int run_interface_app(const Bytecode *code, const char *name, int mobile)
         if (chosen) action_clicked(NULL, chosen);
         const char *test_timer = getenv("HYPERIAN_VISUAL_TEST_TIMER");
         for (int i = 0; test_timer && i < context.timer_count; i++) if (!strcmp(context.timers[i].event, test_timer)) timer_fired(&context.timers[i]);
+        const char *test_event = getenv("HYPERIAN_VISUAL_TEST_EVENT");
+        if (test_event) dispatch_window_event(&context, test_event);
         const char *test_name = getenv("HYPERIAN_VISUAL_TEST_STATE");
         if (test_name) printf("%s=%s\n", test_name, hyperian_state_get(&context.state, test_name) ? hyperian_state_get(&context.state, test_name) : "");
         if (getenv("HYPERIAN_VISUAL_TEST_LABELS")) {

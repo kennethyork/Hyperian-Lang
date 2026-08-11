@@ -11,6 +11,16 @@
 
 static int starts_with(const char *text, const char *prefix) { return !strncmp(text, prefix, strlen(prefix)); }
 
+static int temporary_bytecode(char *path, size_t size) {
+    if (snprintf(path, size, "/tmp/hyperian-bytecode-XXXXXX") >= (int)size) {
+        fprintf(stderr, "error: temporary bytecode path is too long\n"); return 0;
+    }
+    int descriptor = mkstemp(path);
+    if (descriptor < 0) { fprintf(stderr, "error: cannot create temporary bytecode: %s\n", strerror(errno)); return 0; }
+    if (close(descriptor)) { unlink(path); fprintf(stderr, "error: cannot finish temporary bytecode: %s\n", strerror(errno)); return 0; }
+    return 1;
+}
+
 static int write_u64(FILE *file, uint64_t value) {
     unsigned char bytes[8]; for (int i = 0; i < 8; i++) bytes[i] = (unsigned char)(value >> (i * 8));
     return fwrite(bytes, 1, 8, file) == 8;
@@ -273,8 +283,8 @@ static int export_mobile_application(const char *source, const char *platform, c
     if (strcmp(platform, "android") && strcmp(platform, "ios")) {
         fprintf(stderr, "error: export for android or ios\n"); return 2;
     }
-    char temporary[128]; snprintf(temporary, sizeof(temporary), "/tmp/hyperian-mobile-%ld.hyc", (long)getpid());
-    int result = compile_file(source, temporary); if (result) return result;
+    char temporary[128]; if (!temporary_bytecode(temporary, sizeof(temporary))) return 1;
+    int result = compile_file(source, temporary); if (result) { unlink(temporary); return result; }
     Bytecode code; bytecode_init(&code); char error[256];
     if (!bytecode_read(&code, temporary, error, sizeof(error))) {
         unlink(temporary); fprintf(stderr, "error: %s\n", error); return 1;
@@ -349,7 +359,7 @@ static int doctor(void) {
     puts("  SQLite storage: not included; native HDB storage is ready");
 #endif
     puts("  filtered and ordered native model collections: ready");
-    puts("  native mobile change and submission events: ready");
+    puts("  native input, focus, pause, and resume events: ready");
 #ifdef HYPERIAN_HAVE_CURL
     puts("  HTTP and HTTPS client: ready");
 #else
@@ -390,7 +400,7 @@ static int create_project(const char *name, const char *target) {
     else if (!strcmp(target, "api")) snprintf(source, sizeof(source),
         "controller Items\n    when someone visits \"/items\"\n        find all Item as items\n        show json items\n    end\nend\n");
     else if (!strcmp(target, "desktop") || !strcmp(target, "mobile")) snprintf(source, sizeof(source),
-        "controller Items\n    action initialize\n        set status to ready\n        collect every Item name ordered by name as item_names\n    end\n    action activate\n        create a Item using the current values as item_id\n        count all Item records as item_count\n        collect every Item name ordered by name as item_names\n        set status to \"Saved item:\" joined with item_id\n        open view \"main\"\n    end\n    when application starts\n        run action initialize\n        show view \"main\"\n    end\n    when input name changes\n        set status to \"Typing:\" joined with name\n    end\n    when input name is submitted\n        run action activate\n    end\nend\n");
+        "controller Items\n    action initialize\n        set status to ready\n        collect every Item name ordered by name as item_names\n    end\n    action activate\n        create a Item using the current values as item_id\n        count all Item records as item_count\n        collect every Item name ordered by name as item_names\n        set status to \"Saved item:\" joined with item_id\n        open view \"main\"\n    end\n    when application starts\n        run action initialize\n        show view \"main\"\n    end\n    when input name changes\n        set status to \"Typing:\" joined with name\n    end\n    when input name is submitted\n        run action activate\n    end\n    when window gains focus\n        set status to focused\n    end\n    when window loses focus\n        set status to unfocused\n    end\nend\n");
     else if (!strcmp(target, "game")) snprintf(source, sizeof(source),
         "controller Items\n    action initialize\n        set player_x to 100\n        set player_y to 100\n        set player_velocity_x to 0\n        set player_velocity_y to 0\n        set glow to 0\n        set animation_frame to 1\n    end\n    action \"move right\"\n        set player_velocity_x to 200\n    end\n    when application starts\n        run action initialize\n        show view \"main\"\n    end\n    when player presses right\n        run action \"move right\"\n    end\n    when game updates\n        move value glow toward 1 at 2 per second\n        advance animation animation_frame from 1 through 4 every 100 milliseconds\n        apply gravity 300 to player_velocity_y\n        move position player_x player_y using velocity player_velocity_x player_velocity_y\n        keep position player_x player_y inside 960 by 540 sized 100 by 100\n        check collision between player_x player_y sized 100 by 100 and 400 260 sized 120 by 120 as player_hit\n    end\nend\n");
     else snprintf(source, sizeof(source),
@@ -444,9 +454,10 @@ static int format_source(const char *path) {
             starts_with(start, "test ") ||
             starts_with(start, "when data changes from ") ||
             starts_with(start, "when someone ") || starts_with(start, "when player presses ") || !strcmp(start, "when game updates") ||
-            !strcmp(start, "when window closes") ||
+            starts_with(start, "when input ") || starts_with(start, "when application ") ||
+            starts_with(start, "when window ") ||
             starts_with(start, "every ") ||
-            !strcmp(start, "when application starts") || starts_with(start, "form ") ||
+            starts_with(start, "form ") ||
             starts_with(start, "for each ") || starts_with(start, "if ") || starts_with(start, "repeat ") || !strcmp(start, "try") ||
             !strcmp(start, "otherwise") || starts_with(start, "when it fails as ");
         if (opening) indentation++;
@@ -516,7 +527,7 @@ int main(int argc, char **argv) {
     }
     if (!strcmp(argv[1], "check")) {
         if (argc != 3) { fprintf(stderr, "usage: hyperian check app.hyp\n"); return 2; }
-        char temporary[128]; snprintf(temporary, sizeof(temporary), "/tmp/hyperian-check-%ld.hyc", (long)getpid());
+        char temporary[128]; if (!temporary_bytecode(temporary, sizeof(temporary))) return 1;
         int result = compile_file(argv[2], temporary); unlink(temporary);
         if (!result) puts("No mistakes found.");
         return result;
@@ -537,7 +548,7 @@ int main(int argc, char **argv) {
         }
         if (input && !action) { fprintf(stderr, "error: --input can only be used with --action\n"); return 2; }
         if (ends_with(argv[2], ".hyc")) return debug_bytecode(argv[2], event, action, input);
-        char temporary[128]; snprintf(temporary, sizeof(temporary), "/tmp/hyperian-debug-%ld.hyc", (long)getpid());
+        char temporary[128]; if (!temporary_bytecode(temporary, sizeof(temporary))) return 1;
         int result = compile_file(argv[2], temporary);
         if (!result) result = debug_bytecode(temporary, event, action, input);
         unlink(temporary); return result;
@@ -549,7 +560,7 @@ int main(int argc, char **argv) {
     if (!strcmp(argv[1], "test")) {
         if (argc != 3) { fprintf(stderr, "usage: hyperian test app.hyp\n"); return 2; }
         if (ends_with(argv[2], ".hyc")) return test_bytecode(argv[2]);
-        char temporary[128]; snprintf(temporary, sizeof(temporary), "/tmp/hyperian-test-%ld.hyc", (long)getpid());
+        char temporary[128]; if (!temporary_bytecode(temporary, sizeof(temporary))) return 1;
         int result = compile_file(argv[2], temporary);
         if (!result) result = test_bytecode(temporary);
         unlink(temporary); return result;
@@ -557,7 +568,7 @@ int main(int argc, char **argv) {
     if (!strcmp(argv[1], "migrate")) {
         if (argc != 3) { fprintf(stderr, "usage: hyperian migrate app.hyp\n"); return 2; }
         if (ends_with(argv[2], ".hyc")) return migrate_bytecode(argv[2]);
-        char temporary[128]; snprintf(temporary, sizeof(temporary), "/tmp/hyperian-migrate-%ld.hyc", (long)getpid());
+        char temporary[128]; if (!temporary_bytecode(temporary, sizeof(temporary))) return 1;
         int result = compile_file(argv[2], temporary);
         if (!result) result = migrate_bytecode(temporary);
         unlink(temporary); return result;
@@ -569,7 +580,7 @@ int main(int argc, char **argv) {
         else if (argc != 3) { fprintf(stderr, "usage: hyperian run app.hyp [--port 9000]\n"); return 2; }
         if (port < 0 || port > 65535) { fprintf(stderr, "error: invalid port\n"); return 2; }
         if (ends_with(argv[2], ".hyp")) {
-            char temporary[128]; snprintf(temporary, sizeof(temporary), "/tmp/hyperian-run-%ld.hyc", (long)getpid());
+            char temporary[128]; if (!temporary_bytecode(temporary, sizeof(temporary))) return 1;
             int result = compile_file(argv[2], temporary);
             if (!result) result = run_bytecode(temporary, port);
             unlink(temporary); return result;

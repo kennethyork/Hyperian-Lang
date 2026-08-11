@@ -19,6 +19,10 @@ int main(int argc, char **argv) {
         contains(json, "\"action\":\"add task\"") && contains(json, "\"changeEvent\":\"CHANGE:title\"") &&
         contains(json, "\"submitEvent\":\"SUBMIT:title\"") && contains(json, "\"changeEvent\":\"CHANGE:details\"") &&
         contains(json, "\"changeEvent\":\"CHANGE:urgent\"");
+    if (okay) okay = hyperian_mobile_send_event(mobile, "RESUME", error, sizeof(error)) &&
+        hyperian_mobile_value(mobile, "lifecycle_status") && !strcmp(hyperian_mobile_value(mobile, "lifecycle_status"), "Application resumed") &&
+        hyperian_mobile_send_event(mobile, "FOCUS", error, sizeof(error)) &&
+        !strcmp(hyperian_mobile_value(mobile, "lifecycle_status"), "Window focused");
     if (okay) okay = hyperian_mobile_set(mobile, "title", "Coffee \"and\" tea", error, sizeof(error)) &&
         hyperian_mobile_send_event(mobile, "CHANGE:title", error, sizeof(error)) &&
         hyperian_mobile_value(mobile, "live_preview") && !strcmp(hyperian_mobile_value(mobile, "live_preview"), "Typing:Coffee \"and\" tea") &&
@@ -35,9 +39,14 @@ int main(int argc, char **argv) {
         hyperian_mobile_run_action(mobile, "show completed", NULL, error, sizeof(error)) &&
         hyperian_mobile_render_json(mobile, json, sizeof(json), error, sizeof(error)) && contains(json, "\"view\":\"completed\"") &&
         hyperian_mobile_send_event(mobile, "TIMER:1000", error, sizeof(error)) &&
-        hyperian_mobile_value(mobile, "heartbeat") && !strcmp(hyperian_mobile_value(mobile, "heartbeat"), "1");
+        hyperian_mobile_value(mobile, "heartbeat") && !strcmp(hyperian_mobile_value(mobile, "heartbeat"), "1") &&
+        hyperian_mobile_send_event(mobile, "BLUR", error, sizeof(error)) &&
+        !strcmp(hyperian_mobile_value(mobile, "lifecycle_status"), "Window unfocused") &&
+        hyperian_mobile_send_event(mobile, "PAUSE", error, sizeof(error)) &&
+        !strcmp(hyperian_mobile_value(mobile, "lifecycle_status"), "Application paused");
     if (!okay && !*error) {
-        fprintf(stderr, "status=%s preview=%s details=%s urgency=%s heartbeat=%s json=%s\n", hyperian_mobile_value(mobile, "status"),
+        fprintf(stderr, "status=%s lifecycle=%s preview=%s details=%s urgency=%s heartbeat=%s json=%s\n", hyperian_mobile_value(mobile, "status"),
+            hyperian_mobile_value(mobile, "lifecycle_status"),
             hyperian_mobile_value(mobile, "live_preview"), hyperian_mobile_value(mobile, "details_preview"),
             hyperian_mobile_value(mobile, "urgency_preview"), hyperian_mobile_value(mobile, "heartbeat"), json);
         snprintf(error, sizeof(error), "a rendered mobile value was incorrect");

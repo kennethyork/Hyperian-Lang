@@ -10,6 +10,7 @@ controller Tasks
         set live_preview to "Start typing a task"
         set details_preview to "No details yet"
         set urgency_preview to "Urgent:false"
+        set lifecycle_status to "Application started"
         set heartbeat to 0
         collect every Task title as task_titles
     end
@@ -49,6 +50,22 @@ controller Tasks
         set urgency_preview to "Urgent:" joined with urgent
     end
 
+    when application pauses
+        set lifecycle_status to "Application paused"
+    end
+
+    when application resumes
+        set lifecycle_status to "Application resumed"
+    end
+
+    when window gains focus
+        set lifecycle_status to "Window focused"
+    end
+
+    when window loses focus
+        set lifecycle_status to "Window unfocused"
+    end
+
     every 1 second
         set heartbeat to heartbeat plus 1
     end
@@ -63,6 +80,7 @@ view "home"
     show live_preview
     show details_preview
     show urgency_preview
+    show lifecycle_status
     button "Add task" runs action "add task"
     button "Completed tasks" runs action "show completed"
     show status

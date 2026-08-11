@@ -1,0 +1,19 @@
+application "Wrong Focus Target" is console
+
+model Setting
+    field name is text
+end
+
+controller Main
+    when application starts
+        show view "main"
+    end
+
+    when window gains focus
+        set status to focused
+    end
+end
+
+view "main"
+    show status
+end

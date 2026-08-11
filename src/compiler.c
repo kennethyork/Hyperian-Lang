@@ -296,8 +296,13 @@ static int validate(Bytecode *code, const char *path) {
         }
     if (strcmp(target, "desktop") && strcmp(target, "mobile")) for (size_t i = 0; i < code->count; i++)
         if (code->items[i].opcode == OP_EVENT && (!strncmp(code->items[i].args[0], "CHANGE:", 7) ||
-            !strncmp(code->items[i].args[0], "SUBMIT:", 7))) {
-            source_error(path, code->items[i].line, "input change and submission events require a desktop or mobile application"); return 0;
+            !strncmp(code->items[i].args[0], "SUBMIT:", 7) || !strcmp(code->items[i].args[0], "FOCUS") ||
+            !strcmp(code->items[i].args[0], "BLUR"))) {
+            source_error(path, code->items[i].line, "input and window-focus events require a desktop or mobile application"); return 0;
+        }
+    if (strcmp(target, "mobile")) for (size_t i = 0; i < code->count; i++)
+        if (code->items[i].opcode == OP_EVENT && (!strcmp(code->items[i].args[0], "PAUSE") || !strcmp(code->items[i].args[0], "RESUME"))) {
+            source_error(path, code->items[i].line, "application pause and resume events require a mobile application"); return 0;
         }
     if (!strcmp(target, "web") || !strcmp(target, "pwa")) {
         int routes = 0;
@@ -491,6 +496,12 @@ int compile_file(const char *source_path, const char *output_path) {
             if (n == 3 && !strcmp(w[0], "when") && !strcmp(w[1], "application") && !strcmp(w[2], "starts")) {
                 char *event = "START"; okay = emit(&code, OP_EVENT, 1, &event, number); stack[depth++] = BLOCK_ROUTE; continue;
             }
+            if (n == 3 && !strcmp(w[0], "when") && !strcmp(w[1], "application") && !strcmp(w[2], "pauses")) {
+                char *event = "PAUSE"; okay = emit(&code, OP_EVENT, 1, &event, number); stack[depth++] = BLOCK_ROUTE; continue;
+            }
+            if (n == 3 && !strcmp(w[0], "when") && !strcmp(w[1], "application") && !strcmp(w[2], "resumes")) {
+                char *event = "RESUME"; okay = emit(&code, OP_EVENT, 1, &event, number); stack[depth++] = BLOCK_ROUTE; continue;
+            }
             if (n == 4 && !strcmp(w[0], "when") && !strcmp(w[1], "input") && !strcmp(w[3], "changes") && is_name(w[2])) {
                 if (strlen(w[2]) >= 64) { source_error(source_path, number, "an input name must be shorter than 64 characters"); okay = 0; continue; }
                 char event[80]; snprintf(event, sizeof(event), "CHANGE:%s", w[2]); char *arg = event;
@@ -510,6 +521,12 @@ int compile_file(const char *source_path, const char *output_path) {
             }
             if (n == 3 && !strcmp(w[0], "when") && !strcmp(w[1], "window") && !strcmp(w[2], "closes")) {
                 char *event = "CLOSE"; okay = emit(&code, OP_EVENT, 1, &event, number); stack[depth++] = BLOCK_ROUTE; continue;
+            }
+            if (n == 4 && !strcmp(w[0], "when") && !strcmp(w[1], "window") && !strcmp(w[2], "gains") && !strcmp(w[3], "focus")) {
+                char *event = "FOCUS"; okay = emit(&code, OP_EVENT, 1, &event, number); stack[depth++] = BLOCK_ROUTE; continue;
+            }
+            if (n == 4 && !strcmp(w[0], "when") && !strcmp(w[1], "window") && !strcmp(w[2], "loses") && !strcmp(w[3], "focus")) {
+                char *event = "BLUR"; okay = emit(&code, OP_EVENT, 1, &event, number); stack[depth++] = BLOCK_ROUTE; continue;
             }
             if (n == 3 && !strcmp(w[0], "every")) {
                 char *end; long amount = strtol(w[1], &end, 10), multiplier = 0;

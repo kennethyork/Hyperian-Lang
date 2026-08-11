@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(Hyperian VERSION 0.31.0 LANGUAGES C)
+project(Hyperian VERSION 0.32.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -193,6 +193,9 @@ add_test(NAME compile_multi_file_program
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/modular/app.hyp -o ${CMAKE_BINARY_DIR}/modular.hyc)
 add_test(NAME compile_foldered_mvc_program
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/foldered_app/app.hyp -o ${CMAKE_BINARY_DIR}/foldered_app.hyc)
+add_test(NAME concurrent_compiler_tooling
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/concurrent_tooling_test.sh $<TARGET_FILE:hyperian>
+        ${CMAKE_SOURCE_DIR}/examples/desktop_notes.hyp ${CMAKE_SOURCE_DIR}/examples/mobile_tasks.hyp)
 add_test(NAME compile_native_desktop
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/desktop_notes.hyp -o ${CMAKE_BINARY_DIR}/desktop_notes.hyc)
 find_program(XVFB_RUN xvfb-run)
@@ -219,6 +222,14 @@ if(GTK3_FOUND AND XVFB_RUN)
             HYPERIAN_VISUAL_TEST_INPUT=true HYPERIAN_VISUAL_TEST_STATE=status
             $<TARGET_FILE:hyperian> run ${CMAKE_SOURCE_DIR}/examples/desktop_notes.hyp)
     set_tests_properties(run_desktop_checkbox_change_event PROPERTIES DEPENDS compile_native_desktop PASS_REGULAR_EXPRESSION "status=Importance changed")
+    add_test(NAME run_desktop_focus_event
+        COMMAND ${XVFB_RUN} -a ${CMAKE_COMMAND} -E env HYPERIAN_VISUAL_TEST=1 HYPERIAN_VISUAL_TEST_EVENT=FOCUS HYPERIAN_VISUAL_TEST_STATE=window_status
+            $<TARGET_FILE:hyperian> run ${CMAKE_SOURCE_DIR}/examples/desktop_notes.hyp)
+    set_tests_properties(run_desktop_focus_event PROPERTIES DEPENDS compile_native_desktop PASS_REGULAR_EXPRESSION "window_status=Window focused")
+    add_test(NAME run_desktop_blur_event
+        COMMAND ${XVFB_RUN} -a ${CMAKE_COMMAND} -E env HYPERIAN_VISUAL_TEST=1 HYPERIAN_VISUAL_TEST_EVENT=BLUR HYPERIAN_VISUAL_TEST_STATE=window_status
+            $<TARGET_FILE:hyperian> run ${CMAKE_SOURCE_DIR}/examples/desktop_notes.hyp)
+    set_tests_properties(run_desktop_blur_event PROPERTIES DEPENDS compile_native_desktop PASS_REGULAR_EXPRESSION "window_status=Window unfocused")
 endif()
 add_test(NAME compile_mobile_preview
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/mobile_tasks.hyp -o ${CMAKE_BINARY_DIR}/mobile_tasks.hyc)
@@ -254,6 +265,9 @@ set_tests_properties(debug_mobile_navigation PROPERTIES PASS_REGULAR_EXPRESSION 
 add_test(NAME debug_english_input_event
     COMMAND hyperian debug ${CMAKE_SOURCE_DIR}/examples/mobile_tasks.hyp --event "input title changes")
 set_tests_properties(debug_english_input_event PROPERTIES PASS_REGULAR_EXPRESSION "Debugging event input title changes")
+add_test(NAME debug_english_lifecycle_event
+    COMMAND hyperian debug ${CMAKE_SOURCE_DIR}/examples/mobile_tasks.hyp --event "application resumes")
+set_tests_properties(debug_english_lifecycle_event PROPERTIES PASS_REGULAR_EXPRESSION "lifecycle_status is now Application resumed")
 add_test(NAME reject_missing_desktop_action
     COMMAND hyperian check ${CMAKE_SOURCE_DIR}/tests/bad_desktop_action.hyp)
 set_tests_properties(reject_missing_desktop_action PROPERTIES WILL_FAIL TRUE)
@@ -266,6 +280,15 @@ set_tests_properties(reject_textarea_submission PROPERTIES WILL_FAIL TRUE)
 add_test(NAME reject_input_event_outside_native_interface
     COMMAND hyperian check ${CMAKE_SOURCE_DIR}/tests/bad_input_event_target.hyp)
 set_tests_properties(reject_input_event_outside_native_interface PROPERTIES WILL_FAIL TRUE)
+add_test(NAME reject_mobile_lifecycle_outside_mobile
+    COMMAND hyperian check ${CMAKE_SOURCE_DIR}/tests/bad_mobile_lifecycle_target.hyp)
+set_tests_properties(reject_mobile_lifecycle_outside_mobile PROPERTIES WILL_FAIL TRUE)
+add_test(NAME reject_focus_event_outside_native_interface
+    COMMAND hyperian check ${CMAKE_SOURCE_DIR}/tests/bad_focus_event_target.hyp)
+set_tests_properties(reject_focus_event_outside_native_interface PROPERTIES WILL_FAIL TRUE)
+add_test(NAME format_native_events
+    COMMAND hyperian format ${CMAKE_SOURCE_DIR}/examples/mobile_tasks.hyp)
+set_tests_properties(format_native_events PROPERTIES PASS_REGULAR_EXPRESSION "    when application pauses")
 add_test(NAME compile_native_game
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/blocks_game.hyp -o ${CMAKE_BINARY_DIR}/blocks_game.hyc)
 add_test(NAME compile_game_physics
