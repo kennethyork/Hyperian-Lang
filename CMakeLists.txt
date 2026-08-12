@@ -1,9 +1,10 @@
 cmake_minimum_required(VERSION 3.16)
-project(Hyperian VERSION 0.40.0 LANGUAGES C)
+project(Hyperian VERSION 0.41.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS ON)
+option(HYPERIAN_ENABLE_SDL2_IMAGE "Enable PNG, JPEG, and WebP game images when SDL2_image is available" ON)
 
 add_executable(hyperian
     src/main.c
@@ -24,6 +25,9 @@ find_package(PkgConfig QUIET)
 if(PkgConfig_FOUND)
     pkg_check_modules(GTK3 QUIET IMPORTED_TARGET gtk+-3.0)
     pkg_check_modules(SDL2 QUIET IMPORTED_TARGET sdl2)
+    if(HYPERIAN_ENABLE_SDL2_IMAGE)
+        pkg_check_modules(SDL2_IMAGE QUIET IMPORTED_TARGET SDL2_image)
+    endif()
     pkg_check_modules(CURL QUIET IMPORTED_TARGET libcurl)
     pkg_check_modules(SQLITE3 QUIET IMPORTED_TARGET sqlite3)
 endif()
@@ -42,6 +46,10 @@ endif()
 if(SDL2_FOUND)
     target_compile_definitions(hyperian PRIVATE HYPERIAN_HAVE_SDL2=1)
     target_link_libraries(hyperian PRIVATE PkgConfig::SDL2)
+endif()
+if(SDL2_FOUND AND HYPERIAN_ENABLE_SDL2_IMAGE AND SDL2_IMAGE_FOUND)
+    target_compile_definitions(hyperian PRIVATE HYPERIAN_HAVE_SDL2_IMAGE=1)
+    target_link_libraries(hyperian PRIVATE PkgConfig::SDL2_IMAGE)
 endif()
 
 install(TARGETS hyperian RUNTIME DESTINATION bin)
@@ -66,6 +74,10 @@ endif()
 if(SDL2_FOUND)
     target_compile_definitions(hyperian_mobile_runtime PRIVATE HYPERIAN_HAVE_SDL2=1)
     target_link_libraries(hyperian_mobile_runtime PRIVATE PkgConfig::SDL2)
+endif()
+if(SDL2_FOUND AND HYPERIAN_ENABLE_SDL2_IMAGE AND SDL2_IMAGE_FOUND)
+    target_compile_definitions(hyperian_mobile_runtime PRIVATE HYPERIAN_HAVE_SDL2_IMAGE=1)
+    target_link_libraries(hyperian_mobile_runtime PRIVATE PkgConfig::SDL2_IMAGE)
 endif()
 install(TARGETS hyperian_mobile_runtime ARCHIVE DESTINATION lib)
 install(FILES src/hyperian.h DESTINATION include/hyperian)
@@ -549,6 +561,8 @@ add_test(NAME debug_game_animation
 set_tests_properties(debug_game_animation PROPERTIES PASS_REGULAR_EXPRESSION "advance animation animation frame from 1 through 4 every 100 milliseconds")
 add_test(NAME compile_game_media
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/game_media.hyp -o ${CMAKE_BINARY_DIR}/game_media.hyc)
+add_test(NAME compile_game_common_images
+    COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/game_common_images.hyp -o ${CMAKE_BINARY_DIR}/game_common_images.hyc)
 if(SDL2_FOUND)
     add_test(NAME run_native_game_headless
         COMMAND ${CMAKE_COMMAND} -E env SDL_VIDEODRIVER=dummy HYPERIAN_VISUAL_TEST=1 HYPERIAN_GAME_TEST_KEY=right HYPERIAN_VISUAL_TEST_STATE=player_x
@@ -556,9 +570,9 @@ if(SDL2_FOUND)
     set_tests_properties(run_native_game_headless PROPERTIES DEPENDS compile_native_game)
     set_tests_properties(run_native_game_headless PROPERTIES PASS_REGULAR_EXPRESSION "player_x=120")
     add_test(NAME run_game_timing_headless
-        COMMAND ${CMAKE_COMMAND} -E env SDL_VIDEODRIVER=dummy HYPERIAN_VISUAL_TEST=1 HYPERIAN_VISUAL_TEST_STATE=seconds_since_last_frame
+        COMMAND ${CMAKE_COMMAND} -E env SDL_VIDEODRIVER=dummy HYPERIAN_VISUAL_TEST=1 "HYPERIAN_VISUAL_TEST_STATE=seconds since last frame"
             $<TARGET_FILE:hyperian> run ${CMAKE_BINARY_DIR}/blocks_game.hyc)
-    set_tests_properties(run_game_timing_headless PROPERTIES DEPENDS compile_native_game PASS_REGULAR_EXPRESSION "seconds_since_last_frame=0\\.")
+    set_tests_properties(run_game_timing_headless PROPERTIES DEPENDS compile_native_game PASS_REGULAR_EXPRESSION "seconds since last frame=0\\.")
     add_test(NAME run_game_physics_headless
         COMMAND ${CMAKE_COMMAND} -E env SDL_VIDEODRIVER=dummy HYPERIAN_VISUAL_TEST=1 "HYPERIAN_VISUAL_TEST_STATE=player hit"
             $<TARGET_FILE:hyperian> run ${CMAKE_BINARY_DIR}/physics_game.hyc)
@@ -570,9 +584,26 @@ if(SDL2_FOUND)
     add_test(NAME create_game_media_assets COMMAND hyperian_game_media_fixture)
     add_test(NAME run_game_media_headless
         COMMAND ${CMAKE_COMMAND} -E env SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy HYPERIAN_VISUAL_TEST=1
-            HYPERIAN_GAME_TEST_KEY=space HYPERIAN_VISUAL_TEST_STATE=player_y
+            HYPERIAN_GAME_TEST_KEY=space "HYPERIAN_VISUAL_TEST_STATE=player top"
             $<TARGET_FILE:hyperian> run ${CMAKE_BINARY_DIR}/game_media.hyc)
-    set_tests_properties(run_game_media_headless PROPERTIES DEPENDS "compile_game_media;create_game_media_assets" PASS_REGULAR_EXPRESSION "player_y=80")
+    set_tests_properties(run_game_media_headless PROPERTIES DEPENDS "compile_game_media;create_game_media_assets" PASS_REGULAR_EXPRESSION "player top=80")
+    add_test(NAME run_legacy_game_frame_name_headless
+        COMMAND ${CMAKE_COMMAND} -E env SDL_VIDEODRIVER=dummy HYPERIAN_VISUAL_TEST=1 "HYPERIAN_VISUAL_TEST_STATE=legacy frame time"
+            $<TARGET_FILE:hyperian> run ${CMAKE_BINARY_DIR}/game_media.hyc)
+    set_tests_properties(run_legacy_game_frame_name_headless PROPERTIES DEPENDS "compile_game_media;create_game_media_assets" PASS_REGULAR_EXPRESSION "legacy frame time=0\\.")
+    if(HYPERIAN_ENABLE_SDL2_IMAGE AND SDL2_IMAGE_FOUND)
+        add_test(NAME doctor_common_game_images COMMAND hyperian doctor)
+        set_tests_properties(doctor_common_game_images PROPERTIES PASS_REGULAR_EXPRESSION "PNG, JPEG, and WebP game images .*: ready")
+        add_test(NAME run_game_common_images_headless
+            COMMAND ${CMAKE_COMMAND} -E env SDL_VIDEODRIVER=dummy HYPERIAN_VISUAL_TEST=1 "HYPERIAN_VISUAL_TEST_STATE=images loaded"
+                $<TARGET_FILE:hyperian> run ${CMAKE_BINARY_DIR}/game_common_images.hyc)
+        set_tests_properties(run_game_common_images_headless PROPERTIES DEPENDS "compile_game_common_images;create_game_media_assets" PASS_REGULAR_EXPRESSION "images loaded=yes")
+        add_test(NAME reject_broken_game_image
+            COMMAND sh ${CMAKE_SOURCE_DIR}/tests/reject_with_message_test.sh "could not load game image assets/broken.png"
+                ${CMAKE_COMMAND} -E env SDL_VIDEODRIVER=dummy HYPERIAN_VISUAL_TEST=1
+                $<TARGET_FILE:hyperian> run ${CMAKE_SOURCE_DIR}/tests/bad_game_image.hyp)
+        set_tests_properties(reject_broken_game_image PROPERTIES DEPENDS create_game_media_assets)
+    endif()
 endif()
 add_test(NAME compile_data_migrations
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/migrating_tasks.hyp -o ${CMAKE_BINARY_DIR}/migrating_tasks.hyc)

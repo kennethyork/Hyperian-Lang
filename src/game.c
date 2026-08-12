@@ -1,11 +1,15 @@
 #include "hyperian.h"
 
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #ifdef HYPERIAN_HAVE_SDL2
 #include <SDL.h>
+#ifdef HYPERIAN_HAVE_SDL2_IMAGE
+#include <SDL_image.h>
+#endif
 
 #define GAME_SPRITES_MAX 64
 #define GAME_POLYGON_POINTS_MAX 32
@@ -69,6 +73,29 @@ static int evaluated_number(HyperianState *state, const char *expression) {
 
 static int evaluated_channel(HyperianState *state, const char *expression) {
     char value[128]; hyperian_state_evaluate(state, expression, value, sizeof(value)); return channel(value);
+}
+
+#ifndef HYPERIAN_HAVE_SDL2_IMAGE
+static int is_bitmap_extension(const char *extension) {
+    return extension && strlen(extension) == 4 && extension[0] == '.' && tolower((unsigned char)extension[1]) == 'b' &&
+        tolower((unsigned char)extension[2]) == 'm' && tolower((unsigned char)extension[3]) == 'p' && !extension[4];
+}
+#endif
+
+static SDL_Surface *load_game_image(const char *path, char *error, size_t error_size) {
+#ifdef HYPERIAN_HAVE_SDL2_IMAGE
+    SDL_Surface *surface = IMG_Load(path);
+    if (!surface) snprintf(error, error_size, "could not load game image %s: %s", path, IMG_GetError());
+    return surface;
+#else
+    const char *extension = strrchr(path, '.');
+    if (!is_bitmap_extension(extension)) {
+        snprintf(error, error_size, "this Hyperian build needs SDL2_image to load %s; BMP images are available", path); return NULL;
+    }
+    SDL_Surface *surface = SDL_LoadBMP(path);
+    if (!surface) snprintf(error, error_size, "could not load game image %s: %s", path, SDL_GetError());
+    return surface;
+#endif
 }
 
 static void draw_filled_circle(SDL_Renderer *renderer, int center_x, int center_y, int radius) {
@@ -135,12 +162,23 @@ int run_game_app(const Bytecode *code, const char *name) {
     char data_error[256] = {0}; HyperianData *data = hyperian_data_open(code, data_error, sizeof(data_error));
     if (!data) { fprintf(stderr, "error: %s\n", data_error); return 1; }
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS)) { fprintf(stderr, "error: cannot start SDL2: %s\n", SDL_GetError()); hyperian_data_close(data); return 1; }
+#ifdef HYPERIAN_HAVE_SDL2_IMAGE
+    IMG_Init(IMG_INIT_JPG | IMG_INIT_PNG | IMG_INIT_WEBP);
+#endif
     hyperian_set_sound_handler(play_game_sound);
-    if (!run_game_event(data, "START", &state)) { hyperian_set_sound_handler(NULL); hyperian_data_close(data); SDL_Quit(); return 1; }
+    if (!run_game_event(data, "START", &state)) { hyperian_set_sound_handler(NULL); hyperian_data_close(data);
+#ifdef HYPERIAN_HAVE_SDL2_IMAGE
+        IMG_Quit();
+#endif
+        SDL_Quit(); return 1; }
     SDL_Window *window = SDL_CreateWindow(name, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 960, 540, SDL_WINDOW_SHOWN);
     SDL_Renderer *renderer = window ? SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC) : NULL;
     if (window && !renderer) renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
-    if (!window || !renderer) { fprintf(stderr, "error: cannot create game window: %s\n", SDL_GetError()); if (window) SDL_DestroyWindow(window); hyperian_set_sound_handler(NULL); hyperian_data_close(data); SDL_Quit(); return 1; }
+    if (!window || !renderer) { fprintf(stderr, "error: cannot create game window: %s\n", SDL_GetError()); if (window) SDL_DestroyWindow(window); hyperian_set_sound_handler(NULL); hyperian_data_close(data);
+#ifdef HYPERIAN_HAVE_SDL2_IMAGE
+        IMG_Quit();
+#endif
+        SDL_Quit(); return 1; }
     GameSprite sprites[GAME_SPRITES_MAX] = {0}; int sprite_count = 0;
     const char *injected_key = getenv("HYPERIAN_GAME_TEST_KEY"); int running = 1, failed = 0, frames = 0;
     if (injected_key) { char event[128]; snprintf(event, sizeof(event), "KEY:%s", injected_key); if (!run_game_event(data, event, &state)) { running = 0; failed = 1; } }
@@ -154,7 +192,8 @@ int run_game_app(const Bytecode *code, const char *name) {
         }
         Uint64 current_frame = SDL_GetPerformanceCounter(); char frame_seconds[64];
         snprintf(frame_seconds, sizeof(frame_seconds), "%.6f", (double)(current_frame - previous_frame) / (double)SDL_GetPerformanceFrequency());
-        previous_frame = current_frame; hyperian_state_set(&state, "seconds_since_last_frame", frame_seconds);
+        previous_frame = current_frame; hyperian_state_set(&state, "seconds since last frame", frame_seconds);
+        hyperian_state_set(&state, "seconds_since_last_frame", frame_seconds);
         if (!running) break;
         if (!run_game_event(data, "FRAME", &state)) { failed = 1; break; }
         int red = 20, green = 24, blue = 35;
@@ -191,10 +230,14 @@ int run_game_app(const Bytecode *code, const char *name) {
             char path[2048]; hyperian_state_evaluate(&state, code->items[i].args[0], path, sizeof(path)); SDL_Texture *texture = NULL;
             for (int at = 0; at < sprite_count; at++) if (!strcmp(sprites[at].path, path)) texture = sprites[at].texture;
             if (!texture && sprite_count < GAME_SPRITES_MAX) {
-                SDL_Surface *surface = SDL_LoadBMP(path);
+                char image_error[256] = {0}; SDL_Surface *surface = load_game_image(path, image_error, sizeof(image_error));
                 if (surface) texture = SDL_CreateTextureFromSurface(renderer, surface);
                 if (surface) SDL_FreeSurface(surface);
-                if (!texture) { fprintf(stderr, "error: could not load game image %s: %s\n", path, SDL_GetError()); running = 0; failed = 1; break; }
+                if (!texture) {
+                    if (*image_error) fprintf(stderr, "error: %s\n", image_error);
+                    else fprintf(stderr, "error: could not create game texture for %s: %s\n", path, SDL_GetError());
+                    running = 0; failed = 1; break;
+                }
                 snprintf(sprites[sprite_count].path, sizeof(sprites[sprite_count].path), "%s", path); sprites[sprite_count++].texture = texture;
             }
             SDL_Rect destination = {evaluated_number(&state, code->items[i].args[1]), evaluated_number(&state, code->items[i].args[2]),
@@ -208,7 +251,11 @@ int run_game_app(const Bytecode *code, const char *name) {
     if (test_name) printf("%s=%s\n", test_name, hyperian_state_get(&state, test_name) ? hyperian_state_get(&state, test_name) : "");
     for (int i = 0; i < sprite_count; i++) SDL_DestroyTexture(sprites[i].texture);
     if (game_audio_device) { SDL_CloseAudioDevice(game_audio_device); game_audio_device = 0; }
-    hyperian_set_sound_handler(NULL); hyperian_data_close(data); SDL_DestroyRenderer(renderer); SDL_DestroyWindow(window); SDL_Quit(); return failed ? 1 : 0;
+    hyperian_set_sound_handler(NULL); hyperian_data_close(data); SDL_DestroyRenderer(renderer); SDL_DestroyWindow(window);
+#ifdef HYPERIAN_HAVE_SDL2_IMAGE
+    IMG_Quit();
+#endif
+    SDL_Quit(); return failed ? 1 : 0;
 }
 #else
 int run_game_app(const Bytecode *code, const char *name) {

@@ -1,0 +1,15 @@
+application "Broken Image Game" is game
+
+model Artwork
+    field name is text
+end
+
+controller Gallery
+    when application starts
+        show view "gallery"
+    end
+end
+
+view "gallery"
+    draw image "assets/broken.png" at 40 40 sized 64 by 64
+end

@@ -6,13 +6,13 @@ end
 
 controller Game
     action initialize
-        set player_x to 100
-        set player_y to 100
+        set "player left" to 100
+        set "player top" to 100
     end
 
     action jump
         play sound "assets/jump.wav"
-        set player_y to player_y minus 20
+        set "player top" to value called "player top" minus 20
     end
 
     when application starts
@@ -25,11 +25,12 @@ controller Game
     end
 
     when game updates
-        set last_frame_time to seconds_since_last_frame
+        set "last frame time" to value called "seconds since last frame"
+        set "legacy frame time" to seconds_since_last_frame
     end
 end
 
 view "world"
     fill background with color 18 24 38
-    draw image "assets/player.bmp" at player_x player_y sized 64 by 64
+    draw image "assets/player.bmp" at "player left" "player top" sized 64 by 64
 end

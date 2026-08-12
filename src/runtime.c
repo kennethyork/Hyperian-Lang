@@ -500,6 +500,11 @@ static int physics_number(Scope *scope, const char *expression, double *number, 
     snprintf(error, error_size, "this game instruction needs a number for %s", expression); return 0;
 }
 
+static int frame_seconds(Scope *scope, double *seconds, char *error, size_t error_size) {
+    const char *readable = local_value(scope->locals, "seconds since last frame");
+    return physics_number(scope, readable ? "seconds since last frame" : "seconds_since_last_frame", seconds, error, error_size);
+}
+
 static void set_physics_number(HyperianState *state, const char *name, double number) {
     char value[64]; snprintf(value, sizeof(value), "%.15g", number); local_set(state, name, value);
 }
@@ -633,7 +638,7 @@ static int execute_logic_at(const Bytecode *code, size_t *position, Scope *scope
         double current, target, speed, seconds;
         if (!physics_number(scope, in->args[0], &current, error, error_size) || !physics_number(scope, in->args[1], &target, error, error_size) ||
             !physics_number(scope, in->args[2], &speed, error, error_size) ||
-            !physics_number(scope, "seconds_since_last_frame", &seconds, error, error_size)) return 0;
+            !frame_seconds(scope, &seconds, error, error_size)) return 0;
         if (speed < 0) { snprintf(error, error_size, "animation speed cannot be negative"); return 0; }
         if (seconds < 0) { snprintf(error, error_size, "time since the last frame cannot be negative"); return 0; }
         double distance = target - current, change = speed * seconds;
@@ -644,7 +649,7 @@ static int execute_logic_at(const Bytecode *code, size_t *position, Scope *scope
     } else if (in->opcode == OP_ADVANCE_ANIMATION) {
         double first_number, last_number, seconds;
         if (!physics_number(scope, in->args[1], &first_number, error, error_size) || !physics_number(scope, in->args[2], &last_number, error, error_size) ||
-            !physics_number(scope, "seconds_since_last_frame", &seconds, error, error_size)) return 0;
+            !frame_seconds(scope, &seconds, error, error_size)) return 0;
         if (first_number < -1000000000 || first_number > 1000000000 || last_number < -1000000000 || last_number > 1000000000) {
             snprintf(error, error_size, "animation frame numbers must be between -1000000000 and 1000000000"); return 0;
         }
@@ -677,13 +682,13 @@ static int execute_logic_at(const Bytecode *code, size_t *position, Scope *scope
         double x, y, velocity_x, velocity_y, seconds;
         if (!physics_number(scope, in->args[0], &x, error, error_size) || !physics_number(scope, in->args[1], &y, error, error_size) ||
             !physics_number(scope, in->args[2], &velocity_x, error, error_size) || !physics_number(scope, in->args[3], &velocity_y, error, error_size) ||
-            !physics_number(scope, "seconds_since_last_frame", &seconds, error, error_size)) return 0;
+            !frame_seconds(scope, &seconds, error, error_size)) return 0;
         set_physics_number(scope->locals, in->args[0], x + velocity_x * seconds);
         set_physics_number(scope->locals, in->args[1], y + velocity_y * seconds);
     } else if (in->opcode == OP_APPLY_GRAVITY) {
         double gravity, velocity, seconds;
         if (!physics_number(scope, in->args[0], &gravity, error, error_size) || !physics_number(scope, in->args[1], &velocity, error, error_size) ||
-            !physics_number(scope, "seconds_since_last_frame", &seconds, error, error_size)) return 0;
+            !frame_seconds(scope, &seconds, error, error_size)) return 0;
         set_physics_number(scope->locals, in->args[1], velocity + gravity * seconds);
     } else if (in->opcode == OP_KEEP_INSIDE) {
         double x, y, width, height, item_width, item_height;
@@ -1051,7 +1056,10 @@ int debug_bytecode(const char *path, const char *event, const char *action, cons
     if (selected_event && strcmp(selected_event, "START") && !hyperian_execute_data_event(data, "START", &state, error, sizeof(error))) {
         fprintf(stderr, "Debugger could not prepare the application: %s\n", error); hyperian_data_close(data); bytecode_free(&code); return 1;
     }
-    if (selected_event && !strcmp(selected_event, "FRAME")) hyperian_state_set(&state, "seconds_since_last_frame", "0.0166666666666667");
+    if (selected_event && !strcmp(selected_event, "FRAME")) {
+        hyperian_state_set(&state, "seconds since last frame", "0.0166666666666667");
+        hyperian_state_set(&state, "seconds_since_last_frame", "0.0166666666666667");
+    }
     debugger_active = 1;
     printf("Debugging %s %s\n", action ? "action" : "event", action ? action : event);
     int okay = action ? hyperian_execute_data_action(data, action, input, &state, error, sizeof(error))

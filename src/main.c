@@ -529,6 +529,13 @@ static int doctor(void) {
 #else
     puts("  game runtime (SDL2): not included in this build");
 #endif
+#ifdef HYPERIAN_HAVE_SDL2_IMAGE
+    puts("  PNG, JPEG, and WebP game images (SDL2_image): ready");
+#elif defined(HYPERIAN_HAVE_SDL2)
+    puts("  PNG, JPEG, and WebP game images (SDL2_image): not included; BMP images are ready");
+#else
+    puts("  game image loading: unavailable because the SDL2 game runtime is not included");
+#endif
 #ifdef HYPERIAN_HAVE_SQLITE3
     puts("  SQLite storage: ready");
 #else
