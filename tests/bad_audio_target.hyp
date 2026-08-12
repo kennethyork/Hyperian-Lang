@@ -1,0 +1,16 @@
+application "Wrong Audio Target" is console
+
+model Soundtrack
+field name is text
+that is all
+
+controller Audio
+when application starts
+play music "assets/theme.ogg" repeatedly
+show view "result"
+that is all
+that is all
+
+view "result"
+show "This should not run"
+that is all

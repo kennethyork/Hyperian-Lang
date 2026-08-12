@@ -1,0 +1,16 @@
+application "Bad Music Volume" is game
+
+model Soundtrack
+field name is text
+that is all
+
+controller Audio
+when application starts
+set music volume to 101 percent
+show view "stage"
+that is all
+that is all
+
+view "stage"
+fill background with color 18 24 38
+that is all

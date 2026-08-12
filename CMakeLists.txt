@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(Hyperian VERSION 0.43.0 LANGUAGES C)
+project(Hyperian VERSION 0.44.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -133,6 +133,7 @@ add_test(NAME reject_pwa_without_route
     COMMAND hyperian check ${CMAKE_SOURCE_DIR}/tests/bad_pwa_route.hyp)
 set_tests_properties(reject_pwa_without_route PROPERTIES WILL_FAIL TRUE)
 find_program(CURL_EXECUTABLE curl)
+find_program(FFMPEG_EXECUTABLE ffmpeg)
 if(CURL_EXECUTABLE)
     add_test(NAME run_pwa_runtime
         COMMAND sh ${CMAKE_SOURCE_DIR}/tests/pwa_runtime_test.sh $<TARGET_FILE:hyperian> ${CMAKE_SOURCE_DIR}/examples/pwa_tasks/app.hyp ${CMAKE_BINARY_DIR})
@@ -592,9 +593,38 @@ add_test(NAME debug_game_animation
 set_tests_properties(debug_game_animation PROPERTIES PASS_REGULAR_EXPRESSION "advance animation animation frame from 1 through 4 every 100 milliseconds")
 add_test(NAME compile_game_media
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/game_media.hyp -o ${CMAKE_BINARY_DIR}/game_media.hyc)
+add_test(NAME compile_game_audio
+    COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/game_audio.hyp -o ${CMAKE_BINARY_DIR}/game_audio.hyc)
+add_test(NAME inspect_game_audio
+    COMMAND hyperian inspect ${CMAKE_BINARY_DIR}/game_audio.hyc)
+set_tests_properties(inspect_game_audio PROPERTIES DEPENDS compile_game_audio
+    PASS_REGULAR_EXPRESSION "PLAY_MUSIC.*repeatedly")
+add_test(NAME inspect_game_audio_volume
+    COMMAND hyperian inspect ${CMAKE_BINARY_DIR}/game_audio.hyc)
+set_tests_properties(inspect_game_audio_volume PROPERTIES DEPENDS compile_game_audio
+    PASS_REGULAR_EXPRESSION "SET_MUSIC_VOLUME 40")
+add_test(NAME inspect_game_audio_controls
+    COMMAND hyperian inspect ${CMAKE_BINARY_DIR}/game_audio.hyc)
+set_tests_properties(inspect_game_audio_controls PROPERTIES DEPENDS compile_game_audio
+    PASS_REGULAR_EXPRESSION "PAUSE_MUSIC")
+add_test(NAME inspect_game_audio_resume
+    COMMAND hyperian inspect ${CMAKE_BINARY_DIR}/game_audio.hyc)
+set_tests_properties(inspect_game_audio_resume PROPERTIES DEPENDS compile_game_audio
+    PASS_REGULAR_EXPRESSION "RESUME_MUSIC")
+add_test(NAME inspect_game_audio_stop
+    COMMAND hyperian inspect ${CMAKE_BINARY_DIR}/game_audio.hyc)
+set_tests_properties(inspect_game_audio_stop PROPERTIES DEPENDS compile_game_audio
+    PASS_REGULAR_EXPRESSION "STOP_MUSIC")
+add_test(NAME reject_audio_outside_game
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/reject_with_message_test.sh "audio instructions require an application declared as game"
+        $<TARGET_FILE:hyperian> check ${CMAKE_SOURCE_DIR}/tests/bad_audio_target.hyp)
 add_test(NAME compile_game_common_images
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/game_common_images.hyp -o ${CMAKE_BINARY_DIR}/game_common_images.hyc)
 if(SDL2_FOUND)
+    add_test(NAME doctor_without_game_mixer
+        COMMAND ${CMAKE_COMMAND} -E env HYPERIAN_DISABLE_SDL2_MIXER=1 $<TARGET_FILE:hyperian> doctor)
+    set_tests_properties(doctor_without_game_mixer PROPERTIES
+        PASS_REGULAR_EXPRESSION "SDL2_mixer.*not installed; WAV effects are ready")
     add_test(NAME run_native_game_headless
         COMMAND ${CMAKE_COMMAND} -E env SDL_VIDEODRIVER=dummy HYPERIAN_VISUAL_TEST=1 HYPERIAN_GAME_TEST_KEY=right HYPERIAN_VISUAL_TEST_STATE=player_x
             $<TARGET_FILE:hyperian> run ${CMAKE_BINARY_DIR}/blocks_game.hyc)
@@ -618,6 +648,38 @@ if(SDL2_FOUND)
             HYPERIAN_GAME_TEST_KEY=space "HYPERIAN_VISUAL_TEST_STATE=player top"
             $<TARGET_FILE:hyperian> run ${CMAKE_BINARY_DIR}/game_media.hyc)
     set_tests_properties(run_game_media_headless PROPERTIES DEPENDS "compile_game_media;create_game_media_assets" PASS_REGULAR_EXPRESSION "player top=80")
+    add_test(NAME run_wav_game_audio_without_mixer
+        COMMAND ${CMAKE_COMMAND} -E env SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy HYPERIAN_DISABLE_SDL2_MIXER=1
+            HYPERIAN_VISUAL_TEST=1 HYPERIAN_GAME_TEST_KEY=space "HYPERIAN_VISUAL_TEST_STATE=player top"
+            $<TARGET_FILE:hyperian> run ${CMAKE_BINARY_DIR}/game_media.hyc)
+    set_tests_properties(run_wav_game_audio_without_mixer PROPERTIES DEPENDS "compile_game_media;create_game_media_assets"
+        PASS_REGULAR_EXPRESSION "player top=80")
+    add_test(NAME reject_compressed_sound_without_mixer
+        COMMAND sh ${CMAKE_SOURCE_DIR}/tests/reject_with_message_test.sh "needs SDL2_mixer to play compressed sound"
+            ${CMAKE_COMMAND} -E env SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy HYPERIAN_DISABLE_SDL2_MIXER=1
+            HYPERIAN_VISUAL_TEST=1 $<TARGET_FILE:hyperian> run ${CMAKE_BINARY_DIR}/game_audio.hyc)
+    set_tests_properties(reject_compressed_sound_without_mixer PROPERTIES DEPENDS compile_game_audio)
+    add_test(NAME reject_streaming_music_without_mixer
+        COMMAND sh ${CMAKE_SOURCE_DIR}/tests/reject_with_message_test.sh "needs SDL2_mixer to stream music"
+            ${CMAKE_COMMAND} -E env SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy HYPERIAN_DISABLE_SDL2_MIXER=1
+            HYPERIAN_VISUAL_TEST=1 $<TARGET_FILE:hyperian> run ${CMAKE_SOURCE_DIR}/tests/bad_game_music.hyp)
+    add_test(NAME reject_bad_music_volume
+        COMMAND sh ${CMAKE_SOURCE_DIR}/tests/reject_with_message_test.sh "music volume must be a number from 0 through 100 percent"
+            ${CMAKE_COMMAND} -E env SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy HYPERIAN_VISUAL_TEST=1
+            $<TARGET_FILE:hyperian> run ${CMAKE_SOURCE_DIR}/tests/bad_music_volume.hyp)
+    if(FFMPEG_EXECUTABLE)
+        add_test(NAME run_compressed_game_audio_headless
+            COMMAND sh ${CMAKE_SOURCE_DIR}/tests/game_audio_runtime_test.sh $<TARGET_FILE:hyperian>
+                ${FFMPEG_EXECUTABLE} ${CMAKE_SOURCE_DIR}/examples/game_audio.hyp ${CMAKE_BINARY_DIR}/game_audio_runtime.hyc)
+        set_tests_properties(run_compressed_game_audio_headless PROPERTIES SKIP_RETURN_CODE 77
+            PASS_REGULAR_EXPRESSION "audio ready=yes")
+    endif()
+    add_test(NAME reject_broken_streaming_music
+        COMMAND sh ${CMAKE_SOURCE_DIR}/tests/require_mixer_test.sh $<TARGET_FILE:hyperian>
+            sh ${CMAKE_SOURCE_DIR}/tests/reject_with_message_test.sh "could not load music assets/broken.ogg"
+            ${CMAKE_COMMAND} -E env SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy HYPERIAN_VISUAL_TEST=1
+            $<TARGET_FILE:hyperian> run ${CMAKE_SOURCE_DIR}/tests/bad_game_music.hyp)
+    set_tests_properties(reject_broken_streaming_music PROPERTIES DEPENDS create_game_media_assets SKIP_RETURN_CODE 77)
     add_test(NAME run_legacy_game_frame_name_headless
         COMMAND ${CMAKE_COMMAND} -E env SDL_VIDEODRIVER=dummy HYPERIAN_VISUAL_TEST=1 "HYPERIAN_VISUAL_TEST_STATE=legacy frame time"
             $<TARGET_FILE:hyperian> run ${CMAKE_BINARY_DIR}/game_media.hyc)

@@ -21,7 +21,7 @@ cmake --build build
 
 The compiler and VM are now at `build/hyperian`.
 
-GTK3, SDL2, SDL2_image, libcurl, and SQLite are detected as optional native backends. SDL2_image adds PNG, JPEG, and WebP game sprites; set `-DHYPERIAN_ENABLE_SDL2_IMAGE=OFF` when configuring to build the BMP-only fallback deliberately. `hyperian doctor` reports exactly which backends are present.
+GTK3, SDL2, SDL2_image, SDL2_mixer, libcurl, and SQLite are detected as optional native backends. SDL2_image adds PNG, JPEG, and WebP game sprites; set `-DHYPERIAN_ENABLE_SDL2_IMAGE=OFF` when configuring to build the BMP-only fallback deliberately. SDL2_mixer is discovered at runtime and adds compressed sound effects plus streamed music while the SDL2-only fallback continues to play WAV effects. `hyperian doctor` reports exactly which backends are present.
 
 ## Try it
 
@@ -754,7 +754,18 @@ The SDL2 backend dispatches arrow, space, and enter keys through `when player pr
 
 Animation needs no manual frame-time arithmetic. `move value` approaches its target without overshooting, whether the target is above or below the current value. `advance animation` changes a whole-number frame at the requested millisecond, second, or minute interval, keeps leftover time, catches up after a slow frame, and wraps from the final frame back to the first. The native VM performs both operations deterministically from elapsed frame time. The compiler restricts them to game applications, and invalid speeds, time, frames, or intervals stop with friendly errors.
 
-Views can always draw state-positioned BMP images. Builds with SDL2_image also draw PNG, JPEG, and WebP sprites with the same English instruction. A missing decoder or damaged image produces a readable runtime error instead of a blank texture. Actions can say `play sound "assets/jump.wav"` for WAV audio. See [examples/blocks_game.hyp](examples/blocks_game.hyp), [examples/game_media.hyp](examples/game_media.hyp), [examples/game_common_images.hyp](examples/game_common_images.hyp), and [examples/physics_game.hyp](examples/physics_game.hyp).
+Views can always draw state-positioned BMP images. Builds with SDL2_image also draw PNG, JPEG, and WebP sprites with the same English instruction. A missing decoder or damaged image produces a readable runtime error instead of a blank texture. Every SDL2 build can play WAV effects. When SDL2_mixer is installed, the same `play sound` sentence also accepts compressed OGG, MP3, FLAC, and Opus effects and allows several effects to overlap. Music is streamed instead of loaded as one large sound:
+
+```hyperian
+play sound "assets/jump.ogg"
+play music "assets/theme.ogg" repeatedly
+set music volume to 40 percent
+pause music
+resume music
+stop music
+```
+
+Say `play music "assets/theme.ogg" once` when it should not repeat. Missing optional audio support, damaged media, and volume values outside 0 through 100 produce readable errors. See [examples/blocks_game.hyp](examples/blocks_game.hyp), [examples/game_media.hyp](examples/game_media.hyp), [examples/game_audio.hyp](examples/game_audio.hyp), [examples/game_common_images.hyp](examples/game_common_images.hyp), and [examples/physics_game.hyp](examples/physics_game.hyp).
 
 ## Programs split across files
 
@@ -917,6 +928,6 @@ that is all
 
 ## Project status
 
-Version 0.43 is a small but real MVC platform: canonical fully left-aligned English source with readable `that is all` block endings and compatibility for older indentation-based programs, custom bytecode, a native VM, standalone executable and asset-bundle creation, readable quoted phrase names across MVC and every runtime, literal-safe English expressions, versioned Android/iOS mobile deployment packages, automated signed APK/AAB/IPA orchestration, a linkable native mobile runtime bridge, self-contained native Android Studio and SwiftUI Xcode project generation, native phone HTTPS and SQLite integration, native backend diagnostics, eight compiler targets including installable offline web applications, parallel-safe compiler tooling, an English source-line debugger, persistent model CRUD plus filtered and ordered collection queries inside native controller actions, repeated native collection views, recurring service and native-interface timers, interactive multi-view GTK desktop and phone-sized mobile preview interfaces with close, live-input-change, keyboard-submission, focus, pause, resume, tap, press-and-hold, and four-direction swipe events, matching generated Android/iOS lifecycle and gesture events, SDL2 keyboard/frame events, frame-rate-independent movement, gravity, smooth value transitions, timed animation frames, boundaries, native rectangle, circle, line, and filled polygon drawing plus collision detection between every shape pair, BMP/PNG/JPEG/WebP sprites, WAV sound, readable frame-time state, and state-driven rendering, native lists and maps, selectable HDB or transactional SQLite storage, recoverable runtime errors, an HTTP/HTTPS client, local packages, reusable actions, native file access, foldered project generation, versioned migrations, persistent CRUD models, safe HTML and typed JSON, authentication and authorization, middleware, formatting, and English tests.
+Version 0.44 is a small but real MVC platform: canonical fully left-aligned English source with readable `that is all` block endings and compatibility for older indentation-based programs, custom bytecode, a native VM, standalone executable and asset-bundle creation, readable quoted phrase names across MVC and every runtime, literal-safe English expressions, versioned Android/iOS mobile deployment packages, automated signed APK/AAB/IPA orchestration, a linkable native mobile runtime bridge, self-contained native Android Studio and SwiftUI Xcode project generation, native phone HTTPS and SQLite integration, native backend diagnostics, eight compiler targets including installable offline web applications, parallel-safe compiler tooling, an English source-line debugger, persistent model CRUD plus filtered and ordered collection queries inside native controller actions, repeated native collection views, recurring service and native-interface timers, interactive multi-view GTK desktop and phone-sized mobile preview interfaces with close, live-input-change, keyboard-submission, focus, pause, resume, tap, press-and-hold, and four-direction swipe events, matching generated Android/iOS lifecycle and gesture events, SDL2 keyboard/frame events, frame-rate-independent movement, gravity, smooth value transitions, timed animation frames, boundaries, native rectangle, circle, line, and filled polygon drawing plus collision detection between every shape pair, BMP/PNG/JPEG/WebP sprites, WAV and compressed overlapping sound effects, streamed music controls, readable frame-time state, and state-driven rendering, native lists and maps, selectable HDB or transactional SQLite storage, recoverable runtime errors, an HTTP/HTTPS client, local packages, reusable actions, native file access, foldered project generation, versioned migrations, persistent CRUD models, safe HTML and typed JSON, authentication and authorization, middleware, formatting, and English tests.
 
-The next major layers are compressed or streaming audio and broader cross-compilation. Those are not claimed as complete yet.
+The next major layer is broader cross-compilation so one host can directly produce native executables for more operating systems. That is not claimed as complete yet.

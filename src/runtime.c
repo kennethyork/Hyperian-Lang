@@ -389,7 +389,9 @@ static int is_logic_instruction(uint8_t opcode) {
         opcode == OP_RETURN_VALUE || opcode == OP_READ_FILE || opcode == OP_WRITE_FILE || opcode == OP_TRY ||
         opcode == OP_MAKE_LIST || opcode == OP_LIST_ADD || opcode == OP_LIST_REMOVE || opcode == OP_LIST_COUNT ||
         opcode == OP_LIST_ITEM || opcode == OP_HTTP_GET || opcode == OP_MAKE_MAP || opcode == OP_MAP_PUT ||
-        opcode == OP_MAP_GET || opcode == OP_MAP_REMOVE || opcode == OP_MAP_COUNT || opcode == OP_PLAY_SOUND || opcode == OP_OPEN_VIEW ||
+        opcode == OP_MAP_GET || opcode == OP_MAP_REMOVE || opcode == OP_MAP_COUNT || opcode == OP_PLAY_SOUND ||
+        opcode == OP_PLAY_MUSIC || opcode == OP_PAUSE_MUSIC || opcode == OP_RESUME_MUSIC || opcode == OP_STOP_MUSIC ||
+        opcode == OP_SET_MUSIC_VOLUME || opcode == OP_OPEN_VIEW ||
         opcode == OP_CREATE_STATE || opcode == OP_FIND_STATE || opcode == OP_UPDATE_STATE || opcode == OP_DELETE_STATE || opcode == OP_COUNT_RECORDS || opcode == OP_COLLECT_FIELD ||
         opcode == OP_MOVE_POSITION || opcode == OP_APPLY_GRAVITY || opcode == OP_KEEP_INSIDE || opcode == OP_CHECK_COLLISION || opcode == OP_COLLECT_QUERY ||
         opcode == OP_MOVE_VALUE_TOWARD || opcode == OP_ADVANCE_ANIMATION ||
@@ -401,6 +403,8 @@ static int is_logic_instruction(uint8_t opcode) {
 
 static HyperianSoundHandler sound_handler = NULL;
 void hyperian_set_sound_handler(HyperianSoundHandler handler) { sound_handler = handler; }
+static HyperianMusicHandler music_handler = NULL;
+void hyperian_set_music_handler(HyperianMusicHandler handler) { music_handler = handler; }
 
 static int execute_logic_range(const Bytecode *code, size_t from, size_t to, Scope *scope, int depth, char *error, size_t error_size);
 
@@ -436,6 +440,11 @@ static void debug_instruction(const Instruction *in, int depth) {
         case OP_MAP_REMOVE: printf("remove %s from map %s", in->args[0], in->args[1]); break;
         case OP_MAP_COUNT: printf("count map %s as %s", in->args[0], in->args[1]); break;
         case OP_PLAY_SOUND: printf("play sound %s", in->args[0]); break;
+        case OP_PLAY_MUSIC: printf("play music %s %s", in->args[0], in->args[1]); break;
+        case OP_PAUSE_MUSIC: printf("pause music"); break;
+        case OP_RESUME_MUSIC: printf("resume music"); break;
+        case OP_STOP_MUSIC: printf("stop music"); break;
+        case OP_SET_MUSIC_VOLUME: printf("set music volume to %s percent", in->args[0]); break;
         case OP_OPEN_VIEW: printf("open view %s", in->args[0]); break;
         case OP_CREATE_STATE: printf("create a %s using the current values as %s", in->args[0], in->args[1]); break;
         case OP_FIND_STATE: printf("find the %s numbered %s as %s", in->args[0], in->args[1], in->args[2]); break;
@@ -893,6 +902,25 @@ static int execute_logic_at(const Bytecode *code, size_t *position, Scope *scope
         char path[2048]; evaluate(scope, in->args[0], path, sizeof(path));
         if (!sound_handler) { snprintf(error, error_size, "this application target cannot play sounds"); return 0; }
         if (!sound_handler(path, error, error_size)) return 0;
+    } else if (in->opcode == OP_PLAY_MUSIC) {
+        char path[2048]; evaluate(scope, in->args[0], path, sizeof(path));
+        if (!music_handler) { snprintf(error, error_size, "this application target cannot play music"); return 0; }
+        HyperianMusicCommand command = !strcmp(in->args[1], "once") ? HYPERIAN_MUSIC_PLAY_ONCE : HYPERIAN_MUSIC_PLAY_REPEATEDLY;
+        if (!music_handler(command, path, 0, error, error_size)) return 0;
+    } else if (in->opcode == OP_PAUSE_MUSIC || in->opcode == OP_RESUME_MUSIC || in->opcode == OP_STOP_MUSIC) {
+        if (!music_handler) { snprintf(error, error_size, "this application target cannot control music"); return 0; }
+        HyperianMusicCommand command = in->opcode == OP_PAUSE_MUSIC ? HYPERIAN_MUSIC_PAUSE :
+            in->opcode == OP_RESUME_MUSIC ? HYPERIAN_MUSIC_RESUME : HYPERIAN_MUSIC_STOP;
+        if (!music_handler(command, NULL, 0, error, error_size)) return 0;
+    } else if (in->opcode == OP_SET_MUSIC_VOLUME) {
+        char text[128]; double volume; evaluate(scope, in->args[0], text, sizeof(text));
+        if (!number_value(text, &volume) || volume < 0 || volume > 100) {
+            snprintf(error, error_size, "music volume must be a number from 0 through 100 percent"); return 0;
+        }
+        if (!music_handler || !music_handler(HYPERIAN_MUSIC_VOLUME, NULL, (int)(volume + 0.5), error, error_size)) {
+            if (!music_handler) snprintf(error, error_size, "this application target cannot control music volume");
+            return 0;
+        }
     } else if (in->opcode == OP_OPEN_VIEW) {
         local_set(scope->locals, "__hyperian_open_view", in->args[0]);
     } else if (in->opcode == OP_CREATE_STATE) {

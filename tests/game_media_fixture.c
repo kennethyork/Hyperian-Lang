@@ -53,6 +53,7 @@ int main(void) {
         0xa5,0x1a,0xff,0xe6,0x09,0xfa,0xfd,0xf3,0xe7,0xae,0x40,0x00
     };
     static const unsigned char broken[] = {'n','o','t',' ','a','n',' ','i','m','a','g','e'};
+    static const unsigned char broken_audio[] = {'n','o','t',' ','a','u','d','i','o'};
     static const unsigned char wave[] = {
         'R','I','F','F',44,0,0,0,'W','A','V','E',
         'f','m','t',' ',16,0,0,0,1,0,1,0,64,31,0,0,64,31,0,0,1,0,8,0,
@@ -61,6 +62,7 @@ int main(void) {
     if (mkdir("assets", 0755) && errno != EEXIST) return 1;
     if (!write_file("assets/player.bmp", bitmap, sizeof(bitmap)) || !write_file("assets/player.png", png, sizeof(png)) ||
         !write_file("assets/player.jpg", jpeg, sizeof(jpeg)) || !write_file("assets/player.webp", webp, sizeof(webp)) ||
-        !write_file("assets/broken.png", broken, sizeof(broken)) || !write_file("assets/jump.wav", wave, sizeof(wave))) return 1;
+        !write_file("assets/broken.png", broken, sizeof(broken)) || !write_file("assets/broken.ogg", broken_audio, sizeof(broken_audio)) ||
+        !write_file("assets/jump.wav", wave, sizeof(wave))) return 1;
     puts("Created game media fixtures."); return 0;
 }

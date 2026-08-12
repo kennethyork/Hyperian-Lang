@@ -413,8 +413,10 @@ static int validate(Bytecode *code, const char *path) {
             code->items[i].opcode == OP_CHECK_POLYGON_COLLISION || code->items[i].opcode == OP_CHECK_POLYGON_LINE_COLLISION ||
             code->items[i].opcode == OP_CHECK_POLYGON_CIRCLE_COLLISION || code->items[i].opcode == OP_CHECK_POLYGON_RECTANGLE_COLLISION ||
             code->items[i].opcode == OP_BACKGROUND ||
-            code->items[i].opcode == OP_RECTANGLE || code->items[i].opcode == OP_SPRITE) {
-            source_error(path, code->items[i].line, "game drawing, physics, and animation instructions require an application declared as game"); return 0;
+            code->items[i].opcode == OP_RECTANGLE || code->items[i].opcode == OP_SPRITE || code->items[i].opcode == OP_PLAY_SOUND ||
+            code->items[i].opcode == OP_PLAY_MUSIC || code->items[i].opcode == OP_PAUSE_MUSIC || code->items[i].opcode == OP_RESUME_MUSIC ||
+            code->items[i].opcode == OP_STOP_MUSIC || code->items[i].opcode == OP_SET_MUSIC_VOLUME) {
+            source_error(path, code->items[i].line, "game drawing, physics, animation, and audio instructions require an application declared as game"); return 0;
         }
     if (strcmp(target, "desktop") && strcmp(target, "mobile")) for (size_t i = 0; i < code->count; i++)
         if (code->items[i].opcode == OP_EVENT && (!strncmp(code->items[i].args[0], "CHANGE:", 7) ||
@@ -911,6 +913,20 @@ int compile_file(const char *source_path, const char *output_path) {
                 char *args[2] = {w[1], w[4]}; okay = emit(&code, OP_WRITE_FILE, 2, args, number);
             } else if (n == 3 && !strcmp(w[0], "play") && !strcmp(w[1], "sound")) {
                 okay = emit(&code, OP_PLAY_SOUND, 1, &w[2], number);
+            } else if ((n == 3 || n == 4) && !strcmp(w[0], "play") && !strcmp(w[1], "music") &&
+                (n == 3 || !strcmp(w[3], "once") || !strcmp(w[3], "repeatedly"))) {
+                char *args[2] = {w[2], n == 4 && !strcmp(w[3], "once") ? "once" : "repeatedly"};
+                okay = emit(&code, OP_PLAY_MUSIC, 2, args, number);
+            } else if (n == 2 && !strcmp(w[0], "pause") && !strcmp(w[1], "music")) {
+                okay = emit(&code, OP_PAUSE_MUSIC, 0, NULL, number);
+            } else if (n == 2 && !strcmp(w[0], "resume") && !strcmp(w[1], "music")) {
+                okay = emit(&code, OP_RESUME_MUSIC, 0, NULL, number);
+            } else if (n == 2 && !strcmp(w[0], "stop") && !strcmp(w[1], "music")) {
+                okay = emit(&code, OP_STOP_MUSIC, 0, NULL, number);
+            } else if (n >= 6 && !strcmp(w[0], "set") && !strcmp(w[1], "music") && !strcmp(w[2], "volume") &&
+                !strcmp(w[3], "to") && !strcmp(w[n - 1], "percent")) {
+                char expression[MAX_LINE]; join_words(expression, sizeof(expression), w, quoted, 4, n - 1);
+                char *arg = expression; okay = emit(&code, OP_SET_MUSIC_VOLUME, 1, &arg, number);
             } else if (n == 3 && !strcmp(w[0], "open") && !strcmp(w[1], "view")) {
                 okay = emit(&code, OP_OPEN_VIEW, 1, &w[2], number);
             } else if (n == 3 && !strcmp(w[0], "make") && !strcmp(w[1], "list") && is_name(w[2])) {

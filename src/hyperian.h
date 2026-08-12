@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#define HYPERIAN_VERSION "0.43.0"
+#define HYPERIAN_VERSION "0.44.0"
 #define HYC_MAGIC "HYC1"
 #define HYC_MAX_ARGS 9
 #define HYPERIAN_STATE_MAX 64
@@ -41,7 +41,8 @@ typedef enum {
     OP_CIRCLE, OP_CHECK_CIRCLE_COLLISION, OP_CHECK_CIRCLE_RECTANGLE_COLLISION,
     OP_LINE, OP_CHECK_LINE_COLLISION, OP_CHECK_LINE_CIRCLE_COLLISION, OP_CHECK_LINE_RECTANGLE_COLLISION,
     OP_POLYGON, OP_CHECK_POLYGON_COLLISION, OP_CHECK_POLYGON_LINE_COLLISION,
-    OP_CHECK_POLYGON_CIRCLE_COLLISION, OP_CHECK_POLYGON_RECTANGLE_COLLISION
+    OP_CHECK_POLYGON_CIRCLE_COLLISION, OP_CHECK_POLYGON_RECTANGLE_COLLISION,
+    OP_PLAY_MUSIC, OP_PAUSE_MUSIC, OP_RESUME_MUSIC, OP_STOP_MUSIC, OP_SET_MUSIC_VOLUME
 } OpCode;
 
 typedef struct {
@@ -64,6 +65,9 @@ typedef struct {
 } HyperianState;
 
 typedef int (*HyperianSoundHandler)(const char *path, char *error, size_t error_size);
+typedef enum { HYPERIAN_MUSIC_PLAY_ONCE, HYPERIAN_MUSIC_PLAY_REPEATEDLY, HYPERIAN_MUSIC_PAUSE,
+    HYPERIAN_MUSIC_RESUME, HYPERIAN_MUSIC_STOP, HYPERIAN_MUSIC_VOLUME } HyperianMusicCommand;
+typedef int (*HyperianMusicHandler)(HyperianMusicCommand command, const char *path, int value, char *error, size_t error_size);
 typedef int (*HyperianHttpHandler)(const char *url, char *body, size_t body_size, long *status, char *error, size_t error_size);
 typedef struct HyperianData HyperianData;
 typedef struct HyperianMobile HyperianMobile;
@@ -91,6 +95,8 @@ const char *hyperian_state_get(const HyperianState *state, const char *name);
 void hyperian_state_set(HyperianState *state, const char *name, const char *value);
 void hyperian_state_evaluate(HyperianState *state, const char *expression, char *output, size_t output_size);
 void hyperian_set_sound_handler(HyperianSoundHandler handler);
+void hyperian_set_music_handler(HyperianMusicHandler handler);
+int hyperian_game_mixer_available(void);
 int hyperian_execute_action(const Bytecode *code, const char *name, const char *input, HyperianState *state, char *error, size_t error_size);
 int hyperian_execute_event(const Bytecode *code, const char *event, HyperianState *state, char *error, size_t error_size);
 HyperianData *hyperian_data_open(const Bytecode *code, char *error, size_t error_size);

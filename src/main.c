@@ -556,8 +556,11 @@ static int doctor(void) {
 #endif
 #ifdef HYPERIAN_HAVE_SDL2
     puts("  game runtime with English physics and animation (SDL2): ready");
+    if (hyperian_game_mixer_available()) puts("  compressed effects and streaming music (SDL2_mixer): ready");
+    else puts("  compressed effects and streaming music (SDL2_mixer): not installed; WAV effects are ready");
 #else
     puts("  game runtime (SDL2): not included in this build");
+    puts("  game audio: unavailable because the SDL2 game runtime is not included");
 #endif
 #ifdef HYPERIAN_HAVE_SDL2_IMAGE
     puts("  PNG, JPEG, and WebP game images (SDL2_image): ready");

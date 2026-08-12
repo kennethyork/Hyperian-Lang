@@ -1,0 +1,22 @@
+application "Audio Game" is game
+
+model Soundtrack
+field name is text
+that is all
+
+controller Audio
+when application starts
+play sound "assets/effect.ogg"
+play music "assets/theme.ogg" repeatedly
+set music volume to 40 percent
+pause music
+resume music
+stop music
+set "audio ready" to yes
+show view "stage"
+that is all
+that is all
+
+view "stage"
+fill background with color 18 24 38
+that is all
