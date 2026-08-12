@@ -14,6 +14,22 @@
 typedef enum { BLOCK_ROOT, BLOCK_MODEL, BLOCK_CONTROLLER, BLOCK_ROUTE, BLOCK_VIEW, BLOCK_FORM, BLOCK_EACH, BLOCK_IF,
     BLOCK_LAYOUT, BLOCK_COMPONENT, BLOCK_ACTION, BLOCK_LOGIC_IF, BLOCK_REPEAT, BLOCK_TEST, BLOCK_MIGRATION, BLOCK_TRY } Block;
 
+static int block_end_opcode(Block block) {
+    return block == BLOCK_MODEL ? OP_END_MODEL : block == BLOCK_CONTROLLER ? OP_END_CONTROLLER :
+        block == BLOCK_ROUTE ? OP_END_ROUTE : block == BLOCK_VIEW ? OP_END_VIEW :
+        block == BLOCK_FORM ? OP_END_FORM : block == BLOCK_EACH ? OP_END_EACH : block == BLOCK_IF ? OP_END_IF :
+        block == BLOCK_LAYOUT ? OP_END_LAYOUT : block == BLOCK_COMPONENT ? OP_END_COMPONENT :
+        block == BLOCK_ACTION ? OP_END_ACTION : block == BLOCK_LOGIC_IF ? OP_END_LOGIC_IF :
+        block == BLOCK_REPEAT ? OP_END_REPEAT : block == BLOCK_MIGRATION ? OP_END_MIGRATION :
+        block == BLOCK_TRY ? OP_END_TRY : OP_END_TEST;
+}
+
+static int indentation_branch(Block block, char **words, int count) {
+    return (block == BLOCK_LOGIC_IF && count == 1 && !strcmp(words[0], "otherwise")) ||
+        (block == BLOCK_TRY && count == 5 && !strcmp(words[0], "when") && !strcmp(words[1], "it") &&
+            !strcmp(words[2], "fails") && !strcmp(words[3], "as"));
+}
+
 static void source_error(const char *path, unsigned line, const char *message) {
     fprintf(stderr, "%s:%u: error: %s\n", path, line, message);
 }
@@ -464,26 +480,60 @@ int compile_file(const char *source_path, const char *output_path) {
     if (!expand_source(source_path, file, 0, project_directory)) { fclose(file); return 1; }
     rewind(file);
     Bytecode code; bytecode_init(&code);
-    Block stack[MAX_DEPTH] = {BLOCK_ROOT}; int depth = 1;
+    Block stack[MAX_DEPTH] = {BLOCK_ROOT}; unsigned block_indentation[MAX_DEPTH] = {0};
+    unsigned child_indentation[MAX_DEPTH]; for (int at = 0; at < MAX_DEPTH; at++) child_indentation[at] = UINT_MAX;
+    int depth = 1;
     char line[MAX_LINE], error[256]; unsigned number = 0; int okay = 1;
     int saw_application = 0;
+#define PUSH_BLOCK(kind) do { \
+    if (depth >= MAX_DEPTH) { source_error(source_path, number, "blocks are nested too deeply"); okay = 0; } \
+    else { stack[depth] = (kind); block_indentation[depth] = indentation; child_indentation[depth] = UINT_MAX; depth++; } \
+} while (0)
     while (okay && fgets(line, sizeof(line), file)) {
         number++;
         if (!strchr(line, '\n') && !feof(file)) { source_error(source_path, number, "line is too long"); okay = 0; break; }
+        unsigned indentation = 0; int indentation_has_tab = 0;
+        while (line[indentation] == ' ' || line[indentation] == '\t') {
+            if (line[indentation] == '\t') indentation_has_tab = 1;
+            indentation++;
+        }
         char *w[MAX_WORDS]; unsigned char quoted[MAX_WORDS] = {0}; int n = words(line, w, quoted, MAX_WORDS, error, sizeof(error));
         if (n < 0) { source_error(source_path, number, error); okay = 0; break; }
         if (!n) continue;
+        if (indentation_has_tab) { source_error(source_path, number, "use spaces for indentation, not tabs"); okay = 0; break; }
+        int explicit_end = n == 1 && !strcmp(w[0], "end");
+        while (depth > 1) {
+            Block open = stack[depth - 1]; unsigned opening = block_indentation[depth - 1];
+            if (indentation < opening || (indentation == opening && !explicit_end && !indentation_branch(open, w, n))) {
+                okay = emit(&code, block_end_opcode(open), 0, NULL, number); depth--;
+                if (!okay) break;
+            } else break;
+        }
+        if (!okay) break;
         Block current = stack[depth - 1];
-        if (n == 1 && !strcmp(w[0], "end")) {
+        if (explicit_end) {
             if (depth == 1) { source_error(source_path, number, "this end does not close anything"); okay = 0; break; }
-            int op = current == BLOCK_MODEL ? OP_END_MODEL : current == BLOCK_CONTROLLER ? OP_END_CONTROLLER :
-                current == BLOCK_ROUTE ? OP_END_ROUTE : current == BLOCK_VIEW ? OP_END_VIEW :
-                current == BLOCK_FORM ? OP_END_FORM : current == BLOCK_EACH ? OP_END_EACH : current == BLOCK_IF ? OP_END_IF :
-                current == BLOCK_LAYOUT ? OP_END_LAYOUT : current == BLOCK_COMPONENT ? OP_END_COMPONENT :
-                current == BLOCK_ACTION ? OP_END_ACTION : current == BLOCK_LOGIC_IF ? OP_END_LOGIC_IF :
-                current == BLOCK_REPEAT ? OP_END_REPEAT : current == BLOCK_MIGRATION ? OP_END_MIGRATION :
-                current == BLOCK_TRY ? OP_END_TRY : OP_END_TEST;
-            okay = emit(&code, op, 0, NULL, number); depth--; continue;
+            if (indentation != block_indentation[depth - 1]) {
+                source_error(source_path, number, "align end with the block it closes"); okay = 0; break;
+            }
+        } else if (depth == 1) {
+            if (indentation) { source_error(source_path, number, "top-level instructions cannot be indented"); okay = 0; break; }
+        } else if (indentation_branch(current, w, n)) {
+            if (indentation != block_indentation[depth - 1]) {
+                source_error(source_path, number, "align this branch with its if or try"); okay = 0; break;
+            }
+            child_indentation[depth - 1] = UINT_MAX;
+        } else {
+            if (indentation <= block_indentation[depth - 1]) {
+                source_error(source_path, number, "indent this line to place it inside the block above"); okay = 0; break;
+            }
+            if (child_indentation[depth - 1] == UINT_MAX) child_indentation[depth - 1] = indentation;
+            else if (indentation != child_indentation[depth - 1]) {
+                source_error(source_path, number, "use the same indentation for instructions in this block"); okay = 0; break;
+            }
+        }
+        if (n == 1 && !strcmp(w[0], "end")) {
+            okay = emit(&code, block_end_opcode(current), 0, NULL, number); depth--; continue;
         }
         if (current == BLOCK_ROOT) {
             int installable_web = n == 6 && !strcmp(w[2], "is") && !strcmp(w[3], "installable") &&
@@ -514,17 +564,17 @@ int compile_file(const char *source_path, const char *output_path) {
                 !strcmp(w[3], "from") && !strcmp(w[5], "to")) {
                 char *from_end, *to_end; long from = strtol(w[4], &from_end, 10), to = strtol(w[6], &to_end, 10);
                 if (*from_end || *to_end || from < 1 || to < 2) { source_error(source_path, number, "data migration versions must be positive whole numbers"); okay = 0; }
-                else { char *args[2] = {w[4], w[6]}; okay = emit(&code, OP_MIGRATION, 2, args, number); stack[depth++] = BLOCK_MIGRATION; }
+                else { char *args[2] = {w[4], w[6]}; okay = emit(&code, OP_MIGRATION, 2, args, number); PUSH_BLOCK(BLOCK_MIGRATION); }
             } else if (n == 2 && !strcmp(w[0], "model") && is_name(w[1])) {
-                okay = emit(&code, OP_MODEL, 1, &w[1], number); stack[depth++] = BLOCK_MODEL;
+                okay = emit(&code, OP_MODEL, 1, &w[1], number); PUSH_BLOCK(BLOCK_MODEL);
             } else if (n == 2 && !strcmp(w[0], "controller") && is_name(w[1])) {
-                okay = emit(&code, OP_CONTROLLER, 1, &w[1], number); stack[depth++] = BLOCK_CONTROLLER;
+                okay = emit(&code, OP_CONTROLLER, 1, &w[1], number); PUSH_BLOCK(BLOCK_CONTROLLER);
             } else if (n == 2 && !strcmp(w[0], "view")) {
-                okay = emit(&code, OP_VIEW, 1, &w[1], number); stack[depth++] = BLOCK_VIEW;
+                okay = emit(&code, OP_VIEW, 1, &w[1], number); PUSH_BLOCK(BLOCK_VIEW);
             } else if (n == 2 && !strcmp(w[0], "layout")) {
-                okay = emit(&code, OP_LAYOUT, 1, &w[1], number); stack[depth++] = BLOCK_LAYOUT;
+                okay = emit(&code, OP_LAYOUT, 1, &w[1], number); PUSH_BLOCK(BLOCK_LAYOUT);
             } else if (n == 2 && !strcmp(w[0], "component")) {
-                okay = emit(&code, OP_COMPONENT, 1, &w[1], number); stack[depth++] = BLOCK_COMPONENT;
+                okay = emit(&code, OP_COMPONENT, 1, &w[1], number); PUSH_BLOCK(BLOCK_COMPONENT);
             } else if (n == 6 && !strcmp(w[0], "when") && !strcmp(w[1], "error") && !strcmp(w[3], "show") && !strcmp(w[4], "view")) {
                 char *args[2] = {w[2], w[5]}; okay = emit(&code, OP_ERROR_VIEW, 2, args, number);
             } else if (n == 6 && !strcmp(w[0], "serve") && !strcmp(w[1], "files") && !strcmp(w[2], "from") && !strcmp(w[4], "at")) {
@@ -587,10 +637,10 @@ int compile_file(const char *source_path, const char *output_path) {
             const char *method = NULL;
             if ((n == 2 || (n == 4 && !strcmp(w[2], "using") && is_name(w[3]))) && !strcmp(w[0], "action") && *w[1]) {
                 char *args[2] = {w[1], n == 4 ? w[3] : ""};
-                okay = emit(&code, OP_ACTION, 2, args, number); stack[depth++] = BLOCK_ACTION; continue;
+                okay = emit(&code, OP_ACTION, 2, args, number); PUSH_BLOCK(BLOCK_ACTION); continue;
             }
             if (n == 2 && !strcmp(w[0], "test") && *w[1]) {
-                okay = emit(&code, OP_TEST, 1, &w[1], number); stack[depth++] = BLOCK_TEST; continue;
+                okay = emit(&code, OP_TEST, 1, &w[1], number); PUSH_BLOCK(BLOCK_TEST); continue;
             }
             if (n == 6 && !strcmp(w[0], "before") && !strcmp(w[1], "every") && !strcmp(w[2], "route") &&
                 !strcmp(w[3], "run") && !strcmp(w[4], "action")) {
@@ -602,53 +652,53 @@ int compile_file(const char *source_path, const char *output_path) {
                 continue;
             }
             if (n == 3 && !strcmp(w[0], "when") && !strcmp(w[1], "application") && !strcmp(w[2], "starts")) {
-                char *event = "START"; okay = emit(&code, OP_EVENT, 1, &event, number); stack[depth++] = BLOCK_ROUTE; continue;
+                char *event = "START"; okay = emit(&code, OP_EVENT, 1, &event, number); PUSH_BLOCK(BLOCK_ROUTE); continue;
             }
             if (n == 3 && !strcmp(w[0], "when") && !strcmp(w[1], "application") && !strcmp(w[2], "pauses")) {
-                char *event = "PAUSE"; okay = emit(&code, OP_EVENT, 1, &event, number); stack[depth++] = BLOCK_ROUTE; continue;
+                char *event = "PAUSE"; okay = emit(&code, OP_EVENT, 1, &event, number); PUSH_BLOCK(BLOCK_ROUTE); continue;
             }
             if (n == 3 && !strcmp(w[0], "when") && !strcmp(w[1], "application") && !strcmp(w[2], "resumes")) {
-                char *event = "RESUME"; okay = emit(&code, OP_EVENT, 1, &event, number); stack[depth++] = BLOCK_ROUTE; continue;
+                char *event = "RESUME"; okay = emit(&code, OP_EVENT, 1, &event, number); PUSH_BLOCK(BLOCK_ROUTE); continue;
             }
             if (n == 4 && !strcmp(w[0], "when") && !strcmp(w[1], "input") && !strcmp(w[3], "changes") && is_name(w[2])) {
                 if (strlen(w[2]) >= 64) { source_error(source_path, number, "an input name must be shorter than 64 characters"); okay = 0; continue; }
                 char event[80]; snprintf(event, sizeof(event), "CHANGE:%s", w[2]); char *arg = event;
-                okay = emit(&code, OP_EVENT, 1, &arg, number); stack[depth++] = BLOCK_ROUTE; continue;
+                okay = emit(&code, OP_EVENT, 1, &arg, number); PUSH_BLOCK(BLOCK_ROUTE); continue;
             }
             if (n == 5 && !strcmp(w[0], "when") && !strcmp(w[1], "input") && !strcmp(w[3], "is") && !strcmp(w[4], "submitted") && is_name(w[2])) {
                 if (strlen(w[2]) >= 64) { source_error(source_path, number, "an input name must be shorter than 64 characters"); okay = 0; continue; }
                 char event[80]; snprintf(event, sizeof(event), "SUBMIT:%s", w[2]); char *arg = event;
-                okay = emit(&code, OP_EVENT, 1, &arg, number); stack[depth++] = BLOCK_ROUTE; continue;
+                okay = emit(&code, OP_EVENT, 1, &arg, number); PUSH_BLOCK(BLOCK_ROUTE); continue;
             }
             if (n == 4 && !strcmp(w[0], "when") && !strcmp(w[1], "player") && !strcmp(w[2], "presses") && is_name(w[3])) {
                 char event[256]; snprintf(event, sizeof(event), "KEY:%s", w[3]); char *arg = event;
-                okay = emit(&code, OP_EVENT, 1, &arg, number); stack[depth++] = BLOCK_ROUTE; continue;
+                okay = emit(&code, OP_EVENT, 1, &arg, number); PUSH_BLOCK(BLOCK_ROUTE); continue;
             }
             if (n == 3 && !strcmp(w[0], "when") && !strcmp(w[1], "game") && !strcmp(w[2], "updates")) {
-                char *event = "FRAME"; okay = emit(&code, OP_EVENT, 1, &event, number); stack[depth++] = BLOCK_ROUTE; continue;
+                char *event = "FRAME"; okay = emit(&code, OP_EVENT, 1, &event, number); PUSH_BLOCK(BLOCK_ROUTE); continue;
             }
             if (n == 3 && !strcmp(w[0], "when") && !strcmp(w[1], "window") && !strcmp(w[2], "closes")) {
-                char *event = "CLOSE"; okay = emit(&code, OP_EVENT, 1, &event, number); stack[depth++] = BLOCK_ROUTE; continue;
+                char *event = "CLOSE"; okay = emit(&code, OP_EVENT, 1, &event, number); PUSH_BLOCK(BLOCK_ROUTE); continue;
             }
             if (n == 4 && !strcmp(w[0], "when") && !strcmp(w[1], "window") && !strcmp(w[2], "gains") && !strcmp(w[3], "focus")) {
-                char *event = "FOCUS"; okay = emit(&code, OP_EVENT, 1, &event, number); stack[depth++] = BLOCK_ROUTE; continue;
+                char *event = "FOCUS"; okay = emit(&code, OP_EVENT, 1, &event, number); PUSH_BLOCK(BLOCK_ROUTE); continue;
             }
             if (n == 4 && !strcmp(w[0], "when") && !strcmp(w[1], "window") && !strcmp(w[2], "loses") && !strcmp(w[3], "focus")) {
-                char *event = "BLUR"; okay = emit(&code, OP_EVENT, 1, &event, number); stack[depth++] = BLOCK_ROUTE; continue;
+                char *event = "BLUR"; okay = emit(&code, OP_EVENT, 1, &event, number); PUSH_BLOCK(BLOCK_ROUTE); continue;
             }
             if (n == 4 && !strcmp(w[0], "when") && !strcmp(w[1], "someone") && !strcmp(w[2], "swipes")) {
                 if (strcmp(w[3], "left") && strcmp(w[3], "right") && strcmp(w[3], "up") && strcmp(w[3], "down")) {
                     source_error(source_path, number, "a swipe direction must be left, right, up, or down"); okay = 0; continue;
                 }
                 char event[32]; snprintf(event, sizeof(event), "SWIPE:%s", w[3]); char *arg = event;
-                okay = emit(&code, OP_EVENT, 1, &arg, number); stack[depth++] = BLOCK_ROUTE; continue;
+                okay = emit(&code, OP_EVENT, 1, &arg, number); PUSH_BLOCK(BLOCK_ROUTE); continue;
             }
             if (n == 3 && !strcmp(w[0], "when") && !strcmp(w[1], "someone") && !strcmp(w[2], "taps")) {
-                char *event = "TAP"; okay = emit(&code, OP_EVENT, 1, &event, number); stack[depth++] = BLOCK_ROUTE; continue;
+                char *event = "TAP"; okay = emit(&code, OP_EVENT, 1, &event, number); PUSH_BLOCK(BLOCK_ROUTE); continue;
             }
             if (n == 5 && !strcmp(w[0], "when") && !strcmp(w[1], "someone") && !strcmp(w[2], "presses") &&
                 !strcmp(w[3], "and") && !strcmp(w[4], "holds")) {
-                char *event = "LONG_PRESS"; okay = emit(&code, OP_EVENT, 1, &event, number); stack[depth++] = BLOCK_ROUTE; continue;
+                char *event = "LONG_PRESS"; okay = emit(&code, OP_EVENT, 1, &event, number); PUSH_BLOCK(BLOCK_ROUTE); continue;
             }
             if (n == 3 && !strcmp(w[0], "every")) {
                 char *end; long amount = strtol(w[1], &end, 10), multiplier = 0;
@@ -659,14 +709,14 @@ int compile_file(const char *source_path, const char *output_path) {
                     source_error(source_path, number, "say: every 5 seconds; the interval can be at most one day"); okay = 0; continue;
                 }
                 char event[64]; snprintf(event, sizeof(event), "TIMER:%ld", amount * multiplier); char *arg = event;
-                okay = emit(&code, OP_EVENT, 1, &arg, number); stack[depth++] = BLOCK_ROUTE; continue;
+                okay = emit(&code, OP_EVENT, 1, &arg, number); PUSH_BLOCK(BLOCK_ROUTE); continue;
             }
             if (n == 4 && !strcmp(w[0], "when") && !strcmp(w[1], "someone")) {
                 if (!strcmp(w[2], "visits")) method = "GET";
                 else if (!strcmp(w[2], "submits")) method = "POST";
             }
             if (!method || w[3][0] != '/') { source_error(source_path, number, "say: when someone visits \"/path\""); okay = 0; }
-            else { char *args[2] = {(char *)method, w[3]}; okay = emit(&code, OP_ROUTE, 2, args, number); stack[depth++] = BLOCK_ROUTE; }
+            else { char *args[2] = {(char *)method, w[3]}; okay = emit(&code, OP_ROUTE, 2, args, number); PUSH_BLOCK(BLOCK_ROUTE); }
         } else if (current == BLOCK_ROUTE || current == BLOCK_ACTION || current == BLOCK_LOGIC_IF || current == BLOCK_REPEAT || current == BLOCK_TEST || current == BLOCK_TRY) {
             int polygon_collision = compile_polygon_collision(&code, w, quoted, n, source_path, number);
             if (polygon_collision) okay = polygon_collision > 0;
@@ -819,14 +869,14 @@ int compile_file(const char *source_path, const char *output_path) {
                 char *args[2] = {w[1], w[5]}; okay = emit(&code, OP_READ_FORM, 2, args, number);
             } else if (n >= 2 && !strcmp(w[0], "if")) {
                 char expression[MAX_LINE]; join_words(expression, sizeof(expression), w, quoted, 1, n);
-                char *arg = expression; okay = emit(&code, OP_LOGIC_IF, 1, &arg, number); stack[depth++] = BLOCK_LOGIC_IF;
+                char *arg = expression; okay = emit(&code, OP_LOGIC_IF, 1, &arg, number); PUSH_BLOCK(BLOCK_LOGIC_IF);
             } else if (n == 1 && !strcmp(w[0], "otherwise") && current == BLOCK_LOGIC_IF) {
                 okay = emit(&code, OP_OTHERWISE, 0, NULL, number);
             } else if (n >= 3 && !strcmp(w[0], "repeat") && !strcmp(w[n - 1], "times")) {
                 char expression[MAX_LINE]; join_words(expression, sizeof(expression), w, quoted, 1, n - 1);
-                char *arg = expression; okay = emit(&code, OP_REPEAT, 1, &arg, number); stack[depth++] = BLOCK_REPEAT;
+                char *arg = expression; okay = emit(&code, OP_REPEAT, 1, &arg, number); PUSH_BLOCK(BLOCK_REPEAT);
             } else if (n == 1 && !strcmp(w[0], "try")) {
-                okay = emit(&code, OP_TRY, 0, NULL, number); stack[depth++] = BLOCK_TRY;
+                okay = emit(&code, OP_TRY, 0, NULL, number); PUSH_BLOCK(BLOCK_TRY);
             } else if (n == 5 && !strcmp(w[0], "when") && !strcmp(w[1], "it") && !strcmp(w[2], "fails") &&
                 !strcmp(w[3], "as") && is_name(w[4]) && current == BLOCK_TRY) {
                 okay = emit(&code, OP_CATCH, 1, &w[4], number);
@@ -940,7 +990,7 @@ int compile_file(const char *source_path, const char *output_path) {
             else if (n == 2 && !strcmp(w[0], "show")) okay = emit(&code, OP_SHOW_VALUE, 1, &w[1], number);
             else if (n == 4 && !strcmp(w[0], "link") && !strcmp(w[2], "to")) { char *a[2] = {w[1], w[3]}; okay = emit(&code, OP_LINK, 2, a, number); }
             else if (n == 4 && !strcmp(w[0], "form") && (!strcmp(w[1], "posts") || !strcmp(w[1], "gets")) && !strcmp(w[2], "to")) {
-                char *a[2] = {w[1], w[3]}; okay = emit(&code, OP_FORM, 2, a, number); stack[depth++] = BLOCK_FORM;
+                char *a[2] = {w[1], w[3]}; okay = emit(&code, OP_FORM, 2, a, number); PUSH_BLOCK(BLOCK_FORM);
             } else if ((n == 4 || n == 5) && !strcmp(w[0], "input") && !strcmp(w[2], "as") && (n == 4 || !strcmp(w[4], "required"))) {
                 char *a[4] = {w[1], w[3], n == 5 ? "true" : "false", "text"}; okay = emit(&code, OP_INPUT, 4, a, number);
             } else if ((n == 5 || n == 6) && !strcmp(w[0], "secret") && !strcmp(w[1], "input") && !strcmp(w[3], "as") &&
@@ -955,15 +1005,17 @@ int compile_file(const char *source_path, const char *output_path) {
                 char *args[2] = {w[1], w[4]}; okay = emit(&code, OP_BUTTON_ACTION, 2, args, number);
             }
             else if (n == 6 && !strcmp(w[0], "for") && !strcmp(w[1], "each") && !strcmp(w[3], "in") && !strcmp(w[5], "show")) {
-                char *a[2] = {w[2], w[4]}; okay = emit(&code, OP_EACH, 2, a, number); stack[depth++] = BLOCK_EACH;
-            } else if (n == 2 && !strcmp(w[0], "if")) { okay = emit(&code, OP_IF, 1, &w[1], number); stack[depth++] = BLOCK_IF; }
+                char *a[2] = {w[2], w[4]}; okay = emit(&code, OP_EACH, 2, a, number); PUSH_BLOCK(BLOCK_EACH);
+            } else if (n == 2 && !strcmp(w[0], "if")) { okay = emit(&code, OP_IF, 1, &w[1], number); PUSH_BLOCK(BLOCK_IF); }
             else { source_error(source_path, number, "unknown view instruction"); okay = 0; }
         }
-        if (depth >= MAX_DEPTH) { source_error(source_path, number, "blocks are nested too deeply"); okay = 0; }
     }
     if (ferror(file)) { fprintf(stderr, "error: could not read %s\n", source_path); okay = 0; }
+    while (okay && depth > 1) {
+        okay = emit(&code, block_end_opcode(stack[depth - 1]), 0, NULL, number); depth--;
+    }
     fclose(file);
-    if (okay && depth != 1) { source_error(source_path, number, "a block is missing its end"); okay = 0; }
+#undef PUSH_BLOCK
     if (okay && !saw_application) { source_error(source_path, 1, "start the program with application \"Name\""); okay = 0; }
     if (okay) okay = validate(&code, source_path);
     if (okay) {

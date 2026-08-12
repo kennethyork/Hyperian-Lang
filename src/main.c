@@ -10,7 +10,6 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-static int starts_with(const char *text, const char *prefix) { return !strncmp(text, prefix, strlen(prefix)); }
 static int ends_with(const char *text, const char *suffix);
 
 static int temporary_bytecode(char *path, size_t size) {
@@ -577,30 +576,30 @@ static int create_project(const char *name, const char *target) {
         strcmp(target, "api") ? "include \"views/main.hyp\"\n" : "");
     snprintf(path, sizeof(path), "%s/app.hyp", name); if (!write_project_file(path, source)) return 1;
     snprintf(path, sizeof(path), "%s/models/item.hyp", name);
-    if (!write_project_file(path, "model Item\n    field \"item name\" is text required\nend\n")) return 1;
+    if (!write_project_file(path, "model Item\n    field \"item name\" is text required\n")) return 1;
     if (!strcmp(target, "web") || !strcmp(target, "pwa")) snprintf(source, sizeof(source),
-        "controller Items\n    when someone visits \"/\"\n        find all Item as items\n        show view \"main\" with items\n    end\nend\n");
+        "controller Items\n    when someone visits \"/\"\n        find all Item as items\n        show view \"main\" with items\n");
     else if (!strcmp(target, "api")) snprintf(source, sizeof(source),
-        "controller Items\n    when someone visits \"/items\"\n        find all Item as items\n        show json items\n    end\nend\n");
+        "controller Items\n    when someone visits \"/items\"\n        find all Item as items\n        show json items\n");
     else if (!strcmp(target, "desktop") || !strcmp(target, "mobile")) snprintf(source, sizeof(source),
-        "controller Items\n    action initialize\n        set status to ready\n        collect every Item \"item name\" ordered by \"item name\" as \"item names\"\n    end\n    action activate\n        create a Item using the current values as \"item number\"\n        count all Item records as \"item count\"\n        collect every Item \"item name\" ordered by \"item name\" as \"item names\"\n        set status to \"Saved item:\" joined with value called \"item number\"\n        open view \"main\"\n    end\n    when application starts\n        run action initialize\n        show view \"main\"\n    end\n    when input \"item name\" changes\n        set status to \"Typing:\" joined with value called \"item name\"\n    end\n    when input \"item name\" is submitted\n        run action activate\n    end\n    when window gains focus\n        set status to focused\n    end\n    when window loses focus\n        set status to unfocused\n    end\n%send\n",
-        !strcmp(target, "mobile") ? "    when someone taps\n        set status to \"Tapped\"\n    end\n    when someone presses and holds\n        set status to \"Pressed and held\"\n    end\n    when someone swipes left\n        set status to \"Swiped left\"\n    end\n" : "");
+        "controller Items\n    action initialize\n        set status to ready\n        collect every Item \"item name\" ordered by \"item name\" as \"item names\"\n\n    action activate\n        create a Item using the current values as \"item number\"\n        count all Item records as \"item count\"\n        collect every Item \"item name\" ordered by \"item name\" as \"item names\"\n        set status to \"Saved item:\" joined with value called \"item number\"\n        open view \"main\"\n\n    when application starts\n        run action initialize\n        show view \"main\"\n\n    when input \"item name\" changes\n        set status to \"Typing:\" joined with value called \"item name\"\n\n    when input \"item name\" is submitted\n        run action activate\n\n    when window gains focus\n        set status to focused\n\n    when window loses focus\n        set status to unfocused\n%s",
+        !strcmp(target, "mobile") ? "\n    when someone taps\n        set status to \"Tapped\"\n\n    when someone presses and holds\n        set status to \"Pressed and held\"\n\n    when someone swipes left\n        set status to \"Swiped left\"\n" : "");
     else if (!strcmp(target, "game")) snprintf(source, sizeof(source),
-        "controller Items\n    action initialize\n        set \"player left\" to 100\n        set \"player top\" to 100\n        set \"horizontal speed\" to 0\n        set \"vertical speed\" to 0\n        set \"ball horizontal center\" to 500\n        set \"ball vertical center\" to 320\n        set \"ball radius\" to 45\n        set glow to 0\n        set \"animation frame\" to 1\n    end\n    action \"move right\"\n        set \"horizontal speed\" to 200\n    end\n    when application starts\n        run action initialize\n        show view \"main\"\n    end\n    when player presses right\n        run action \"move right\"\n    end\n    when game updates\n        move value glow toward 1 at 2 per second\n        advance animation \"animation frame\" from 1 through 4 every 100 milliseconds\n        apply gravity 300 to \"vertical speed\"\n        move position \"player left\" \"player top\" using velocity \"horizontal speed\" \"vertical speed\"\n        keep position \"player left\" \"player top\" inside 960 by 540 sized 100 by 100\n        check whether rectangle at \"player left\" \"player top\" sized 100 by 100 touches circle centered at \"ball horizontal center\" \"ball vertical center\" with radius \"ball radius\" as \"player hit\"\n        check whether line from 0 0 to 960 540 touches circle centered at \"ball horizontal center\" \"ball vertical center\" with radius \"ball radius\" as \"laser hit\"\n        check whether polygon through 430 250 then 530 250 then 480 360 touches circle centered at \"ball horizontal center\" \"ball vertical center\" with radius \"ball radius\" as \"polygon hit\"\n    end\nend\n");
+        "controller Items\n    action initialize\n        set \"player left\" to 100\n        set \"player top\" to 100\n        set \"horizontal speed\" to 0\n        set \"vertical speed\" to 0\n        set \"ball horizontal center\" to 500\n        set \"ball vertical center\" to 320\n        set \"ball radius\" to 45\n        set glow to 0\n        set \"animation frame\" to 1\n\n    action \"move right\"\n        set \"horizontal speed\" to 200\n\n    when application starts\n        run action initialize\n        show view \"main\"\n\n    when player presses right\n        run action \"move right\"\n\n    when game updates\n        move value glow toward 1 at 2 per second\n        advance animation \"animation frame\" from 1 through 4 every 100 milliseconds\n        apply gravity 300 to \"vertical speed\"\n        move position \"player left\" \"player top\" using velocity \"horizontal speed\" \"vertical speed\"\n        keep position \"player left\" \"player top\" inside 960 by 540 sized 100 by 100\n        check whether rectangle at \"player left\" \"player top\" sized 100 by 100 touches circle centered at \"ball horizontal center\" \"ball vertical center\" with radius \"ball radius\" as \"player hit\"\n        check whether line from 0 0 to 960 540 touches circle centered at \"ball horizontal center\" \"ball vertical center\" with radius \"ball radius\" as \"laser hit\"\n        check whether polygon through 430 250 then 530 250 then 480 360 touches circle centered at \"ball horizontal center\" \"ball vertical center\" with radius \"ball radius\" as \"polygon hit\"\n");
     else snprintf(source, sizeof(source),
-        "controller Items\n    when application starts\n        find all Item as items\n        show view \"main\" with items\n    end\nend\n");
+        "controller Items\n    when application starts\n        find all Item as items\n        show view \"main\" with items\n");
     snprintf(path, sizeof(path), "%s/controllers/items.hyp", name); if (!write_project_file(path, source)) return 1;
     if (strcmp(target, "api")) {
         snprintf(path, sizeof(path), "%s/views/main.hyp", name);
         const char *view = (!strcmp(target, "desktop") || !strcmp(target, "mobile")) ?
             (!strcmp(target, "mobile") ?
-            "view \"main\"\n    heading \"Mobile application\"\n    input \"Your name\" as \"item name\"\n    button \"Save item\" runs action activate\n    show status\n    for each \"saved item\" in \"item names\" show\n        show \"saved item\"\n    end\nend\n" :
-            "view \"main\"\n    heading \"Native desktop application\"\n    input \"Your name\" as \"item name\"\n    button \"Save item\" runs action activate\n    show status\n    for each \"saved item\" in \"item names\" show\n        show \"saved item\"\n    end\nend\n") :
+            "view \"main\"\n    heading \"Mobile application\"\n    input \"Your name\" as \"item name\"\n    button \"Save item\" runs action activate\n    show status\n    for each \"saved item\" in \"item names\" show\n        show \"saved item\"\n" :
+            "view \"main\"\n    heading \"Native desktop application\"\n    input \"Your name\" as \"item name\"\n    button \"Save item\" runs action activate\n    show status\n    for each \"saved item\" in \"item names\" show\n        show \"saved item\"\n") :
             !strcmp(target, "game") ?
-            "view \"main\"\n    fill background with color 18 24 38\n    draw rectangle at \"player left\" \"player top\" sized 100 by 100 with color 70 170 255\n    draw circle centered at \"ball horizontal center\" \"ball vertical center\" with radius \"ball radius\" and color 255 110 90\n    draw line from 0 0 to 960 540 with color 120 230 160\n    draw polygon through 430 250 then 530 250 then 480 360 with color 180 100 240\nend\n" :
+            "view \"main\"\n    fill background with color 18 24 38\n    draw rectangle at \"player left\" \"player top\" sized 100 by 100 with color 70 170 255\n    draw circle centered at \"ball horizontal center\" \"ball vertical center\" with radius \"ball radius\" and color 255 110 90\n    draw line from 0 0 to 960 540 with color 120 230 160\n    draw polygon through 430 250 then 530 250 then 480 360 with color 180 100 240\n" :
             !strcmp(target, "pwa") ?
-            "view \"main\"\n    title \"Installable Hyperian application\"\n    style \"/assets/app.css\"\n    heading \"Installable Hyperian application\"\n    text \"This English MVC application works online and can be installed.\"\nend\n" :
-            "view \"main\"\n    heading \"Welcome to Hyperian\"\n    text \"Your foldered MVC application is ready.\"\nend\n";
+            "view \"main\"\n    title \"Installable Hyperian application\"\n    style \"/assets/app.css\"\n    heading \"Installable Hyperian application\"\n    text \"This English MVC application works online and can be installed.\"\n" :
+            "view \"main\"\n    heading \"Welcome to Hyperian\"\n    text \"Your foldered MVC application is ready.\"\n";
         if (!write_project_file(path, view)) return 1;
     }
     snprintf(path, sizeof(path), "%s/public/app.css", name);
@@ -624,27 +623,16 @@ static int create_project(const char *name, const char *target) {
 
 static int format_source(const char *path) {
     FILE *file = fopen(path, "r"); if (!file) { fprintf(stderr, "error: cannot open %s\n", path); return 1; }
-    char line[4096]; int indentation = 0;
+    char line[4096]; unsigned widths[64] = {0}; int level = 0;
     while (fgets(line, sizeof(line), file)) {
-        char *start = line; while (*start == ' ' || *start == '\t') start++;
+        char *start = line; unsigned width = 0;
+        while (*start == ' ' || *start == '\t') { width += *start == '\t' ? 4 : 1; start++; }
         start[strcspn(start, "\r\n")] = 0;
         if (!*start) { putchar('\n'); continue; }
-        int closing = !strcmp(start, "end") || !strcmp(start, "otherwise") || starts_with(start, "when it fails as ");
-        if (closing && indentation) indentation--;
-        for (int i = 0; i < indentation * 4; i++) putchar(' ');
+        while (level > 0 && width < widths[level]) level--;
+        if (width > widths[level] && level + 1 < 64) widths[++level] = width;
+        for (int i = 0; i < level * 4; i++) putchar(' ');
         puts(start);
-        int opening = starts_with(start, "model ") || starts_with(start, "controller ") || starts_with(start, "view ") ||
-            starts_with(start, "layout ") || starts_with(start, "component ") || starts_with(start, "action ") ||
-            starts_with(start, "test ") ||
-            starts_with(start, "when data changes from ") ||
-            starts_with(start, "when someone ") || starts_with(start, "when player presses ") || !strcmp(start, "when game updates") ||
-            starts_with(start, "when input ") || starts_with(start, "when application ") ||
-            starts_with(start, "when window ") ||
-            starts_with(start, "every ") ||
-            starts_with(start, "form ") ||
-            starts_with(start, "for each ") || starts_with(start, "if ") || starts_with(start, "repeat ") || !strcmp(start, "try") ||
-            !strcmp(start, "otherwise") || starts_with(start, "when it fails as ");
-        if (opening) indentation++;
     }
     int failed = ferror(file); fclose(file); return failed ? 1 : 0;
 }

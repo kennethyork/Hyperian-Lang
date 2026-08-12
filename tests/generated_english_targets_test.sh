@@ -13,6 +13,10 @@ for target in web pwa console api service desktop mobile game; do
     )
     source="$workspace/$project"
     grep 'field "item name" is text required' "$source/models/item.hyp" >/dev/null
+    if find "$source" -name '*.hyp' -exec grep -H '^[[:space:]]*end[[:space:]]*$' {} + | grep . >/dev/null; then
+        echo "generated $target project still contains end markers" >&2
+        exit 1
+    fi
     "$compiler" check "$source/app.hyp"
 done
 

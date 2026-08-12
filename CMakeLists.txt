@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(Hyperian VERSION 0.41.0 LANGUAGES C)
+project(Hyperian VERSION 0.42.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -96,6 +96,20 @@ add_test(NAME compile_example
 add_test(NAME inspect_example
     COMMAND hyperian inspect ${CMAKE_BINARY_DIR}/tasks.hyc)
 set_tests_properties(inspect_example PROPERTIES DEPENDS compile_example)
+add_test(NAME compile_indentation_example
+    COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/indentation_console.hyp -o ${CMAKE_BINARY_DIR}/indentation_console.hyc)
+add_test(NAME run_indentation_example
+    COMMAND hyperian run ${CMAKE_BINARY_DIR}/indentation_console.hyc)
+set_tests_properties(run_indentation_example PROPERTIES DEPENDS compile_indentation_example PASS_REGULAR_EXPRESSION "Hello from indented Hyperian")
+add_test(NAME format_indentation_example
+    COMMAND hyperian format ${CMAKE_SOURCE_DIR}/examples/indentation_console.hyp)
+set_tests_properties(format_indentation_example PROPERTIES PASS_REGULAR_EXPRESSION "        run action \"choose greeting\"")
+add_test(NAME reject_inconsistent_indentation
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/reject_with_message_test.sh "use the same indentation for instructions in this block"
+        $<TARGET_FILE:hyperian> check ${CMAKE_SOURCE_DIR}/tests/bad_inconsistent_indentation.hyp)
+add_test(NAME reject_tab_indentation
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/reject_with_message_test.sh "use spaces for indentation, not tabs"
+        $<TARGET_FILE:hyperian> check ${CMAKE_SOURCE_DIR}/tests/bad_tab_indentation.hyp)
 add_test(NAME compile_pwa
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/pwa_tasks/app.hyp -o ${CMAKE_BINARY_DIR}/pwa_tasks.hyc)
 add_test(NAME reject_pwa_without_route

@@ -1,0 +1,29 @@
+application "Indented Greeting" is console
+
+model Greeting
+    field message is text
+
+controller Greeter
+    action "choose greeting"
+        set "person is known" to yes
+        set count to 0
+        repeat 2 times
+            set count to count plus 1
+
+        if value called "person is known" is yes
+            set message to "Hello from indented Hyperian"
+        otherwise
+            set message to "Hello, stranger"
+
+        try
+            set "try result" to success
+        when it fails as problem
+            set "try result" to recovered
+
+    when application starts
+        run action "choose greeting"
+        show view "greeting"
+
+view "greeting"
+    heading "Whitespace defines these MVC blocks"
+    show message

@@ -1,0 +1,11 @@
+application "Tab Indentation" is console
+
+model Setting
+	field name is text
+
+controller Main
+    when application starts
+        show view "main"
+
+view "main"
+    text "This should not compile."
