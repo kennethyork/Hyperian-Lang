@@ -13,8 +13,10 @@ mkdir "$project/assets"
 printf 'Hello from a bundled asset.\n' > "$project/assets/message.txt"
 ln -s message.txt "$project/assets/linked-message.txt"
 platform=$("$compiler" platform)
-if "$compiler" bundle "$project/app.hyp" for "$platform" using "$pack" to "$bundle"; then
-    echo "expected unsafe bundle assets to be rejected" >&2
-    exit 1
+if test -L "$project/assets/linked-message.txt"; then
+    if "$compiler" bundle "$project/app.hyp" for "$platform" using "$pack" to "$bundle"; then
+        echo "expected unsafe bundle assets to be rejected" >&2
+        exit 1
+    fi
+    test ! -e "$bundle"
 fi
-test ! -e "$bundle"

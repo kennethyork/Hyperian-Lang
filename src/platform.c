@@ -115,8 +115,23 @@ int hyperian_directory_close(HyperianDirectory *directory) {
 int hyperian_run_process(const char *directory, char *const arguments[]) {
     char original[4096];
     if (!_getcwd(original, sizeof(original)) || _chdir(directory)) return -1;
-    intptr_t result = _spawnvp(_P_WAIT, arguments[0], (const char *const *)arguments);
+    const char *tool = arguments[0];
+    char **shell_arguments = NULL;
+    size_t length = strlen(tool), count = 0;
+    if (length >= 3 && !_stricmp(tool + length - 3, ".sh")) {
+        while (arguments[count]) count++;
+        shell_arguments = malloc((count + 2) * sizeof(*shell_arguments));
+        if (!shell_arguments) {
+            int saved = errno; _chdir(original); errno = saved; return -1;
+        }
+        shell_arguments[0] = "sh";
+        for (size_t index = 0; index <= count; index++) shell_arguments[index + 1] = arguments[index];
+        tool = shell_arguments[0];
+        arguments = shell_arguments;
+    }
+    intptr_t result = _spawnvp(_P_WAIT, tool, (const char *const *)arguments);
     int saved = errno; int restored = !_chdir(original); errno = saved;
+    free(shell_arguments);
     return result < 0 || !restored ? -1 : (int)result;
 }
 

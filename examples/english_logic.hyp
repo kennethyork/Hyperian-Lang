@@ -42,8 +42,8 @@ return greeting
 that is all
 
 action "save and load" using message
-write message to file "/tmp/hyperian-language-file-test.txt"
-read file "/tmp/hyperian-language-file-test.txt" as loaded
+write message to file "hyperian-language-file-test.txt"
+read file "hyperian-language-file-test.txt" as loaded
 return loaded
 that is all
 

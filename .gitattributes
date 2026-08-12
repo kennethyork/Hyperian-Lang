@@ -1,2 +1,15 @@
+# Hyperian source is indentation-sensitive and its checked-in text fixtures are
+# hashed by the native security tests. Keep text identical on every host.
+* text=auto eol=lf
+
 # Preserve the official generated SQLite amalgamation byte-for-byte.
 platform/sqlite/sqlite3.c -whitespace
+
+# Runtime archives and common application assets are binary.
+*.hyr binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.sqlite binary

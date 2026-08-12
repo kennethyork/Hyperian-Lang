@@ -35,8 +35,10 @@ fi
 test ! -e "$work/bad-magic-app"
 
 ln -s "$archive" "$work/linked.hyr"
-if "$compiler" build "$source" for "$platform" using "$work/linked.hyr" as "$work/linked-app"; then
-    echo "expected a symbolic-link archive to be rejected" >&2
-    exit 1
+if test -L "$work/linked.hyr"; then
+    if "$compiler" build "$source" for "$platform" using "$work/linked.hyr" as "$work/linked-app"; then
+        echo "expected a symbolic-link archive to be rejected" >&2
+        exit 1
+    fi
+    test ! -e "$work/linked-app"
 fi
-test ! -e "$work/linked-app"
