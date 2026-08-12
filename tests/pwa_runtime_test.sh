@@ -35,9 +35,12 @@ grep 'class="hyperian-row"' "$home"
 grep 'class="hyperian-card"' "$home"
 grep 'class="hyperian-table"' "$home"
 grep '<th scope="col">Task</th>' "$home"
-curl -fsS -X POST -d 'title=Rendered table task' "http://127.0.0.1:$port/tasks" >/dev/null
+grep '<label>Priority<select name="priority" required>' "$home"
+grep '<option value="normal">Normal</option>' "$home"
+curl -fsS -X POST -d 'title=Rendered table task&priority=high' "http://127.0.0.1:$port/tasks" >/dev/null
 curl -fsS "http://127.0.0.1:$port/" >"$home"
 grep '<td>Rendered table task</td>' "$home"
+grep '<td>high</td>' "$home"
 if grep '<tbody><ul>' "$home" >/dev/null; then
     echo "a repeated table row must not be wrapped in a list" >&2
     exit 1

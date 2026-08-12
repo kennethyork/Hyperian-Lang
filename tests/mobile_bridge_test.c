@@ -19,10 +19,15 @@ int main(int argc, char **argv) {
         contains(json, "\"kind\":\"column\"") && contains(json, "\"kind\":\"row\"") &&
         contains(json, "\"kind\":\"table\"") && contains(json, "\"kind\":\"tableRow\"") &&
         contains(json, "\"kind\":\"tableHeading\"") &&
+        contains(json, "\"kind\":\"choice\"") && contains(json, "\"kind\":\"choiceOption\"") &&
+        contains(json, "\"label\":\"Priority\"") && contains(json, "\"value\":\"normal\"") &&
         contains(json, "\"children\":[") && contains(json, "\"kind\":\"input\"") &&
         contains(json, "\"action\":\"add task\"") && contains(json, "\"changeEvent\":\"CHANGE:title\"") &&
         contains(json, "\"submitEvent\":\"SUBMIT:title\"") && contains(json, "\"changeEvent\":\"CHANGE:details\"") &&
         contains(json, "\"changeEvent\":\"CHANGE:urgent\"");
+    if (okay) okay = hyperian_mobile_set(mobile, "priority", "high", error, sizeof(error)) &&
+        hyperian_mobile_send_event(mobile, "CHANGE:priority", error, sizeof(error)) &&
+        hyperian_mobile_value(mobile, "priority_status") && !strcmp(hyperian_mobile_value(mobile, "priority_status"), "Priority:high");
     if (okay) okay = hyperian_mobile_send_event(mobile, "RESUME", error, sizeof(error)) &&
         hyperian_mobile_value(mobile, "lifecycle_status") && !strcmp(hyperian_mobile_value(mobile, "lifecycle_status"), "Application resumed") &&
         hyperian_mobile_send_event(mobile, "FOCUS", error, sizeof(error)) &&

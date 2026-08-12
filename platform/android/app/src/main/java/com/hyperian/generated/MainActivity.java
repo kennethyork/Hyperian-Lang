@@ -23,6 +23,9 @@ import android.widget.ImageView;
 import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
+import android.widget.Spinner;
+import android.widget.ArrayAdapter;
+import android.widget.AdapterView;
 import android.widget.TextView;
 import android.widget.Toast;
 import org.json.JSONArray;
@@ -173,6 +176,23 @@ public final class MainActivity extends Activity {
             CheckBox input = new CheckBox(this); input.setText(control.optString("label")); input.setChecked(control.optString("value").equals("true"));
             String inputName = control.getString("name"), changeEvent = control.optString("changeEvent"); inputs.put(inputName, input);
             if (!changeEvent.isEmpty()) input.setOnCheckedChangeListener((ignored, checked) -> sendInputEvent(changeEvent)); view = input;
+        } else if (kind.equals("choice")) {
+            LinearLayout group = new LinearLayout(this); group.setOrientation(LinearLayout.VERTICAL);
+            TextView label = new TextView(this); label.setText(control.optString("label")); group.addView(label);
+            Spinner input = new Spinner(this); JSONArray choices = control.getJSONArray("children");
+            String[] labels = new String[choices.length()], values = new String[choices.length()]; int selected = 0;
+            for (int choice = 0; choice < choices.length(); choice++) {
+                JSONObject option = choices.getJSONObject(choice); labels[choice] = option.getString("label"); values[choice] = option.getString("value");
+                if (values[choice].equals(control.optString("value"))) selected = choice;
+            }
+            input.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, labels)); input.setSelection(selected);
+            input.setTag(values); String inputName = control.getString("name"), changeEvent = control.optString("changeEvent"); inputs.put(inputName, input);
+            if (!changeEvent.isEmpty()) input.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+                private boolean ready;
+                @Override public void onItemSelected(AdapterView<?> parent, View selectedView, int position, long id) { if (ready) sendInputEvent(changeEvent); ready = true; }
+                @Override public void onNothingSelected(AdapterView<?> parent) {}
+            });
+            group.addView(input); view = group;
         } else if (kind.equals("button")) {
             Button button = new Button(this); button.setText(control.optString("label")); String action = control.optString("action");
             button.setEnabled(!action.isEmpty()); button.setOnClickListener(ignored -> runAction(action)); view = button;
@@ -199,7 +219,11 @@ public final class MainActivity extends Activity {
 
     private void syncInputs() {
         for (Map.Entry<String, View> item : inputs.entrySet()) {
-            String value = item.getValue() instanceof CheckBox ? (((CheckBox)item.getValue()).isChecked() ? "true" : "false") : ((EditText)item.getValue()).getText().toString();
+            String value;
+            if (item.getValue() instanceof CheckBox) value = ((CheckBox)item.getValue()).isChecked() ? "true" : "false";
+            else if (item.getValue() instanceof Spinner) {
+                Spinner choice = (Spinner)item.getValue(); String[] values = (String[])choice.getTag(); value = values[choice.getSelectedItemPosition()];
+            } else value = ((EditText)item.getValue()).getText().toString();
             setMobileValue(item.getKey(), value);
         }
     }

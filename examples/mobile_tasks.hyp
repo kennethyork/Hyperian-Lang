@@ -2,6 +2,7 @@ application "Mobile Tasks" is mobile
 
 model Task
 field title is text required
+field priority is text required
 that is all
 
 controller Tasks
@@ -10,6 +11,7 @@ set status to "Ready on mobile"
 set live_preview to "Start typing a task"
 set details_preview to "No details yet"
 set urgency_preview to "Urgent:false"
+set priority_status to "Priority:normal"
 set lifecycle_status to "Application started"
 set gesture_status to "No gesture yet"
 set heartbeat to 0
@@ -49,6 +51,10 @@ that is all
 
 when input urgent changes
 set urgency_preview to "Urgent:" joined with urgent
+that is all
+
+when input priority changes
+set priority_status to "Priority:" joined with priority
 that is all
 
 when application pauses
@@ -104,10 +110,16 @@ arrange the following in a column
 input "Task title" as title
 textarea "Task details" as details
 checkbox "Urgent" as urgent
+choose "Priority" as priority required
+offer "Low" as low
+offer "Normal" as normal
+offer "High" as high
+that is all
 that is all
 show live_preview
 show details_preview
 show urgency_preview
+show priority_status
 show lifecycle_status
 show gesture_status
 arrange the following in a row

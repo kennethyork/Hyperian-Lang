@@ -1,3 +1,4 @@
 model Task
 field title is text required
+field priority is text required
 that is all

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(Hyperian VERSION 0.50.0 LANGUAGES C)
+project(Hyperian VERSION 0.51.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -130,7 +130,7 @@ else()
 endif()
 add_test(NAME verify_installed_toolchain
     COMMAND sh ${CMAKE_SOURCE_DIR}/tests/installed_toolchain_test.sh ${CMAKE_BINARY_DIR}/InstalledToolchain
-        ${HYPERIAN_INSTALLED_EXECUTABLE} ${CMAKE_SOURCE_DIR}/examples/left_aligned_console.hyp)
+        ${HYPERIAN_INSTALLED_EXECUTABLE} ${CMAKE_SOURCE_DIR}/examples/left_aligned_console.hyp ${PROJECT_VERSION})
 set_tests_properties(verify_installed_toolchain PROPERTIES DEPENDS install_toolchain_for_users)
 add_test(NAME compile_example
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/tasks.hyp -o ${CMAKE_BINARY_DIR}/tasks.hyc)
@@ -180,6 +180,21 @@ add_test(NAME reject_table_cell_outside_row
 add_test(NAME reject_late_table_heading
     COMMAND sh ${CMAKE_SOURCE_DIR}/tests/reject_with_message_test.sh "put every table heading before the table rows"
         $<TARGET_FILE:hyperian> check ${CMAKE_SOURCE_DIR}/tests/bad_late_table_heading.hyp)
+add_test(NAME inspect_and_format_view_choices
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/view_choice_test.sh $<TARGET_FILE:hyperian>
+        ${CMAKE_SOURCE_DIR}/examples/mobile_tasks.hyp ${CMAKE_BINARY_DIR}/view_choices.hyc)
+add_test(NAME run_console_choice
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/console_choice_test.sh $<TARGET_FILE:hyperian>
+        ${CMAKE_SOURCE_DIR}/examples/console_choice.hyp)
+add_test(NAME reject_choice_without_options
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/reject_with_message_test.sh "a choice list must offer at least one choice"
+        $<TARGET_FILE:hyperian> check ${CMAKE_SOURCE_DIR}/tests/bad_choice_without_options.hyp)
+add_test(NAME reject_choice_option_outside_choice
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/reject_with_message_test.sh "an offered choice must be directly inside a choice list"
+        $<TARGET_FILE:hyperian> check ${CMAKE_SOURCE_DIR}/tests/bad_choice_option_outside_choice.hyp)
+add_test(NAME reject_duplicate_choice_value
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/reject_with_message_test.sh "each offered choice needs a different value"
+        $<TARGET_FILE:hyperian> check ${CMAKE_SOURCE_DIR}/tests/bad_duplicate_choice_value.hyp)
 add_test(NAME compile_pwa
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/pwa_tasks/app.hyp -o ${CMAKE_BINARY_DIR}/pwa_tasks.hyc)
 add_test(NAME reject_pwa_without_route
@@ -454,6 +469,11 @@ if(GTK3_FOUND AND XVFB_RUN)
             HYPERIAN_VISUAL_TEST_INPUT=true HYPERIAN_VISUAL_TEST_STATE=status
             $<TARGET_FILE:hyperian> run ${CMAKE_SOURCE_DIR}/examples/desktop_notes.hyp)
     set_tests_properties(run_desktop_checkbox_change_event PROPERTIES DEPENDS compile_native_desktop PASS_REGULAR_EXPRESSION "status=Importance changed")
+    add_test(NAME run_mobile_preview_choice_change_event
+        COMMAND ${XVFB_RUN} -a ${CMAKE_COMMAND} -E env HYPERIAN_DATA=${CMAKE_BINARY_DIR}/mobile_choice_events.hdb HYPERIAN_VISUAL_TEST=1 HYPERIAN_VISUAL_TEST_INPUT_NAME=priority
+            HYPERIAN_VISUAL_TEST_INPUT=high HYPERIAN_VISUAL_TEST_STATE=priority_status
+            $<TARGET_FILE:hyperian> run ${CMAKE_SOURCE_DIR}/examples/mobile_tasks.hyp)
+    set_tests_properties(run_mobile_preview_choice_change_event PROPERTIES DEPENDS compile_mobile_preview PASS_REGULAR_EXPRESSION "priority_status=Priority:high")
     add_test(NAME run_desktop_focus_event
         COMMAND ${XVFB_RUN} -a ${CMAKE_COMMAND} -E env HYPERIAN_VISUAL_TEST=1 HYPERIAN_VISUAL_TEST_EVENT=FOCUS HYPERIAN_VISUAL_TEST_STATE=window_status
             $<TARGET_FILE:hyperian> run ${CMAKE_SOURCE_DIR}/examples/desktop_notes.hyp)

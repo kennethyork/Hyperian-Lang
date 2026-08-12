@@ -1,0 +1,18 @@
+application "Bad duplicate choice" is console
+
+model Preference
+field priority is text
+that is all
+
+controller Main
+when application starts
+show view "main"
+that is all
+that is all
+
+view "main"
+choose "Priority" as priority
+offer "Normal" as normal
+offer "Ordinary" as normal
+that is all
+that is all

@@ -14,7 +14,7 @@
 
 typedef enum { BLOCK_ROOT, BLOCK_MODEL, BLOCK_CONTROLLER, BLOCK_ROUTE, BLOCK_VIEW, BLOCK_FORM, BLOCK_EACH, BLOCK_IF,
     BLOCK_LAYOUT, BLOCK_COMPONENT, BLOCK_ACTION, BLOCK_LOGIC_IF, BLOCK_REPEAT, BLOCK_TEST, BLOCK_MIGRATION, BLOCK_TRY,
-    BLOCK_VIEW_ROW, BLOCK_VIEW_COLUMN, BLOCK_VIEW_CARD, BLOCK_VIEW_TABLE, BLOCK_TABLE_ROW } Block;
+    BLOCK_VIEW_ROW, BLOCK_VIEW_COLUMN, BLOCK_VIEW_CARD, BLOCK_VIEW_TABLE, BLOCK_TABLE_ROW, BLOCK_CHOICE } Block;
 
 static int block_end_opcode(Block block) {
     return block == BLOCK_MODEL ? OP_END_MODEL : block == BLOCK_CONTROLLER ? OP_END_CONTROLLER :
@@ -25,7 +25,8 @@ static int block_end_opcode(Block block) {
         block == BLOCK_REPEAT ? OP_END_REPEAT : block == BLOCK_MIGRATION ? OP_END_MIGRATION :
         block == BLOCK_TRY ? OP_END_TRY : block == BLOCK_VIEW_ROW ? OP_END_VIEW_ROW :
         block == BLOCK_VIEW_COLUMN ? OP_END_VIEW_COLUMN : block == BLOCK_VIEW_CARD ? OP_END_VIEW_CARD :
-        block == BLOCK_VIEW_TABLE ? OP_END_VIEW_TABLE : block == BLOCK_TABLE_ROW ? OP_END_TABLE_ROW : OP_END_TEST;
+        block == BLOCK_VIEW_TABLE ? OP_END_VIEW_TABLE : block == BLOCK_TABLE_ROW ? OP_END_TABLE_ROW :
+        block == BLOCK_CHOICE ? OP_END_CHOICE : OP_END_TEST;
 }
 
 static int indentation_branch(Block block, char **words, int count) {
@@ -199,7 +200,7 @@ static int duplicate_name(const Bytecode *code, uint8_t op, const char *name) {
 static int known_interface_input(const Bytecode *code, const char *name, int can_be_multiline_or_checkbox) {
     for (size_t i = 0; i < code->count; i++)
         if ((code->items[i].opcode == OP_INPUT || (can_be_multiline_or_checkbox &&
-            (code->items[i].opcode == OP_TEXTAREA || code->items[i].opcode == OP_CHECKBOX))) &&
+            (code->items[i].opcode == OP_TEXTAREA || code->items[i].opcode == OP_CHECKBOX || code->items[i].opcode == OP_CHOICE))) &&
             !strcmp(code->items[i].args[1], name)) return 1;
     return 0;
 }
@@ -256,6 +257,20 @@ static int validate(Bytecode *code, const char *path) {
         }
         if (in->opcode == OP_BUTTON_ACTION && !known_name(code, OP_ACTION, in->args[1])) {
             source_error(path, in->line, "this interface button action does not exist"); return 0;
+        }
+        if (in->opcode == OP_CHOICE) {
+            int options = 0;
+            for (size_t at = i + 1; at < code->count && code->items[at].opcode != OP_END_CHOICE; at++) {
+                if (code->items[at].opcode != OP_CHOICE_OPTION) {
+                    source_error(path, code->items[at].line, "only offer choices inside a choice list"); return 0;
+                }
+                for (size_t before = i + 1; before < at; before++)
+                    if (code->items[before].opcode == OP_CHOICE_OPTION && !strcmp(code->items[before].args[1], code->items[at].args[1])) {
+                        source_error(path, code->items[at].line, "each offered choice needs a different value"); return 0;
+                    }
+                options++;
+            }
+            if (!options) { source_error(path, in->line, "a choice list must offer at least one choice"); return 0; }
         }
         if (in->opcode == OP_EVENT && !strncmp(in->args[0], "CHANGE:", 7) && !known_interface_input(code, in->args[0] + 7, 1)) {
             source_error(path, in->line, "the input that should report changes does not exist"); return 0;
@@ -1064,6 +1079,15 @@ int compile_file(const char *source_path, const char *output_path) {
                 !strcmp(w[4], "table") && !strcmp(w[5], "cell")) {
                 if (current != BLOCK_TABLE_ROW) { source_error(source_path, number, "a table cell must be directly inside a table row"); okay = 0; }
                 else okay = emit(&code, OP_TABLE_CELL, 1, &w[1], number);
+            }
+            else if ((n == 4 || n == 5) && !strcmp(w[0], "choose") && !strcmp(w[2], "as") &&
+                (n == 4 || !strcmp(w[4], "required"))) {
+                char *args[3] = {w[1], w[3], n == 5 ? "true" : "false"};
+                okay = emit(&code, OP_CHOICE, 3, args, number); PUSH_BLOCK(BLOCK_CHOICE);
+            }
+            else if ((n == 2 || n == 4) && !strcmp(w[0], "offer") && (n == 2 || !strcmp(w[2], "as"))) {
+                if (current != BLOCK_CHOICE) { source_error(source_path, number, "an offered choice must be directly inside a choice list"); okay = 0; }
+                else { char *args[2] = {w[1], n == 4 ? w[3] : w[1]}; okay = emit(&code, OP_CHOICE_OPTION, 2, args, number); }
             }
             else if (n == 2 && !strcmp(w[0], "show")) okay = emit(&code, OP_SHOW_VALUE, 1, &w[1], number);
             else if (n == 4 && !strcmp(w[0], "link") && !strcmp(w[2], "to")) { char *a[2] = {w[1], w[3]}; okay = emit(&code, OP_LINK, 2, a, number); }

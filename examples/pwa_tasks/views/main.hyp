@@ -8,6 +8,11 @@ arrange the following in a row
 show the following in a card
 form posts to "/tasks"
 input "What needs doing?" as title required
+choose "Priority" as priority required
+offer "Low" as low
+offer "Normal" as normal
+offer "High" as high
+that is all
 button "Add task"
 that is all
 that is all
@@ -15,9 +20,11 @@ that is all
 show the following in a card
 show the following in a table
 use "Task" as a table heading
+use "Priority" as a table heading
 for each task in tasks show
 show the following in a table row
 show task.title in a table cell
+show task.priority in a table cell
 that is all
 that is all
 that is all

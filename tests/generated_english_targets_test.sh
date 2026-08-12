@@ -27,4 +27,6 @@ done
 
 grep 'when input "item name" changes' "$workspace/English-desktop/controllers/items.hyp" >/dev/null
 grep 'when input "item name" changes' "$workspace/English-mobile/controllers/items.hyp" >/dev/null
+grep 'choose "Item kind" as "item kind"' "$workspace/English-desktop/views/main.hyp" >/dev/null
+grep 'choose "Item kind" as "item kind"' "$workspace/English-mobile/views/main.hyp" >/dev/null
 grep 'set "player left" to' "$workspace/English-game/controllers/items.hyp" >/dev/null

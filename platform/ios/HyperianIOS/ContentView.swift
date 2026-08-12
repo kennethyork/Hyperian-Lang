@@ -152,6 +152,11 @@ struct HyperianControlView: View {
         case "input": TextField(control.label ?? "", text: application.binding(for: control)).textFieldStyle(.roundedBorder).onSubmit { application.submit(control) }
         case "textarea": TextEditor(text: application.binding(for: control)).frame(minHeight: 120).overlay(RoundedRectangle(cornerRadius: 8).stroke(.secondary))
         case "checkbox": Toggle(control.label ?? "", isOn: application.booleanBinding(for: control))
+        case "choice": Picker(control.label ?? "", selection: application.binding(for: control)) {
+            ForEach(Array((control.children ?? []).enumerated()), id: \.offset) { _, option in
+                Text(option.label ?? option.value ?? "").tag(option.value ?? "")
+            }
+        }.pickerStyle(.menu)
         case "button": Button(control.label ?? "") { application.run(control.action ?? "") }.buttonStyle(.borderedProminent).disabled((control.action ?? "").isEmpty)
         case "link": if let address = control.destination, let url = URL(string: address) { Link(control.label ?? address, destination: url) }
         case "image": if let source = control.source, let image = UIImage(contentsOfFile: Bundle.main.path(forResource: source, ofType: nil, inDirectory: "Resources") ?? "") {

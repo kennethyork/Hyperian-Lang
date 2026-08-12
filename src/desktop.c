@@ -7,7 +7,7 @@
 #ifdef HYPERIAN_HAVE_GTK3
 #include <gtk/gtk.h>
 
-typedef enum { DESKTOP_ENTRY, DESKTOP_TEXT, DESKTOP_CHECK } DesktopInputKind;
+typedef enum { DESKTOP_ENTRY, DESKTOP_TEXT, DESKTOP_CHECK, DESKTOP_CHOICE } DesktopInputKind;
 typedef struct DesktopContext DesktopContext;
 typedef struct { DesktopContext *context; const char *name; GtkWidget *widget; DesktopInputKind kind; } DesktopInput;
 typedef struct { const char *expression; GtkWidget *label; } DesktopOutput;
@@ -63,11 +63,12 @@ static void sync_inputs(DesktopContext *context) {
         DesktopInput *input = &context->inputs[i]; const char *value = ""; char *allocated = NULL;
         if (input->kind == DESKTOP_ENTRY) value = gtk_entry_get_text(GTK_ENTRY(input->widget));
         else if (input->kind == DESKTOP_CHECK) value = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(input->widget)) ? "true" : "false";
+        else if (input->kind == DESKTOP_CHOICE) value = gtk_combo_box_get_active_id(GTK_COMBO_BOX(input->widget));
         else {
             GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(input->widget)); GtkTextIter start, end;
             gtk_text_buffer_get_bounds(buffer, &start, &end); allocated = gtk_text_buffer_get_text(buffer, &start, &end, FALSE); value = allocated;
         }
-        hyperian_state_set(&context->state, input->name, value); g_free(allocated);
+        hyperian_state_set(&context->state, input->name, value ? value : ""); g_free(allocated);
     }
 }
 
@@ -132,10 +133,14 @@ static void remember_input(DesktopContext *context, const char *name, GtkWidget 
     const char *value = hyperian_state_get(&context->state, name); if (!value) value = "";
     if (kind == DESKTOP_ENTRY) gtk_entry_set_text(GTK_ENTRY(widget), value);
     else if (kind == DESKTOP_CHECK) gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(widget), !strcmp(value, "true"));
+    else if (kind == DESKTOP_CHOICE) {
+        if (!*value || !gtk_combo_box_set_active_id(GTK_COMBO_BOX(widget), value)) gtk_combo_box_set_active(GTK_COMBO_BOX(widget), 0);
+    }
     else gtk_text_buffer_set_text(gtk_text_view_get_buffer(GTK_TEXT_VIEW(widget)), value, -1);
     if (desktop_has_event(context->code, "CHANGE", name)) {
         if (kind == DESKTOP_ENTRY) g_signal_connect(widget, "changed", G_CALLBACK(input_changed), input);
         else if (kind == DESKTOP_CHECK) g_signal_connect(widget, "toggled", G_CALLBACK(input_changed), input);
+        else if (kind == DESKTOP_CHOICE) g_signal_connect(widget, "changed", G_CALLBACK(input_changed), input);
         else g_signal_connect(gtk_text_view_get_buffer(GTK_TEXT_VIEW(widget)), "changed", G_CALLBACK(input_changed), input);
     }
     if (kind == DESKTOP_ENTRY && desktop_has_event(context->code, "SUBMIT", name))
@@ -160,6 +165,15 @@ static void add_desktop_widgets(DesktopContext *context, GtkWidget *box, size_t 
             }
             if (next < 0) hyperian_state_set(&context->state, "error", "a collected list could not be displayed");
             i = end; continue;
+        } else if (in->opcode == OP_CHOICE) {
+            size_t end = desktop_matching_end(context->code, i, OP_CHOICE, OP_END_CHOICE);
+            GtkWidget *group = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10), *label = gtk_label_new(in->args[0]);
+            GtkWidget *choice = gtk_combo_box_text_new(); gtk_label_set_xalign(GTK_LABEL(label), 0);
+            gtk_box_pack_start(GTK_BOX(group), label, FALSE, FALSE, 4);
+            for (size_t option = i + 1; option < end; option++) if (context->code->items[option].opcode == OP_CHOICE_OPTION)
+                gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(choice), context->code->items[option].args[1], context->code->items[option].args[0]);
+            gtk_box_pack_start(GTK_BOX(group), choice, TRUE, TRUE, 4); remember_input(context, in->args[1], choice, DESKTOP_CHOICE);
+            widget = group; i = end;
         } else if (in->opcode == OP_VIEW_ROW || in->opcode == OP_VIEW_COLUMN || in->opcode == OP_VIEW_CARD ||
             in->opcode == OP_VIEW_TABLE || in->opcode == OP_TABLE_ROW) {
             uint8_t close = in->opcode == OP_VIEW_ROW ? OP_END_VIEW_ROW :
@@ -326,6 +340,7 @@ static int run_interface_app(const Bytecode *code, const char *name, int mobile)
         if (test_input && changed) {
             if (changed->kind == DESKTOP_ENTRY) gtk_entry_set_text(GTK_ENTRY(changed->widget), test_input);
             else if (changed->kind == DESKTOP_CHECK) gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(changed->widget), !strcmp(test_input, "true"));
+            else if (changed->kind == DESKTOP_CHOICE) gtk_combo_box_set_active_id(GTK_COMBO_BOX(changed->widget), test_input);
             else gtk_text_buffer_set_text(gtk_text_view_get_buffer(GTK_TEXT_VIEW(changed->widget)), test_input, -1);
         }
         const char *wanted_submit = getenv("HYPERIAN_VISUAL_TEST_SUBMIT"); DesktopInput *submitted = NULL;

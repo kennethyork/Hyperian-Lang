@@ -1,0 +1,20 @@
+application "Choice report" is console
+
+model Preference
+field priority is text
+that is all
+
+controller Reports
+when application starts
+show view "report"
+that is all
+that is all
+
+view "report"
+heading "Choice report"
+choose "Priority" as priority
+offer "Low" as low
+offer "Normal" as normal
+offer "High" as high
+that is all
+that is all

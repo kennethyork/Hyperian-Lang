@@ -1194,6 +1194,20 @@ static int render_range(const Bytecode *code, size_t from, size_t to, Buffer *bo
                 buffer_add(body, ">"); buffer_html(body, in->args[0]); buffer_add(body, "</label><input type=\"hidden\" name=\"");
                 buffer_html(body, in->args[1]); buffer_add(body, "\" value=\"false\">"); break;
             }
+            case OP_CHOICE: {
+                size_t end = find_end(code, i, OP_CHOICE, OP_END_CHOICE);
+                const char *selected = record_value(scope->item, in->args[1]);
+                buffer_add(body, "<label>"); buffer_html(body, in->args[0]); buffer_add(body, "<select name=\"");
+                buffer_html(body, in->args[1]); buffer_add(body, "\"");
+                if (!strcmp(in->args[2], "true")) buffer_add(body, " required");
+                buffer_add(body, ">");
+                for (size_t option = i + 1; option < end; option++) if (code->items[option].opcode == OP_CHOICE_OPTION) {
+                    buffer_add(body, "<option value=\""); buffer_html(body, code->items[option].args[1]); buffer_add(body, "\"");
+                    if (selected && !strcmp(selected, code->items[option].args[1])) buffer_add(body, " selected");
+                    buffer_add(body, ">"); buffer_html(body, code->items[option].args[0]); buffer_add(body, "</option>");
+                }
+                buffer_add(body, "</select></label>"); i = end; break;
+            }
             case OP_EACH: {
                 size_t end = find_end(code, i, OP_EACH, OP_END_EACH);
                 if (!scope->table_depth) buffer_add(body, "<ul>");
@@ -1309,7 +1323,7 @@ static char *render_view(const Bytecode *code, const char *view, Scope *scope, R
     buffer_html(&result, title);
     buffer_add(&result, "</title>");
     if (pwa) buffer_add(&result, "<meta name=\"theme-color\" content=\"#2563eb\"><meta name=\"apple-mobile-web-app-capable\" content=\"yes\"><link rel=\"manifest\" href=\"/assets/manifest.webmanifest\"><link rel=\"icon\" href=\"/assets/icon.svg\"><script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js'))}</script>");
-    buffer_add(&result, "<style>:root{font:17px/1.5 system-ui,sans-serif;color-scheme:light dark}body{width:min(44rem,calc(100% - 2rem));margin:3rem auto}h1{line-height:1.1}form{display:flex;gap:.6rem;margin:1rem 0}input,button,textarea{font:inherit;padding:.65rem .8rem}input,textarea{flex:1}button{cursor:pointer}li{margin:.45rem 0}img{max-width:100%;height:auto}.hyperian-row,.hyperian-column{display:flex;gap:1rem;margin:1rem 0}.hyperian-row{flex-flow:row wrap;align-items:flex-start}.hyperian-row>*{flex:1 1 12rem}.hyperian-column{flex-direction:column}.hyperian-card{padding:1rem;border:1px solid color-mix(in srgb,currentColor 25%,transparent);border-radius:.75rem;margin:1rem 0;box-shadow:0 .2rem .8rem #0002}.hyperian-table-scroll{max-width:100%;overflow-x:auto}.hyperian-table{width:100%;border-collapse:collapse;margin:1rem 0}.hyperian-table th,.hyperian-table td{text-align:left;padding:.65rem .75rem;border-bottom:1px solid color-mix(in srgb,currentColor 22%,transparent)}.hyperian-table th{font-weight:700;background:color-mix(in srgb,currentColor 7%,transparent)}@media(max-width:38rem){.hyperian-row{flex-direction:column}.hyperian-row>*{width:100%}}</style>");
+    buffer_add(&result, "<style>:root{font:17px/1.5 system-ui,sans-serif;color-scheme:light dark}body{width:min(44rem,calc(100% - 2rem));margin:3rem auto}h1{line-height:1.1}form{display:flex;gap:.6rem;margin:1rem 0}input,button,textarea,select{font:inherit;padding:.65rem .8rem}input,textarea,select{flex:1}label:has(>select){display:flex;align-items:center;gap:.6rem}button{cursor:pointer}li{margin:.45rem 0}img{max-width:100%;height:auto}.hyperian-row,.hyperian-column{display:flex;gap:1rem;margin:1rem 0}.hyperian-row{flex-flow:row wrap;align-items:flex-start}.hyperian-row>*{flex:1 1 12rem}.hyperian-column{flex-direction:column}.hyperian-card{padding:1rem;border:1px solid color-mix(in srgb,currentColor 25%,transparent);border-radius:.75rem;margin:1rem 0;box-shadow:0 .2rem .8rem #0002}.hyperian-table-scroll{max-width:100%;overflow-x:auto}.hyperian-table{width:100%;border-collapse:collapse;margin:1rem 0}.hyperian-table th,.hyperian-table td{text-align:left;padding:.65rem .75rem;border-bottom:1px solid color-mix(in srgb,currentColor 22%,transparent)}.hyperian-table th{font-weight:700;background:color-mix(in srgb,currentColor 7%,transparent)}@media(max-width:38rem){.hyperian-row{flex-direction:column}.hyperian-row>*{width:100%}}</style>");
     for (size_t i = start; i < end; i++) if (code->items[i].opcode == OP_STYLE) {
         buffer_add(&result, "<link rel=\"stylesheet\" href=\""); buffer_dynamic_html(&result, code->items[i].args[0], scope); buffer_add(&result, "\">");
     }
@@ -2012,6 +2026,14 @@ static int console_render_range(const Bytecode *code, size_t from, size_t to, Sc
                 console_render_range(code, i + 1, end, scope, records); putchar('\n'); i = end; break;
             }
             case OP_TABLE_CELL: printf("%s\t", resolve(scope, in->args[0])); break;
+            case OP_CHOICE: {
+                size_t end = find_end(code, i, OP_CHOICE, OP_END_CHOICE);
+                printf("%s: ", in->args[0]); int first = 1;
+                for (size_t option = i + 1; option < end; option++) if (code->items[option].opcode == OP_CHOICE_OPTION) {
+                    printf("%s%s", first ? "" : " / ", code->items[option].args[0]); first = 0;
+                }
+                putchar('\n'); i = end; break;
+            }
             case OP_IF: {
                 size_t end = find_end(code, i, OP_IF, OP_END_IF);
                 if (truthy(resolve(scope, in->args[0]))) console_render_range(code, i + 1, end, scope, records);

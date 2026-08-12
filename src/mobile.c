@@ -107,6 +107,27 @@ static void render_controls(HyperianMobile *mobile, Json *json, size_t from, siz
             if (value_is_true(value)) render_controls(mobile, json, i + 1, end);
             i = end; continue;
         }
+        if (in->opcode == OP_CHOICE) {
+            size_t end = matching_end(&mobile->code, i, OP_CHOICE, OP_END_CHOICE);
+            const char *selected = hyperian_state_get(&mobile->state, in->args[1]);
+            if ((!selected || !*selected) && i + 1 < end && mobile->code.items[i + 1].opcode == OP_CHOICE_OPTION) {
+                hyperian_state_set(&mobile->state, in->args[1], mobile->code.items[i + 1].args[1]);
+                selected = hyperian_state_get(&mobile->state, in->args[1]);
+            }
+            control_start(json, "choice"); control_value(json, "label", in->args[0]); control_value(json, "name", in->args[1]);
+            control_value(json, "value", selected ? selected : "");
+            char event[80];
+            if (has_input_event(&mobile->code, "CHANGE", in->args[1])) {
+                snprintf(event, sizeof(event), "CHANGE:%s", in->args[1]); control_value(json, "changeEvent", event);
+            }
+            json_raw(json, ",\"required\":"); json_raw(json, !strcmp(in->args[2], "true") ? "true" : "false");
+            json_raw(json, ",\"children\":["); json->first = 1;
+            for (size_t option = i + 1; option < end; option++) if (mobile->code.items[option].opcode == OP_CHOICE_OPTION) {
+                control_start(json, "choiceOption"); control_value(json, "label", mobile->code.items[option].args[0]);
+                control_value(json, "value", mobile->code.items[option].args[1]); json_raw(json, "}");
+            }
+            json_raw(json, "]}"); json->first = 0; i = end; continue;
+        }
         if (in->opcode == OP_VIEW_ROW || in->opcode == OP_VIEW_COLUMN || in->opcode == OP_VIEW_CARD ||
             in->opcode == OP_VIEW_TABLE || in->opcode == OP_TABLE_ROW) {
             uint8_t close = in->opcode == OP_VIEW_ROW ? OP_END_VIEW_ROW :

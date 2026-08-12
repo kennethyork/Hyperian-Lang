@@ -248,7 +248,7 @@ The build also produces `libhyperian_mobile.a`, a portable C library for Android
 - `hyperian_mobile_start` runs `when application starts`.
 - `hyperian_mobile_set` synchronizes a native input into controller state.
 - `hyperian_mobile_run_action` and `hyperian_mobile_send_event` execute controller behavior, CRUD, timers, and navigation.
-- `hyperian_mobile_render_json` returns the current view as ordered heading, text, value, input, text-area, checkbox, button, link, image, row, column, card, table, table-row, table-heading, and table-cell controls. It expands English `for each` and `if` view blocks.
+- `hyperian_mobile_render_json` returns the current view as ordered heading, text, value, input, text-area, checkbox, choice-list, button, link, image, row, column, card, table, table-row, table-heading, and table-cell controls. It expands English `for each` and `if` view blocks.
 - `hyperian_mobile_close` releases the session.
 
 This API means platform code renders controls but does not reimplement Hyperian semantics. Models, actions, persistence, view selection, and expressions continue running in Hyperian’s native VM. CMake installs the library under `lib/` and its public header under `include/hyperian/`.
@@ -612,6 +612,11 @@ heading "Native desktop notes"
 input "Note title" as title
 textarea "Note details" as details
 checkbox "Important" as important
+choose "Priority" as priority required
+offer "Low" as low
+offer "Normal" as normal
+offer "High" as high
+that is all
 button "Save note" runs action "save note"
 show status
 that is all
@@ -630,7 +635,19 @@ run action "save note"
 that is all
 ```
 
-Change events work with single-line inputs, text areas, and checkboxes. Submission events run when someone submits a single-line field from the keyboard. The GTK desktop and mobile-preview backends, native mobile C bridge, generated Android project, and generated iOS project all dispatch the same compiled controller events. The compiler rejects missing controls, text-area submission handlers, and use outside desktop or mobile applications.
+Change events work with single-line inputs, text areas, checkboxes, and choice lists. Submission events run when someone submits a single-line field from the keyboard. The GTK desktop and mobile-preview backends, native mobile C bridge, generated Android project, and generated iOS project all dispatch the same compiled controller events. The compiler rejects missing controls, text-area submission handlers, and use outside desktop or mobile applications.
+
+Views can offer a fixed set of choices with a fully left-aligned English block:
+
+```hyperian
+choose "Priority" as priority required
+offer "Low" as low
+offer "Normal" as normal
+offer "High" as high
+that is all
+```
+
+The words after `offer` are what people see. The value after `as` is what the Model receives. Web views render a native HTML select, GTK renders a combo box, Android renders a spinner, and SwiftUI renders a picker. A console view prints the available choices. Choice values are synchronized before Controller actions, and native applications may respond with `when input priority changes`.
 
 Application and focus lifecycle behavior is English too:
 
@@ -1012,6 +1029,6 @@ that is all
 
 ## Project status
 
-Version 0.50 is a small but real MVC platform: canonical fully left-aligned English source with readable `that is all` block endings and compatibility for older indentation-based programs, focused built-in help for directly running `.hyp` source without confusing it with `.hyr` runtime packs, nested English row, column, card, and data-table view layouts across responsive web, GTK, Android, SwiftUI, mobile-bridge JSON, and readable console output, custom portable bytecode, a native VM, native Windows x64 compiler/runtime support with Windows files, processes, clocks, services, cryptographic randomness, and Winsock HTTP serving, verified versioned native runtime folders and path-free downloadable `.hyr` archives with SHA-256 integrity, automated five-platform release builds, direct cross-platform executable assembly, transactional cross-platform asset bundles for console, service, web, API, desktop, mobile-preview, and game applications, readable quoted phrase names across MVC and every runtime, literal-safe English expressions, versioned Android/iOS mobile deployment packages, automated signed APK/AAB/IPA orchestration, a linkable native mobile runtime bridge, self-contained native Android Studio and SwiftUI Xcode project generation, native phone HTTPS and SQLite integration, native backend diagnostics, eight compiler targets including installable offline web applications, parallel-safe compiler tooling, an English source-line debugger, persistent model CRUD plus filtered and ordered collection queries inside native controller actions, repeated native collection views, recurring service and native-interface timers, interactive multi-view GTK desktop and phone-sized mobile preview interfaces with close, live-input-change, keyboard-submission, focus, pause, resume, tap, press-and-hold, and four-direction swipe events, matching generated Android/iOS lifecycle and gesture events, SDL2 keyboard/frame events, frame-rate-independent movement, gravity, smooth value transitions, timed animation frames, boundaries, native rectangle, circle, line, and filled polygon drawing plus collision detection between every shape pair, BMP/PNG/JPEG/WebP sprites, WAV and compressed overlapping sound effects, streamed music controls, readable frame-time state, and state-driven rendering, native lists and maps, selectable HDB or transactional SQLite storage, recoverable runtime errors, an HTTP/HTTPS client, local packages, reusable actions, native file access, foldered project generation, versioned migrations, persistent CRUD models, safe HTML and typed JSON, authentication and authorization, middleware, formatting, and English tests.
+Version 0.51 is a small but real MVC platform: canonical fully left-aligned English source with readable `that is all` block endings and compatibility for older indentation-based programs, focused built-in help for directly running `.hyp` source without confusing it with `.hyr` runtime packs, English fixed-choice lists rendered as HTML selects, GTK combo boxes, Android spinners, SwiftUI pickers, mobile-bridge JSON, and readable console choices, nested English row, column, card, and data-table view layouts across responsive web, GTK, Android, SwiftUI, mobile-bridge JSON, and readable console output, custom portable bytecode, a native VM, native Windows x64 compiler/runtime support with Windows files, processes, clocks, services, cryptographic randomness, and Winsock HTTP serving, verified versioned native runtime folders and path-free downloadable `.hyr` archives with SHA-256 integrity, automated five-platform release builds, direct cross-platform executable assembly, transactional cross-platform asset bundles for console, service, web, API, desktop, mobile-preview, and game applications, readable quoted phrase names across MVC and every runtime, literal-safe English expressions, versioned Android/iOS mobile deployment packages, automated signed APK/AAB/IPA orchestration, a linkable native mobile runtime bridge, self-contained native Android Studio and SwiftUI Xcode project generation, native phone HTTPS and SQLite integration, native backend diagnostics, eight compiler targets including installable offline web applications, parallel-safe compiler tooling, an English source-line debugger, persistent model CRUD plus filtered and ordered collection queries inside native controller actions, repeated native collection views, recurring service and native-interface timers, interactive multi-view GTK desktop and phone-sized mobile preview interfaces with close, live-input-change, keyboard-submission, focus, pause, resume, tap, press-and-hold, and four-direction swipe events, matching generated Android/iOS lifecycle and gesture events, SDL2 keyboard/frame events, frame-rate-independent movement, gravity, smooth value transitions, timed animation frames, boundaries, native rectangle, circle, line, and filled polygon drawing plus collision detection between every shape pair, BMP/PNG/JPEG/WebP sprites, WAV and compressed overlapping sound effects, streamed music controls, readable frame-time state, and state-driven rendering, native lists and maps, selectable HDB or transactional SQLite storage, recoverable runtime errors, an HTTP/HTTPS client, local packages, reusable actions, native file access, foldered project generation, versioned migrations, persistent CRUD models, safe HTML and typed JSON, authentication and authorization, middleware, formatting, and English tests.
 
 Windows arm64 release coverage and bundled native Windows desktop/game dependencies remain future portability work.
