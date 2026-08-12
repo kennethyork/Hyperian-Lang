@@ -50,7 +50,7 @@ jobs:
           cmake -E sha256sum "hyperian-${version}-${{ matrix.platform }}.hyr" > "hyperian-${version}-${{ matrix.platform }}.hyr.sha256"
 
       - name: Upload the verified runtime archive
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: runtime-${{ matrix.platform }}
           path: dist/*
@@ -65,7 +65,7 @@ jobs:
       contents: write
     steps:
       - name: Download every native runtime
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
