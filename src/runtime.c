@@ -1,17 +1,29 @@
 #include "hyperian.h"
+#include "platform.h"
 #include "security.h"
 
-#include <arpa/inet.h>
 #include <ctype.h>
 #include <errno.h>
 #include <float.h>
+#include <limits.h>
 #include <signal.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/socket.h>
 #include <time.h>
+
+#ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+typedef SOCKET HyperianSocket;
+#define HYPERIAN_INVALID_SOCKET INVALID_SOCKET
+#else
+#include <arpa/inet.h>
+#include <sys/socket.h>
 #include <unistd.h>
+typedef int HyperianSocket;
+#define HYPERIAN_INVALID_SOCKET (-1)
+#endif
 
 #ifdef HYPERIAN_HAVE_SQLITE3
 #include <sqlite3.h>
@@ -51,6 +63,48 @@ static Record *find_record(Record *records, const char *model, const char *id);
 
 static volatile sig_atomic_t keep_running = 1;
 static void stop_server(int signal_number) { (void)signal_number; keep_running = 0; }
+
+static void install_stop_signals(void) {
+#ifdef _WIN32
+    signal(SIGINT, stop_server);
+#ifdef SIGTERM
+    signal(SIGTERM, stop_server);
+#endif
+#else
+    struct sigaction action; memset(&action, 0, sizeof(action)); action.sa_handler = stop_server; sigemptyset(&action.sa_mask);
+    sigaction(SIGINT, &action, NULL); sigaction(SIGTERM, &action, NULL);
+#endif
+}
+
+static int start_network(void) {
+#ifdef _WIN32
+    WSADATA data; return WSAStartup(MAKEWORD(2, 2), &data) == 0;
+#else
+    return 1;
+#endif
+}
+
+static void finish_network(void) {
+#ifdef _WIN32
+    WSACleanup();
+#endif
+}
+
+static void close_socket(HyperianSocket socket_fd) {
+#ifdef _WIN32
+    closesocket(socket_fd);
+#else
+    close(socket_fd);
+#endif
+}
+
+static int network_error_number(void) {
+#ifdef _WIN32
+    return WSAGetLastError();
+#else
+    return errno;
+#endif
+}
 
 static char *copy_string(const char *s) { size_t n = strlen(s) + 1; char *r = malloc(n); if (r) memcpy(r, s, n); return r; }
 
@@ -844,7 +898,7 @@ static int execute_logic_at(const Bytecode *code, size_t *position, Scope *scope
         if (!file) { snprintf(error, error_size, "could not write file %s: %s", path, strerror(errno)); return 0; }
         size_t length = strlen(value); int okay = fwrite(value, 1, length, file) == length;
         if (fclose(file)) okay = 0;
-        if (okay) okay = rename(temporary, path) == 0;
+        if (okay) okay = hyperian_replace_file(temporary, path) == 0;
         if (!okay) { remove(temporary); snprintf(error, error_size, "could not finish writing file %s", path); return 0; }
     } else if (in->opcode == OP_MAKE_LIST) {
         local_set(scope->locals, in->args[0], "");
@@ -1558,8 +1612,11 @@ static Response execute_route(const Bytecode *code, size_t route_at, Form *form,
     return (Response){500, error_page("The route did not show a view, show JSON, or redirect"), NULL, "text/html; charset=utf-8", NULL, 0};
 }
 
-static int send_all(int socket_fd, const char *data, size_t length) {
-    while (length) { ssize_t sent = send(socket_fd, data, length, 0); if (sent <= 0) return 0; data += sent; length -= (size_t)sent; }
+static int send_all(HyperianSocket socket_fd, const char *data, size_t length) {
+    while (length) {
+        int wanted = length > INT_MAX ? INT_MAX : (int)length;
+        int sent = send(socket_fd, data, wanted, 0); if (sent <= 0) return 0; data += sent; length -= (size_t)sent;
+    }
     return 1;
 }
 
@@ -1587,9 +1644,9 @@ static void session_cookie(const char *request, const char *headers_end, char to
     }
 }
 
-static void serve_client(int client, const Bytecode *code, Record **records, Session **sessions, const char *app_name) {
-    char request[REQUEST_MAX + 1]; size_t used = 0; ssize_t got;
-    while (used < REQUEST_MAX && (got = recv(client, request + used, REQUEST_MAX - used, 0)) > 0) {
+static void serve_client(HyperianSocket client, const Bytecode *code, Record **records, Session **sessions, const char *app_name) {
+    char request[REQUEST_MAX + 1]; size_t used = 0; int got;
+    while (used < REQUEST_MAX && (got = recv(client, request + used, (int)(REQUEST_MAX - used), 0)) > 0) {
         used += (size_t)got; request[used] = 0;
         char *headers_end = strstr(request, "\r\n\r\n");
         if (headers_end) {
@@ -1681,7 +1738,7 @@ static int save_hdb_records(Record *records, const Bytecode *code) {
             okay = file_write_text(file, record->fields[i].key) && file_write_text(file, record->fields[i].value);
     }
     if (fclose(file)) okay = 0;
-    if (okay) okay = rename(temporary, data_path()) == 0;
+    if (okay) okay = hyperian_replace_file(temporary, data_path()) == 0;
     if (!okay) remove(temporary);
     return okay;
 }
@@ -1914,8 +1971,7 @@ static int console_render_range(const Bytecode *code, size_t from, size_t to, Sc
 }
 
 static uint64_t monotonic_milliseconds(void) {
-    struct timespec time; clock_gettime(CLOCK_MONOTONIC, &time);
-    return (uint64_t)time.tv_sec * 1000 + (uint64_t)time.tv_nsec / 1000000;
+    return hyperian_monotonic_milliseconds();
 }
 
 static int run_console(const Bytecode *code, const char *app_name, int service) {
@@ -1959,8 +2015,7 @@ static int run_console(const Bytecode *code, const char *app_name, int service) 
                 timers[timer_count++] = (ServiceTimer){code->items[i].args[0], interval, now + interval};
             }
         if (timer_count) {
-            struct sigaction action; memset(&action, 0, sizeof(action)); action.sa_handler = stop_server; sigemptyset(&action.sa_mask);
-            sigaction(SIGINT, &action, NULL); sigaction(SIGTERM, &action, NULL); keep_running = 1;
+            install_stop_signals(); keep_running = 1;
             const char *limit_text = getenv("HYPERIAN_SERVICE_TEST_TICKS"); int limit = limit_text ? atoi(limit_text) : 0, ticks = 0;
             while (keep_running && (!limit || ticks < limit)) {
                 now = monotonic_milliseconds(); uint64_t nearest = now + 1000;
@@ -1977,7 +2032,7 @@ static int run_console(const Bytecode *code, const char *app_name, int service) 
                 }
                 if (keep_running && (!limit || ticks < limit)) {
                     now = monotonic_milliseconds(); uint64_t wait = nearest > now ? nearest - now : 1;
-                    struct timespec pause = {(time_t)(wait / 1000), (long)(wait % 1000) * 1000000}; nanosleep(&pause, NULL);
+                    hyperian_sleep_milliseconds(wait);
                 }
             }
             const char *test_name = getenv("HYPERIAN_SERVICE_TEST_STATE");
@@ -2010,23 +2065,30 @@ int run_bytecode(const char *path, int port_override) {
         bytecode_free(&code); return 1;
     }
     if (!port) port = 8000;
-    int server = socket(AF_INET, SOCK_STREAM, 0); int yes = 1;
-    setsockopt(server, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
+    if (!start_network()) { fprintf(stderr, "error: cannot start networking: %d\n", network_error_number()); bytecode_free(&code); return 1; }
+    HyperianSocket server = socket(AF_INET, SOCK_STREAM, 0); int yes = 1;
+    setsockopt(server, SOL_SOCKET, SO_REUSEADDR, (const char *)&yes, sizeof(yes));
     struct sockaddr_in address = {.sin_family = AF_INET, .sin_port = htons((uint16_t)port), .sin_addr.s_addr = htonl(INADDR_LOOPBACK)};
-    if (server < 0 || bind(server, (struct sockaddr *)&address, sizeof(address)) < 0 || listen(server, 16) < 0) {
-        fprintf(stderr, "error: cannot listen on port %d: %s\n", port, strerror(errno)); if (server >= 0) close(server); bytecode_free(&code); return 1;
+    if (server == HYPERIAN_INVALID_SOCKET || bind(server, (struct sockaddr *)&address, sizeof(address)) < 0 || listen(server, 16) < 0) {
+        fprintf(stderr, "error: cannot listen on port %d (network error %d)\n", port, network_error_number());
+        if (server != HYPERIAN_INVALID_SOCKET) close_socket(server);
+        finish_network(); bytecode_free(&code); return 1;
     }
-    struct sigaction action; memset(&action, 0, sizeof(action)); action.sa_handler = stop_server; sigemptyset(&action.sa_mask);
-    sigaction(SIGINT, &action, NULL); sigaction(SIGTERM, &action, NULL);
+    install_stop_signals();
     printf("%s is running at http://127.0.0.1:%d\n", name, port); fflush(stdout);
     int data_okay; Record *records = load_records(&code, &data_okay); Session *sessions = NULL;
-    if (!data_okay) { close(server); bytecode_free(&code); return 1; }
+    if (!data_okay) { close_socket(server); finish_network(); bytecode_free(&code); return 1; }
     while (keep_running) {
-        int client = accept(server, NULL, NULL);
-        if (client < 0) { if (errno == EINTR) continue; break; }
-        serve_client(client, &code, &records, &sessions, name); close(client);
+        HyperianSocket client = accept(server, NULL, NULL);
+        if (client == HYPERIAN_INVALID_SOCKET) {
+#ifndef _WIN32
+            if (errno == EINTR) continue;
+#endif
+            break;
+        }
+        serve_client(client, &code, &records, &sessions, name); close_socket(client);
     }
-    close(server); records_free(records); sessions_free(sessions); bytecode_free(&code); return 0;
+    close_socket(server); finish_network(); records_free(records); sessions_free(sessions); bytecode_free(&code); return 0;
 }
 
 int inspect_bytecode(const char *path) {

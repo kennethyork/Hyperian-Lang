@@ -2,6 +2,13 @@
 #include <stdio.h>
 #include <sys/stat.h>
 
+#ifdef _WIN32
+#include <direct.h>
+#define make_fixture_directory(path) _mkdir(path)
+#else
+#define make_fixture_directory(path) mkdir(path, 0755)
+#endif
+
 static int write_file(const char *path, const unsigned char *data, size_t size) {
     FILE *file = fopen(path, "wb");
     if (!file) return 0;
@@ -59,7 +66,7 @@ int main(void) {
         'f','m','t',' ',16,0,0,0,1,0,1,0,64,31,0,0,64,31,0,0,1,0,8,0,
         'd','a','t','a',8,0,0,0,128,128,128,128,128,128,128,128
     };
-    if (mkdir("assets", 0755) && errno != EEXIST) return 1;
+    if (make_fixture_directory("assets") && errno != EEXIST) return 1;
     if (!write_file("assets/player.bmp", bitmap, sizeof(bitmap)) || !write_file("assets/player.png", png, sizeof(png)) ||
         !write_file("assets/player.jpg", jpeg, sizeof(jpeg)) || !write_file("assets/player.webp", webp, sizeof(webp)) ||
         !write_file("assets/broken.png", broken, sizeof(broken)) || !write_file("assets/broken.ogg", broken_audio, sizeof(broken_audio)) ||

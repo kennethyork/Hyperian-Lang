@@ -13,18 +13,28 @@ jobs:
   build-runtime-pack:
     name: Build ${{ matrix.platform }}
     runs-on: ${{ matrix.runner }}
+    defaults:
+      run:
+        shell: bash
     strategy:
       fail-fast: false
       matrix:
         include:
           - platform: linux-x64
             runner: ubuntu-24.04
+            executable: build/hyperian
           - platform: linux-arm64
             runner: ubuntu-24.04-arm
+            executable: build/hyperian
           - platform: macos-x64
             runner: macos-15-intel
+            executable: build/hyperian
           - platform: macos-arm64
             runner: macos-15
+            executable: build/hyperian
+          - platform: windows-x64
+            runner: windows-2025
+            executable: build/Release/hyperian.exe
     steps:
       - name: Check out Hyperian
         uses: actions/checkout@v6
@@ -32,20 +42,20 @@ jobs:
       - name: Build the native compiler and runtime
         run: |
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-          cmake --build build --parallel
+          cmake --build build --config Release --parallel
 
       - name: Run the native test suite
-        run: ctest --test-dir build --output-on-failure
+        run: ctest --test-dir build --build-config Release --output-on-failure
 
       - name: Verify the runner platform
-        run: test "$(build/hyperian platform)" = "${{ matrix.platform }}"
+        run: test "$("${{ matrix.executable }}" platform | tr -d '\r')" = "${{ matrix.platform }}"
 
       - name: Create the downloadable runtime archive
         run: |
-          version=$(build/hyperian version | awk '{print $2}')
+          version=$("${{ matrix.executable }}" version | awk '{print $2}' | tr -d '\r')
           test "v${version}" = "${GITHUB_REF_NAME}" || test "${GITHUB_EVENT_NAME}" = "workflow_dispatch"
           mkdir -p dist
-          build/hyperian pack runtime as "dist/hyperian-${version}-${{ matrix.platform }}.hyr"
+          "${{ matrix.executable }}" pack runtime as "dist/hyperian-${version}-${{ matrix.platform }}.hyr"
           cd dist
           cmake -E sha256sum "hyperian-${version}-${{ matrix.platform }}.hyr" > "hyperian-${version}-${{ matrix.platform }}.hyr.sha256"
 
@@ -72,8 +82,8 @@ jobs:
 
       - name: Verify the release payload
         run: |
-          test "$(find dist -maxdepth 1 -name '*.hyr' -type f | wc -l)" -eq 4
-          test "$(find dist -maxdepth 1 -name '*.sha256' -type f | wc -l)" -eq 4
+          test "$(find dist -maxdepth 1 -name '*.hyr' -type f | wc -l)" -eq 5
+          test "$(find dist -maxdepth 1 -name '*.sha256' -type f | wc -l)" -eq 5
           cd dist
           sha256sum --check *.sha256
 

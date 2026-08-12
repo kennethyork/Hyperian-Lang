@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(Hyperian VERSION 0.47.0 LANGUAGES C)
+project(Hyperian VERSION 0.48.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -16,6 +16,7 @@ add_executable(hyperian
     src/game.c
     src/network.c
     src/security.c
+    src/platform.c
 )
 target_include_directories(hyperian PRIVATE src)
 target_compile_options(hyperian PRIVATE -Wall -Wextra -Wpedantic)
@@ -55,7 +56,7 @@ endif()
 install(TARGETS hyperian RUNTIME DESTINATION bin)
 
 add_library(hyperian_mobile_runtime STATIC
-    src/mobile.c src/runtime.c src/bytecode.c src/network.c src/security.c src/desktop.c src/game.c)
+    src/mobile.c src/runtime.c src/bytecode.c src/network.c src/security.c src/platform.c src/desktop.c src/game.c)
 set_target_properties(hyperian_mobile_runtime PROPERTIES OUTPUT_NAME hyperian_mobile POSITION_INDEPENDENT_CODE ON)
 target_include_directories(hyperian_mobile_runtime PUBLIC src)
 target_compile_options(hyperian_mobile_runtime PRIVATE -Wall -Wextra -Wpedantic)
@@ -84,8 +85,13 @@ install(FILES src/hyperian.h DESTINATION include/hyperian)
 install(DIRECTORY platform/android DESTINATION share/hyperian/platform)
 install(DIRECTORY platform/ios DESTINATION share/hyperian/platform)
 install(DIRECTORY platform/sqlite DESTINATION share/hyperian/platform)
-install(FILES src/mobile.c src/runtime.c src/bytecode.c src/network.c src/security.c src/security.h src/desktop.c src/game.c src/hyperian.h
+install(FILES src/mobile.c src/runtime.c src/bytecode.c src/network.c src/security.c src/security.h src/platform.c src/platform.h src/desktop.c src/game.c src/hyperian.h
     DESTINATION share/hyperian/runtime)
+
+if(WIN32)
+    target_link_libraries(hyperian PRIVATE ws2_32)
+    target_link_libraries(hyperian_mobile_runtime PRIVATE ws2_32)
+endif()
 
 enable_testing()
 add_test(NAME compiler_help COMMAND hyperian help)
@@ -211,12 +217,12 @@ set_tests_properties(run_scheduled_service PROPERTIES DEPENDS compile_scheduled_
 add_test(NAME reject_bad_timer COMMAND hyperian check ${CMAKE_SOURCE_DIR}/tests/bad_timer.hyp)
 set_tests_properties(reject_bad_timer PROPERTIES WILL_FAIL TRUE)
 add_test(NAME build_standalone_service
-    COMMAND hyperian build ${CMAKE_SOURCE_DIR}/examples/report_service.hyp -o ${CMAKE_BINARY_DIR}/standalone_report)
+    COMMAND hyperian build ${CMAKE_SOURCE_DIR}/examples/report_service.hyp -o ${CMAKE_BINARY_DIR}/standalone_report${CMAKE_EXECUTABLE_SUFFIX})
 add_test(NAME run_standalone_service
-    COMMAND ${CMAKE_BINARY_DIR}/standalone_report)
+    COMMAND ${CMAKE_BINARY_DIR}/standalone_report${CMAKE_EXECUTABLE_SUFFIX})
 set_tests_properties(run_standalone_service PROPERTIES DEPENDS build_standalone_service)
 add_test(NAME native_platform_name COMMAND hyperian platform)
-set_tests_properties(native_platform_name PROPERTIES PASS_REGULAR_EXPRESSION "^(linux|macos|freebsd)-(x64|arm64)")
+set_tests_properties(native_platform_name PROPERTIES PASS_REGULAR_EXPRESSION "^(linux|macos|freebsd|windows)-(x64|arm64)")
 add_test(NAME clean_native_runtime_pack
     COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}/NativeRuntime)
 add_test(NAME create_native_runtime_pack
@@ -328,7 +334,7 @@ set_tests_properties(build_console_bundle PROPERTIES DEPENDS clean_console_bundl
 add_test(NAME verify_console_bundle_manifest
     COMMAND sh ${CMAKE_SOURCE_DIR}/tests/bundle_manifest_test.sh $<TARGET_FILE:hyperian> ${CMAKE_BINARY_DIR}/BundleConsole)
 set_tests_properties(verify_console_bundle_manifest PROPERTIES DEPENDS build_console_bundle)
-add_test(NAME run_console_bundle COMMAND ${CMAKE_BINARY_DIR}/BundleConsole/run)
+add_test(NAME run_console_bundle COMMAND ${CMAKE_BINARY_DIR}/BundleConsole/run${CMAKE_EXECUTABLE_SUFFIX})
 set_tests_properties(run_console_bundle PROPERTIES DEPENDS build_console_bundle WORKING_DIRECTORY ${CMAKE_SOURCE_DIR} PASS_REGULAR_EXPRESSION "Hello from a bundled asset")
 add_test(NAME format_source
     COMMAND hyperian format ${CMAKE_SOURCE_DIR}/examples/english_logic.hyp)

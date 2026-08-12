@@ -1,4 +1,5 @@
 #include "hyperian.h"
+#include "platform.h"
 
 #include <ctype.h>
 #include <errno.h>
@@ -453,7 +454,7 @@ static int expand_source(const char *path, FILE *output, int depth, const char *
         if (count < 0) { source_error(path, number, error); okay = 0; break; }
         if (count && !strcmp(parts[0], "include")) {
             if (count != 2) { source_error(path, number, "say: include \"models.hyp\""); okay = 0; break; }
-            char included[PATH_MAX]; const char *slash = strrchr(path, '/');
+            char included[PATH_MAX]; const char *slash = hyperian_last_path_separator(path);
             size_t directory = slash ? (size_t)(slash - path + 1) : 0;
             if (directory + strlen(parts[1]) + 1 > sizeof(included)) { source_error(path, number, "the included path is too long"); okay = 0; break; }
             if (directory) memcpy(included, path, directory);
@@ -474,7 +475,7 @@ static int expand_source(const char *path, FILE *output, int depth, const char *
 int compile_file(const char *source_path, const char *output_path) {
     FILE *file = tmpfile();
     if (!file) { fprintf(stderr, "error: cannot create compiler workspace: %s\n", strerror(errno)); return 1; }
-    char project_directory[PATH_MAX]; const char *source_slash = strrchr(source_path, '/');
+    char project_directory[PATH_MAX]; const char *source_slash = hyperian_last_path_separator(source_path);
     size_t project_prefix = source_slash ? (size_t)(source_slash - source_path + 1) : 0;
     if (project_prefix >= sizeof(project_directory)) { fclose(file); fprintf(stderr, "error: project path is too long\n"); return 1; }
     if (project_prefix) memcpy(project_directory, source_path, project_prefix);
@@ -602,7 +603,7 @@ int compile_file(const char *source_path, const char *output_path) {
                     char directory[PATH_MAX];
                     if (w[3][0] == '/') snprintf(directory, sizeof(directory), "%s", w[3]);
                     else {
-                        const char *slash = strrchr(source_path, '/'); size_t prefix = slash ? (size_t)(slash - source_path + 1) : 0;
+                        const char *slash = hyperian_last_path_separator(source_path); size_t prefix = slash ? (size_t)(slash - source_path + 1) : 0;
                         if (prefix + strlen(w[3]) + 1 > sizeof(directory)) { source_error(source_path, number, "the public folder path is too long"); okay = 0; }
                         else { if (prefix) memcpy(directory, source_path, prefix); strcpy(directory + prefix, w[3]); }
                     }

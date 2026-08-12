@@ -1,23 +1,36 @@
 #include "hyperian.h"
+#include "platform.h"
 #include "security.h"
 
 #include <errno.h>
-#include <dirent.h>
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
-#include <sys/wait.h>
+
+#ifdef _WIN32
+#include <direct.h>
+#include <io.h>
+#ifndef PATH_MAX
+#define PATH_MAX 4096
+#endif
+#define chmod _chmod
+#define chdir _chdir
+#define close _close
+#define fdopen _fdopen
+#define fileno _fileno
+#define mkdir(path, mode) _mkdir(path)
+#define rmdir _rmdir
+#define unlink _unlink
+#else
 #include <unistd.h>
+#endif
 
 static int ends_with(const char *text, const char *suffix);
 
 static int temporary_bytecode(char *path, size_t size) {
-    if (snprintf(path, size, "/tmp/hyperian-bytecode-XXXXXX") >= (int)size) {
-        fprintf(stderr, "error: temporary bytecode path is too long\n"); return 0;
-    }
-    int descriptor = mkstemp(path);
+    int descriptor = hyperian_temporary_file(path, size, "bytecode");
     if (descriptor < 0) { fprintf(stderr, "error: cannot create temporary bytecode: %s\n", strerror(errno)); return 0; }
     if (close(descriptor)) { unlink(path); fprintf(stderr, "error: cannot finish temporary bytecode: %s\n", strerror(errno)); return 0; }
     return 1;
@@ -35,20 +48,11 @@ static int read_u64(FILE *file, uint64_t *value) {
 }
 
 static FILE *running_executable(const char *fallback) {
-    FILE *file = fopen("/proc/self/exe", "rb"); if (file) return file;
-    file = fopen(fallback, "rb"); if (file || strchr(fallback, '/')) return file;
-    const char *path = getenv("PATH");
-    while (path && *path) {
-        const char *ending = strchr(path, ':'); size_t length = ending ? (size_t)(ending - path) : strlen(path);
-        char candidate[PATH_MAX];
-        if (length && length + strlen(fallback) + 2 <= sizeof(candidate)) {
-            memcpy(candidate, path, length); candidate[length] = '/'; snprintf(candidate + length + 1, sizeof(candidate) - length - 1, "%s", fallback);
-            file = fopen(candidate, "rb"); if (file) return file;
-        }
-        if (!ending) break;
-        path = ending + 1;
+    char path[PATH_MAX];
+    if (hyperian_executable_path(fallback, path, sizeof(path))) {
+        FILE *file = fopen(path, "rb"); if (file) return file;
     }
-    return NULL;
+    return fopen(fallback, "rb");
 }
 
 static int embedded_bytecode(FILE *executable, uint64_t *offset, uint64_t *length, int *bundled) {
@@ -101,10 +105,8 @@ static int build_executable(const char *source, const char *output, const char *
 }
 
 static int enter_bundle_directory(const char *fallback) {
-    char path[PATH_MAX]; ssize_t length = readlink("/proc/self/exe", path, sizeof(path) - 1);
-    if (length < 0) {
-        if (!realpath(fallback, path)) { fprintf(stderr, "error: cannot locate this application bundle\n"); return 0; }
-    } else path[length] = 0;
+    char path[PATH_MAX];
+    if (!hyperian_executable_path(fallback, path, sizeof(path))) { fprintf(stderr, "error: cannot locate this application bundle\n"); return 0; }
     char *slash = strrchr(path, '/');
     if (!slash) return 1;
     *slash = 0;
@@ -195,7 +197,7 @@ static int copy_bundle_file(const char *source, const char *destination, mode_t 
 }
 
 static int copy_new_file(const char *source, const char *destination, mode_t mode) {
-    FILE *from = fopen(source, "rb"), *to = from ? fopen(destination, "wx") : NULL; int okay = from && to;
+    FILE *from = fopen(source, "rb"), *to = from ? fopen(destination, "wbx") : NULL; int okay = from && to;
     unsigned char data[65536]; size_t count;
     while (okay && (count = fread(data, 1, sizeof(data), from)) != 0)
         if (fwrite(data, 1, count, to) != count) okay = 0;
@@ -211,36 +213,38 @@ static int copy_new_file(const char *source, const char *destination, mode_t mod
 }
 
 static int copy_bundle_tree(const char *source, const char *destination) {
-    struct stat info;
-    if (lstat(source, &info)) return errno == ENOENT;
+    struct stat info; int is_link = 0;
+    if (hyperian_path_information(source, &info, &is_link)) return errno == ENOENT;
+    if (is_link) { fprintf(stderr, "error: bundle assets cannot be symbolic links: %s\n", source); return 0; }
     if (!S_ISDIR(info.st_mode)) { fprintf(stderr, "error: bundle asset %s must be a folder\n", source); return 0; }
     if (mkdir(destination, info.st_mode & 0777)) { fprintf(stderr, "error: cannot create bundle folder %s: %s\n", destination, strerror(errno)); return 0; }
-    DIR *directory = opendir(source); if (!directory) return 0; int okay = 1; struct dirent *entry;
-    while (okay && (entry = readdir(directory))) {
-        if (!strcmp(entry->d_name, ".") || !strcmp(entry->d_name, "..")) continue;
+    HyperianDirectory *directory = hyperian_directory_open(source); if (!directory) return 0; int okay = 1; const char *name;
+    while (okay && (name = hyperian_directory_next(directory))) {
+        if (!strcmp(name, ".") || !strcmp(name, "..")) continue;
         char from[PATH_MAX], to[PATH_MAX];
-        if (snprintf(from, sizeof(from), "%s/%s", source, entry->d_name) >= (int)sizeof(from) ||
-            snprintf(to, sizeof(to), "%s/%s", destination, entry->d_name) >= (int)sizeof(to)) { okay = 0; break; }
-        if (lstat(from, &info)) { okay = 0; break; }
-        if (S_ISLNK(info.st_mode)) { fprintf(stderr, "error: bundle assets cannot contain symbolic links: %s\n", from); okay = 0; }
+        if (snprintf(from, sizeof(from), "%s/%s", source, name) >= (int)sizeof(from) ||
+            snprintf(to, sizeof(to), "%s/%s", destination, name) >= (int)sizeof(to)) { okay = 0; break; }
+        if (hyperian_path_information(from, &info, &is_link)) { okay = 0; break; }
+        if (is_link) { fprintf(stderr, "error: bundle assets cannot contain symbolic links: %s\n", from); okay = 0; }
         else if (S_ISDIR(info.st_mode)) okay = copy_bundle_tree(from, to);
         else if (S_ISREG(info.st_mode)) okay = copy_bundle_file(from, to, info.st_mode);
         else { fprintf(stderr, "error: unsupported bundle asset %s\n", from); okay = 0; }
     }
-    closedir(directory); return okay;
+    if (hyperian_directory_close(directory)) okay = 0;
+    return okay;
 }
 
 static int remove_bundle_tree(const char *path) {
-    struct stat info;
-    if (lstat(path, &info)) return errno == ENOENT;
-    if (!S_ISDIR(info.st_mode) || S_ISLNK(info.st_mode)) return !unlink(path);
-    DIR *directory = opendir(path); if (!directory) return 0; int okay = 1; struct dirent *entry;
-    while (okay && (entry = readdir(directory))) {
-        if (!strcmp(entry->d_name, ".") || !strcmp(entry->d_name, "..")) continue;
+    struct stat info; int is_link = 0;
+    if (hyperian_path_information(path, &info, &is_link)) return errno == ENOENT;
+    if (!S_ISDIR(info.st_mode) || is_link) return !unlink(path);
+    HyperianDirectory *directory = hyperian_directory_open(path); if (!directory) return 0; int okay = 1; const char *name;
+    while (okay && (name = hyperian_directory_next(directory))) {
+        if (!strcmp(name, ".") || !strcmp(name, "..")) continue;
         char child[PATH_MAX];
-        if (snprintf(child, sizeof(child), "%s/%s", path, entry->d_name) >= (int)sizeof(child) || !remove_bundle_tree(child)) okay = 0;
+        if (snprintf(child, sizeof(child), "%s/%s", path, name) >= (int)sizeof(child) || !remove_bundle_tree(child)) okay = 0;
     }
-    if (closedir(directory)) okay = 0;
+    if (hyperian_directory_close(directory)) okay = 0;
     if (okay && rmdir(path)) okay = 0;
     return okay;
 }
@@ -259,6 +263,8 @@ static const char *host_platform_name(void) {
     static char platform[32]; if (architecture) snprintf(platform, sizeof(platform), "linux-%s", architecture); return architecture ? platform : NULL;
 #elif defined(__FreeBSD__)
     static char platform[32]; if (architecture) snprintf(platform, sizeof(platform), "freebsd-%s", architecture); return architecture ? platform : NULL;
+#elif defined(_WIN32)
+    static char platform[32]; if (architecture) snprintf(platform, sizeof(platform), "windows-%s", architecture); return architecture ? platform : NULL;
 #else
     (void)architecture; return NULL;
 #endif
@@ -275,7 +281,7 @@ static int copy_runtime_prefix(FILE *runtime, const char *destination) {
     if (fseek(runtime, 0, SEEK_END)) return 0;
     long size = ftell(runtime); uint64_t offset, length; int bundled;
     if (embedded_bytecode(runtime, &offset, &length, &bundled)) size = (long)offset;
-    rewind(runtime); FILE *output = fopen(destination, "wx");
+    rewind(runtime); FILE *output = fopen(destination, "wbx");
     int okay = output && size >= 0 && copy_bytes(runtime, output, (uint64_t)size);
     if (output && fclose(output)) okay = 0;
     if (!okay) unlink(destination);
@@ -289,15 +295,16 @@ static int create_runtime_pack(const char *output, const char *self_path) {
     if (!stat(output, &existing)) { fprintf(stderr, "error: runtime pack %s already exists\n", output); return 1; }
     if (errno != ENOENT || mkdir(output, 0755)) { fprintf(stderr, "error: cannot create runtime pack %s: %s\n", output, strerror(errno)); return 1; }
     char runtime_path[PATH_MAX], manifest_path[PATH_MAX];
-    int paths_fit = snprintf(runtime_path, sizeof(runtime_path), "%s/runtime", output) < (int)sizeof(runtime_path) &&
+    const char *runtime_name = !strncmp(platform, "windows-", 8) ? "runtime.exe" : "runtime";
+    int paths_fit = snprintf(runtime_path, sizeof(runtime_path), "%s/%s", output, runtime_name) < (int)sizeof(runtime_path) &&
         snprintf(manifest_path, sizeof(manifest_path), "%s/hyperian.runtime", output) < (int)sizeof(manifest_path);
     FILE *runtime = paths_fit ? running_executable(self_path) : NULL;
     int okay = runtime && copy_runtime_prefix(runtime, runtime_path); if (runtime) fclose(runtime);
     char manifest[512], checksum[65]; if (okay) okay = hyperian_sha256_file(runtime_path, checksum);
     if (okay) {
         snprintf(manifest, sizeof(manifest),
-            "Hyperian native runtime pack\nformat: HYRP1\ntoolchain: %s\nbytecode: %s\nplatform: %s\nexecutable: runtime\nchecksum: %s\n",
-            HYPERIAN_VERSION, HYC_MAGIC, platform, checksum);
+            "Hyperian native runtime pack\nformat: HYRP1\ntoolchain: %s\nbytecode: %s\nplatform: %s\nexecutable: %s\nchecksum: %s\n",
+            HYPERIAN_VERSION, HYC_MAGIC, platform, runtime_name, checksum);
         okay = write_project_file(manifest_path, manifest);
     }
     if (!okay) { remove_bundle_tree(output); fprintf(stderr, "error: could not finish runtime pack %s\n", output); return 1; }
@@ -310,7 +317,7 @@ static int create_runtime_archive(const char *output, const char *self_path) {
     struct stat existing;
     if (!stat(output, &existing)) { fprintf(stderr, "error: runtime pack %s already exists\n", output); return 1; }
     if (errno != ENOENT) { fprintf(stderr, "error: cannot create runtime pack %s: %s\n", output, strerror(errno)); return 1; }
-    char runtime_path[] = "/tmp/hyperian-runtime-XXXXXX"; int descriptor = mkstemp(runtime_path);
+    char runtime_path[PATH_MAX]; int descriptor = hyperian_temporary_file(runtime_path, sizeof(runtime_path), "runtime");
     if (descriptor < 0 || close(descriptor) || unlink(runtime_path)) {
         if (descriptor >= 0) unlink(runtime_path);
         fprintf(stderr, "error: cannot prepare a native runtime archive: %s\n", strerror(errno)); return 1;
@@ -319,10 +326,10 @@ static int create_runtime_archive(const char *output, const char *self_path) {
     int okay = running && copy_runtime_prefix(running, runtime_path); if (running) fclose(running);
     char checksum[65] = "", manifest[512] = ""; if (okay) okay = hyperian_sha256_file(runtime_path, checksum);
     if (okay) snprintf(manifest, sizeof(manifest),
-        "Hyperian native runtime pack\nformat: HYRP1\ntoolchain: %s\nbytecode: %s\nplatform: %s\nexecutable: runtime\nchecksum: %s\n",
-        HYPERIAN_VERSION, HYC_MAGIC, platform, checksum);
+        "Hyperian native runtime pack\nformat: HYRP1\ntoolchain: %s\nbytecode: %s\nplatform: %s\nexecutable: %s\nchecksum: %s\n",
+        HYPERIAN_VERSION, HYC_MAGIC, platform, !strncmp(platform, "windows-", 8) ? "runtime.exe" : "runtime", checksum);
     FILE *runtime = okay ? fopen(runtime_path, "rb") : NULL;
-    FILE *archive = runtime ? fopen(output, "wx") : NULL;
+    FILE *archive = runtime ? fopen(output, "wbx") : NULL;
     long runtime_size = -1;
     if (runtime && (!fseek(runtime, 0, SEEK_END))) runtime_size = ftell(runtime);
     if (runtime) rewind(runtime);
@@ -377,8 +384,8 @@ static int validate_runtime_manifest(char *contents, const char *pack, const cha
 
 static int runtime_pack_executable(const char *pack, const char *wanted_platform, char *runtime_path,
     size_t runtime_path_size, int *temporary) {
-    *temporary = 0; struct stat pack_info;
-    if (lstat(pack, &pack_info) || S_ISLNK(pack_info.st_mode)) {
+    *temporary = 0; struct stat pack_info; int pack_is_link = 0;
+    if (hyperian_path_information(pack, &pack_info, &pack_is_link) || pack_is_link) {
         fprintf(stderr, "error: %s is not a Hyperian native runtime pack\n", pack); return 0;
     }
     char manifest_contents[4096], executable[64], wanted_checksum[65];
@@ -409,7 +416,7 @@ static int runtime_pack_executable(const char *pack, const char *wanted_platform
         if (!validate_runtime_manifest(manifest_contents, pack, wanted_platform, executable, sizeof(executable), wanted_checksum)) {
             fclose(archive); return 0;
         }
-        char path[] = "/tmp/hyperian-runtime-XXXXXX"; int descriptor = mkstemp(path); FILE *runtime = descriptor >= 0 ? fdopen(descriptor, "wb") : NULL;
+        char path[PATH_MAX]; int descriptor = hyperian_temporary_file(path, sizeof(path), "runtime"); FILE *runtime = descriptor >= 0 ? fdopen(descriptor, "wb") : NULL;
         if (descriptor >= 0 && !runtime) close(descriptor);
         okay = runtime && copy_bytes(archive, runtime, runtime_size); if (runtime && fclose(runtime)) okay = 0;
         fclose(archive);
@@ -420,8 +427,8 @@ static int runtime_pack_executable(const char *pack, const char *wanted_platform
     } else {
         fprintf(stderr, "error: %s is not a Hyperian native runtime pack\n", pack); return 0;
     }
-    struct stat info;
-    if (lstat(runtime_path, &info) || !S_ISREG(info.st_mode) || S_ISLNK(info.st_mode)) {
+    struct stat info; int runtime_is_link = 0;
+    if (hyperian_path_information(runtime_path, &info, &runtime_is_link) || !S_ISREG(info.st_mode) || runtime_is_link) {
         if (*temporary) unlink(runtime_path);
         fprintf(stderr, "error: runtime pack %s does not contain its native executable\n", pack); return 0;
     }
@@ -442,7 +449,7 @@ static int build_for_native_platform(const char *source, const char *platform, c
     return result;
 }
 static void source_directory(const char *source, char *directory, size_t size) {
-    const char *slash = strrchr(source, '/');
+    const char *slash = hyperian_last_path_separator(source);
     if (!slash) snprintf(directory, size, ".");
     else if (slash == source) snprintf(directory, size, "/");
     else { size_t length = (size_t)(slash - source); if (length >= size) length = size - 1; memcpy(directory, source, length); directory[length] = 0; }
@@ -490,7 +497,7 @@ static int bundle_for_native_platform(const char *source, const char *platform, 
 static int resource_folders(const char *self_path, const char *platform, char *adapter, size_t adapter_size, char *runtime, size_t runtime_size) {
     char executable[PATH_MAX];
     struct stat installed;
-    if (realpath(self_path, executable)) {
+    if (hyperian_real_path(self_path, executable, sizeof(executable))) {
         char *slash = strrchr(executable, '/'); if (slash) { *slash = 0; slash = strrchr(executable, '/'); }
         if (slash) {
             *slash = 0; snprintf(adapter, adapter_size, "%s/share/hyperian/platform/%s", executable, platform);
@@ -665,16 +672,9 @@ static int safe_team_id(const char *value) {
 }
 
 static int run_mobile_tool(const char *directory, char *const arguments[]) {
-    pid_t child = fork();
-    if (child < 0) { fprintf(stderr, "error: cannot start %s: %s\n", arguments[0], strerror(errno)); return 0; }
-    if (!child) {
-        if (chdir(directory)) { fprintf(stderr, "error: cannot enter mobile project %s: %s\n", directory, strerror(errno)); _exit(127); }
-        execvp(arguments[0], arguments);
-        fprintf(stderr, "error: cannot run %s: %s\n", arguments[0], strerror(errno)); _exit(127);
-    }
-    int status;
-    while (waitpid(child, &status, 0) < 0) if (errno != EINTR) { fprintf(stderr, "error: cannot wait for %s: %s\n", arguments[0], strerror(errno)); return 0; }
-    if (!WIFEXITED(status) || WEXITSTATUS(status)) {
+    int result = hyperian_run_process(directory, arguments);
+    if (result < 0) { fprintf(stderr, "error: cannot start %s: %s\n", arguments[0], strerror(errno)); return 0; }
+    if (result) {
         fprintf(stderr, "error: %s did not finish the mobile build successfully\n", arguments[0]); return 0;
     }
     return 1;
@@ -688,13 +688,13 @@ static int build_android_application(const char *package, const char *kind, cons
         fprintf(stderr, "error: set HYPERIAN_APPLICATION_ID to a reverse-domain name such as com.example.myapp\n"); return 0;
     }
     char resolved_keystore[PATH_MAX];
-    if (!keystore || !*keystore || !realpath(keystore, resolved_keystore) || stat(resolved_keystore, &info) || !S_ISREG(info.st_mode)) {
+    if (!keystore || !*keystore || !hyperian_real_path(keystore, resolved_keystore, sizeof(resolved_keystore)) || stat(resolved_keystore, &info) || !S_ISREG(info.st_mode)) {
         fprintf(stderr, "error: set HYPERIAN_ANDROID_KEYSTORE to your release keystore file\n"); return 0;
     }
     if (!alias || !*alias || !store_password || !*store_password || !key_password || !*key_password) {
         fprintf(stderr, "error: set HYPERIAN_ANDROID_KEY_ALIAS, HYPERIAN_ANDROID_STORE_PASSWORD, and HYPERIAN_ANDROID_KEY_PASSWORD\n"); return 0;
     }
-    if (setenv("HYPERIAN_ANDROID_KEYSTORE", resolved_keystore, 1)) {
+    if (hyperian_set_environment("HYPERIAN_ANDROID_KEYSTORE", resolved_keystore)) {
         fprintf(stderr, "error: cannot prepare the Android signing environment: %s\n", strerror(errno)); return 0;
     }
     char project[PATH_MAX], artifact[PATH_MAX];
@@ -766,8 +766,8 @@ static int build_mobile_application(const char *source, const char *platform, co
     struct stat existing;
     if (!stat(output, &existing)) { fprintf(stderr, "error: mobile application output %s already exists\n", output); return 1; }
     if (errno != ENOENT) { fprintf(stderr, "error: cannot inspect mobile output %s: %s\n", output, strerror(errno)); return 1; }
-    char temporary_root[] = "/tmp/hyperian-mobile-build-XXXXXX";
-    if (!mkdtemp(temporary_root)) { fprintf(stderr, "error: cannot create temporary mobile build folder: %s\n", strerror(errno)); return 1; }
+    char temporary_root[PATH_MAX];
+    if (!hyperian_temporary_directory(temporary_root, sizeof(temporary_root), "mobile-build")) { fprintf(stderr, "error: cannot create temporary mobile build folder: %s\n", strerror(errno)); return 1; }
     char package[PATH_MAX]; int okay = snprintf(package, sizeof(package), "%s/package", temporary_root) < (int)sizeof(package) &&
         !export_mobile_application(source, platform, package, self_path);
     if (okay && !strcmp(platform, "android")) okay = build_android_application(package, kind, output);
@@ -897,10 +897,8 @@ static int format_source(const char *path, int write_back) {
     FILE *output = stdout; char temporary[PATH_MAX] = {0}; mode_t mode = 0644;
     if (write_back) {
         struct stat information; if (!stat(path, &information)) mode = information.st_mode;
-        if (snprintf(temporary, sizeof(temporary), "%s.format-XXXXXX", path) >= (int)sizeof(temporary)) {
-            fclose(file); fprintf(stderr, "error: source path is too long to format safely\n"); return 1;
-        }
-        int descriptor = mkstemp(temporary); output = descriptor >= 0 ? fdopen(descriptor, "w") : NULL;
+        int descriptor = hyperian_temporary_sibling(temporary, sizeof(temporary), path, "format");
+        output = descriptor >= 0 ? fdopen(descriptor, "w") : NULL;
         if (!output) { if (descriptor >= 0) close(descriptor); fclose(file); fprintf(stderr, "error: cannot create formatted source near %s\n", path); return 1; }
     }
     char line[4096]; int has_closing_phrases = 0;
@@ -930,7 +928,9 @@ static int format_source(const char *path, int write_back) {
     if (write_back) {
         if (fclose(output)) failed = 1;
         if (!failed && chmod(temporary, mode & 0777)) failed = 1;
-        if (!failed && rename(temporary, path)) failed = 1;
+        if (!failed && hyperian_replace_file(temporary, path)) {
+            fprintf(stderr, "error: cannot replace %s with its formatted source: %s\n", path, strerror(errno)); failed = 1;
+        }
         if (failed) unlink(temporary);
         else printf("Formatted %s as left-aligned Hyperian.\n", path);
     }
