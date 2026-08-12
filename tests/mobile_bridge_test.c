@@ -15,7 +15,9 @@ int main(int argc, char **argv) {
     if (!mobile) { fprintf(stderr, "%s\n", error); return 1; }
     int okay = hyperian_mobile_start(mobile, error, sizeof(error)) &&
         hyperian_mobile_render_json(mobile, json, sizeof(json), error, sizeof(error)) &&
-        contains(json, "\"view\":\"home\"") && contains(json, "\"kind\":\"input\"") &&
+        contains(json, "\"view\":\"home\"") && contains(json, "\"kind\":\"card\"") &&
+        contains(json, "\"kind\":\"column\"") && contains(json, "\"kind\":\"row\"") &&
+        contains(json, "\"children\":[") && contains(json, "\"kind\":\"input\"") &&
         contains(json, "\"action\":\"add task\"") && contains(json, "\"changeEvent\":\"CHANGE:title\"") &&
         contains(json, "\"submitEvent\":\"SUBMIT:title\"") && contains(json, "\"changeEvent\":\"CHANGE:details\"") &&
         contains(json, "\"changeEvent\":\"CHANGE:urgent\"");

@@ -4,12 +4,18 @@ style "/assets/app.css"
 heading "Pocket Tasks"
 text "An installable application written in English-like Hyperian."
 
+arrange the following in a row
+show the following in a card
 form posts to "/tasks"
 input "What needs doing?" as title required
 button "Add task"
 that is all
+that is all
 
+show the following in a card
 for each task in tasks show
 show task.title
+that is all
+that is all
 that is all
 that is all

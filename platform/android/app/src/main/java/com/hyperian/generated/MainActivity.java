@@ -3,7 +3,9 @@ package com.hyperian.generated;
 import android.app.Activity;
 import android.content.Intent;
 import android.graphics.BitmapFactory;
+import android.graphics.Color;
 import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
@@ -124,16 +126,29 @@ public final class MainActivity extends Activity {
         try {
             JSONObject screen = new JSONObject(renderMobile());
             if (screen.has("error")) throw new Exception(screen.getString("error"));
-            content.removeAllViews(); inputs.clear(); JSONArray controls = screen.getJSONArray("controls");
-            for (int index = 0; index < controls.length(); index++) addControl(controls.getJSONObject(index));
+            content.removeAllViews(); inputs.clear(); addControls(screen.getJSONArray("controls"), content);
             if (!timersStarted) { timersStarted = true; JSONArray intervals = screen.getJSONArray("timers");
                 for (int index = 0; index < intervals.length(); index++) scheduleTimer(intervals.getLong(index)); }
         } catch (Exception error) { showError(error.getMessage()); }
     }
 
-    private void addControl(JSONObject control) throws Exception {
+    private void addControls(JSONArray controls, LinearLayout parent) throws Exception {
+        for (int index = 0; index < controls.length(); index++) addControl(controls.getJSONObject(index), parent);
+    }
+
+    private void addControl(JSONObject control, LinearLayout parent) throws Exception {
         String kind = control.getString("kind"); View view;
-        if (kind.equals("heading") || kind.equals("text") || kind.equals("value")) {
+        if (kind.equals("row") || kind.equals("column") || kind.equals("card")) {
+            LinearLayout group = new LinearLayout(this);
+            group.setOrientation(kind.equals("row") ? LinearLayout.HORIZONTAL : LinearLayout.VERTICAL);
+            int inset = pixels(kind.equals("card") ? 14 : 4); group.setPadding(inset, inset, inset, inset);
+            if (kind.equals("card")) {
+                GradientDrawable card = new GradientDrawable(); card.setColor(Color.argb(18, 127, 127, 127));
+                card.setStroke(pixels(1), Color.argb(80, 127, 127, 127)); card.setCornerRadius(pixels(12));
+                group.setBackground(card); group.setElevation(pixels(2));
+            }
+            addControls(control.getJSONArray("children"), group); view = group;
+        } else if (kind.equals("heading") || kind.equals("text") || kind.equals("value")) {
             TextView text = new TextView(this); text.setText(control.optString("text"));
             text.setTextSize(kind.equals("heading") ? 28 : 17); if (kind.equals("heading")) text.setTypeface(null, Typeface.BOLD); view = text;
         } else if (kind.equals("input") || kind.equals("textarea")) {
@@ -166,8 +181,10 @@ public final class MainActivity extends Activity {
         } else {
             TextView description = new TextView(this); description.setText(control.optString("description", control.optString("source"))); view = description;
         }
-        LinearLayout.LayoutParams layout = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        layout.setMargins(0, 0, 0, pixels(10)); content.addView(view, layout);
+        int width = parent.getOrientation() == LinearLayout.HORIZONTAL ? 0 : LinearLayout.LayoutParams.MATCH_PARENT;
+        LinearLayout.LayoutParams layout = new LinearLayout.LayoutParams(width, LinearLayout.LayoutParams.WRAP_CONTENT,
+            parent.getOrientation() == LinearLayout.HORIZONTAL ? 1 : 0);
+        layout.setMargins(0, 0, pixels(10), pixels(10)); parent.addView(view, layout);
     }
 
     private void runAction(String action) {

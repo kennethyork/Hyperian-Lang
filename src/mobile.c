@@ -107,6 +107,15 @@ static void render_controls(HyperianMobile *mobile, Json *json, size_t from, siz
             if (value_is_true(value)) render_controls(mobile, json, i + 1, end);
             i = end; continue;
         }
+        if (in->opcode == OP_VIEW_ROW || in->opcode == OP_VIEW_COLUMN || in->opcode == OP_VIEW_CARD) {
+            uint8_t close = in->opcode == OP_VIEW_ROW ? OP_END_VIEW_ROW :
+                in->opcode == OP_VIEW_COLUMN ? OP_END_VIEW_COLUMN : OP_END_VIEW_CARD;
+            const char *kind = in->opcode == OP_VIEW_ROW ? "row" : in->opcode == OP_VIEW_COLUMN ? "column" : "card";
+            size_t end = matching_end(&mobile->code, i, in->opcode, close);
+            control_start(json, kind); json_raw(json, ",\"children\":[");
+            json->first = 1; render_controls(mobile, json, i + 1, end); json_raw(json, "]}"); json->first = 0;
+            i = end; continue;
+        }
         const char *kind = NULL;
         if (in->opcode == OP_HEADING) kind = "heading";
         else if (in->opcode == OP_TEXT) kind = "text";

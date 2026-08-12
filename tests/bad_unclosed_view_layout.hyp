@@ -1,0 +1,16 @@
+application "Broken layout" is web
+
+model Item
+field name is text
+that is all
+
+controller Items
+when someone visits "/"
+show view "main"
+that is all
+that is all
+
+view "main"
+arrange the following in a row
+text "This row never ends."
+that is all

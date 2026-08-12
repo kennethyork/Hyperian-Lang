@@ -861,13 +861,13 @@ static int create_project(const char *name, const char *target) {
         snprintf(path, sizeof(path), "%s/views/main.hyp", name);
         const char *view = (!strcmp(target, "desktop") || !strcmp(target, "mobile")) ?
             (!strcmp(target, "mobile") ?
-            "view \"main\"\n    heading \"Mobile application\"\n    input \"Your name\" as \"item name\"\n    button \"Save item\" runs action activate\n    show status\n    for each \"saved item\" in \"item names\" show\n        show \"saved item\"\n" :
-            "view \"main\"\n    heading \"Native desktop application\"\n    input \"Your name\" as \"item name\"\n    button \"Save item\" runs action activate\n    show status\n    for each \"saved item\" in \"item names\" show\n        show \"saved item\"\n") :
+            "view \"main\"\n    heading \"Mobile application\"\n    show the following in a card\n        arrange the following in a column\n            input \"Your name\" as \"item name\"\n            arrange the following in a row\n                button \"Save item\" runs action activate\n            show status\n    show the following in a card\n        for each \"saved item\" in \"item names\" show\n            show \"saved item\"\n" :
+            "view \"main\"\n    heading \"Native desktop application\"\n    show the following in a card\n        arrange the following in a column\n            input \"Your name\" as \"item name\"\n            arrange the following in a row\n                button \"Save item\" runs action activate\n            show status\n    show the following in a card\n        for each \"saved item\" in \"item names\" show\n            show \"saved item\"\n") :
             !strcmp(target, "game") ?
             "view \"main\"\n    fill background with color 18 24 38\n    draw rectangle at \"player left\" \"player top\" sized 100 by 100 with color 70 170 255\n    draw circle centered at \"ball horizontal center\" \"ball vertical center\" with radius \"ball radius\" and color 255 110 90\n    draw line from 0 0 to 960 540 with color 120 230 160\n    draw polygon through 430 250 then 530 250 then 480 360 with color 180 100 240\n" :
             !strcmp(target, "pwa") ?
-            "view \"main\"\n    title \"Installable Hyperian application\"\n    style \"/assets/app.css\"\n    heading \"Installable Hyperian application\"\n    text \"This English MVC application works online and can be installed.\"\n" :
-            "view \"main\"\n    heading \"Welcome to Hyperian\"\n    text \"Your foldered MVC application is ready.\"\n";
+            "view \"main\"\n    title \"Installable Hyperian application\"\n    style \"/assets/app.css\"\n    heading \"Installable Hyperian application\"\n    arrange the following in a row\n        show the following in a card\n            text \"This English MVC application works online.\"\n        show the following in a card\n            text \"It can also be installed.\"\n" :
+            "view \"main\"\n    heading \"Welcome to Hyperian\"\n    arrange the following in a row\n        show the following in a card\n            text \"Your foldered MVC application is ready.\"\n        show the following in a card\n            text \"Add your next view here.\"\n";
         if (!write_left_aligned_source(path, view)) return 1;
     }
     snprintf(path, sizeof(path), "%s/public/app.css", name);

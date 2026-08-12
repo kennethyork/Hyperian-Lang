@@ -41,6 +41,15 @@ static size_t desktop_each_end(const Bytecode *code, size_t start) {
     return code->count;
 }
 
+static size_t desktop_matching_end(const Bytecode *code, size_t start, uint8_t open, uint8_t close) {
+    int depth = 1;
+    for (size_t i = start + 1; i < code->count; i++) {
+        if (code->items[i].opcode == open) depth++;
+        else if (code->items[i].opcode == close && --depth == 0) return i;
+    }
+    return code->count;
+}
+
 static const char *starting_view(const Bytecode *code) {
     for (size_t i = 0; i < code->count; i++) if (code->items[i].opcode == OP_EVENT && !strcmp(code->items[i].args[0], "START")) {
         size_t end = desktop_end(code, i, OP_END_ROUTE);
@@ -151,6 +160,18 @@ static void add_desktop_widgets(DesktopContext *context, GtkWidget *box, size_t 
             }
             if (next < 0) hyperian_state_set(&context->state, "error", "a collected list could not be displayed");
             i = end; continue;
+        } else if (in->opcode == OP_VIEW_ROW || in->opcode == OP_VIEW_COLUMN || in->opcode == OP_VIEW_CARD) {
+            uint8_t close = in->opcode == OP_VIEW_ROW ? OP_END_VIEW_ROW :
+                in->opcode == OP_VIEW_COLUMN ? OP_END_VIEW_COLUMN : OP_END_VIEW_CARD;
+            size_t end = desktop_matching_end(context->code, i, in->opcode, close);
+            GtkOrientation direction = in->opcode == OP_VIEW_ROW ? GTK_ORIENTATION_HORIZONTAL : GTK_ORIENTATION_VERTICAL;
+            GtkWidget *children = gtk_box_new(direction, 10);
+            add_desktop_widgets(context, children, i + 1, end, reactive);
+            if (in->opcode == OP_VIEW_CARD) {
+                widget = gtk_frame_new(NULL); gtk_frame_set_shadow_type(GTK_FRAME(widget), GTK_SHADOW_ETCHED_IN);
+                gtk_container_set_border_width(GTK_CONTAINER(children), 12); gtk_container_add(GTK_CONTAINER(widget), children);
+            } else widget = children;
+            i = end;
         } else if (in->opcode == OP_HEADING) {
             char *safe = g_markup_escape_text(in->args[0], -1), *markup = g_strdup_printf("<span size=\"xx-large\" weight=\"bold\">%s</span>", safe);
             widget = gtk_label_new(NULL); gtk_label_set_markup(GTK_LABEL(widget), markup); g_free(markup); g_free(safe);

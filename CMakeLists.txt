@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(Hyperian VERSION 0.48.0 LANGUAGES C)
+project(Hyperian VERSION 0.49.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -139,6 +139,9 @@ add_test(NAME reject_non_left_aligned_english
 add_test(NAME reject_missing_english_closing_phrase
     COMMAND sh ${CMAKE_SOURCE_DIR}/tests/reject_with_message_test.sh "finish this block by saying: that is all"
         $<TARGET_FILE:hyperian> check ${CMAKE_SOURCE_DIR}/tests/bad_missing_closing_phrase.hyp)
+add_test(NAME reject_unclosed_view_layout
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/reject_with_message_test.sh "finish this block by saying: that is all"
+        $<TARGET_FILE:hyperian> check ${CMAKE_SOURCE_DIR}/tests/bad_unclosed_view_layout.hyp)
 add_test(NAME compile_pwa
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/pwa_tasks/app.hyp -o ${CMAKE_BINARY_DIR}/pwa_tasks.hyc)
 add_test(NAME reject_pwa_without_route
@@ -436,6 +439,9 @@ if(GTK3_FOUND AND XVFB_RUN)
 endif()
 add_test(NAME compile_mobile_preview
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/mobile_tasks.hyp -o ${CMAKE_BINARY_DIR}/mobile_tasks.hyc)
+add_test(NAME inspect_and_format_view_layouts
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/view_layout_test.sh $<TARGET_FILE:hyperian>
+        ${CMAKE_SOURCE_DIR}/examples/mobile_tasks.hyp ${CMAKE_BINARY_DIR}/view_layouts.hyc)
 add_test(NAME clean_generated_english_mobile
     COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}/GeneratedEnglishMobile)
 add_test(NAME create_generated_english_mobile

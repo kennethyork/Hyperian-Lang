@@ -97,27 +97,35 @@ that is all
 that is all
 
 view "home"
+show the following in a card
 heading "My mobile tasks"
 text "The same English MVC code drives this phone-sized preview."
+arrange the following in a column
 input "Task title" as title
 textarea "Task details" as details
 checkbox "Urgent" as urgent
+that is all
 show live_preview
 show details_preview
 show urgency_preview
 show lifecycle_status
 show gesture_status
+arrange the following in a row
 button "Add task" runs action "add task"
 button "Completed tasks" runs action "show completed"
+that is all
 show status
 for each task_title in task_titles show
 show task_title
 that is all
 that is all
+that is all
 
 
 view "completed"
+show the following in a card
 heading "Completed tasks"
 text "This is a second native mobile view."
 button "Back" runs action "show home"
+that is all
 that is all

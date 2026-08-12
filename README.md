@@ -930,9 +930,37 @@ that is all
 that is all
 ```
 
+Views can also describe responsive structure with full English sentences. Rows place their children beside one another when space allows, columns stack them, and cards visually group related content:
+
+```hyperian
+view "dashboard"
+heading "Project dashboard"
+
+arrange the following in a row
+show the following in a card
+heading "Open work"
+show open_count
+that is all
+
+show the following in a card
+heading "Finished work"
+show finished_count
+that is all
+that is all
+
+arrange the following in a column
+input "Task name" as title required
+checkbox "Important" as important
+button "Save task" runs action "save task"
+that is all
+that is all
+```
+
+These are nested MVC view blocks, not web-only CSS shortcuts. Hyperian renders them as responsive HTML containers, GTK boxes and frames, nested Android layouts, and SwiftUI stacks and cards. Console views preserve their readable content order, and controls inside a group keep their normal events and reactive values.
+
 Edit views populate text areas and checkbox state from the current model. HTML attributes and values remain escaped. The complete multi-file asset example is in [examples/modular](examples/modular).
 
-Console controllers understand `when application starts` and `ask`. Views share `title`, `heading`, `text`, `say`, `show`, `for each`, and `if`; web views additionally support links and forms.
+Console controllers understand `when application starts` and `ask`. Views share `title`, `heading`, `text`, `say`, `show`, `for each`, `if`, rows, columns, and cards; web views additionally support links and forms.
 
 Quoted text may contain spaces. `#` starts a comment. Canonical Hyperian reads like left-aligned English: every sentence begins at the left edge, and `that is all` closes the current model, controller, action, event, condition, loop, form, or view. A source set that uses `that is all` is checked strictly for left alignment. Older indentation-based source and the shorter `end` spelling remain compatible, so existing projects continue to compile.
 
@@ -958,6 +986,6 @@ that is all
 
 ## Project status
 
-Version 0.48 is a small but real MVC platform: canonical fully left-aligned English source with readable `that is all` block endings and compatibility for older indentation-based programs, custom portable bytecode, a native VM, native Windows x64 compiler/runtime support with Windows files, processes, clocks, services, and Winsock HTTP serving, verified versioned native runtime folders and path-free downloadable `.hyr` archives with SHA-256 integrity, automated five-platform release builds, direct cross-platform executable assembly, transactional cross-platform asset bundles for console, service, web, API, desktop, mobile-preview, and game applications, readable quoted phrase names across MVC and every runtime, literal-safe English expressions, versioned Android/iOS mobile deployment packages, automated signed APK/AAB/IPA orchestration, a linkable native mobile runtime bridge, self-contained native Android Studio and SwiftUI Xcode project generation, native phone HTTPS and SQLite integration, native backend diagnostics, eight compiler targets including installable offline web applications, parallel-safe compiler tooling, an English source-line debugger, persistent model CRUD plus filtered and ordered collection queries inside native controller actions, repeated native collection views, recurring service and native-interface timers, interactive multi-view GTK desktop and phone-sized mobile preview interfaces with close, live-input-change, keyboard-submission, focus, pause, resume, tap, press-and-hold, and four-direction swipe events, matching generated Android/iOS lifecycle and gesture events, SDL2 keyboard/frame events, frame-rate-independent movement, gravity, smooth value transitions, timed animation frames, boundaries, native rectangle, circle, line, and filled polygon drawing plus collision detection between every shape pair, BMP/PNG/JPEG/WebP sprites, WAV and compressed overlapping sound effects, streamed music controls, readable frame-time state, and state-driven rendering, native lists and maps, selectable HDB or transactional SQLite storage, recoverable runtime errors, an HTTP/HTTPS client, local packages, reusable actions, native file access, foldered project generation, versioned migrations, persistent CRUD models, safe HTML and typed JSON, authentication and authorization, middleware, formatting, and English tests.
+Version 0.49 is a small but real MVC platform: canonical fully left-aligned English source with readable `that is all` block endings and compatibility for older indentation-based programs, nested English row, column, and card view layouts across responsive web, GTK, Android, and SwiftUI interfaces, custom portable bytecode, a native VM, native Windows x64 compiler/runtime support with Windows files, processes, clocks, services, cryptographic randomness, and Winsock HTTP serving, verified versioned native runtime folders and path-free downloadable `.hyr` archives with SHA-256 integrity, automated five-platform release builds, direct cross-platform executable assembly, transactional cross-platform asset bundles for console, service, web, API, desktop, mobile-preview, and game applications, readable quoted phrase names across MVC and every runtime, literal-safe English expressions, versioned Android/iOS mobile deployment packages, automated signed APK/AAB/IPA orchestration, a linkable native mobile runtime bridge, self-contained native Android Studio and SwiftUI Xcode project generation, native phone HTTPS and SQLite integration, native backend diagnostics, eight compiler targets including installable offline web applications, parallel-safe compiler tooling, an English source-line debugger, persistent model CRUD plus filtered and ordered collection queries inside native controller actions, repeated native collection views, recurring service and native-interface timers, interactive multi-view GTK desktop and phone-sized mobile preview interfaces with close, live-input-change, keyboard-submission, focus, pause, resume, tap, press-and-hold, and four-direction swipe events, matching generated Android/iOS lifecycle and gesture events, SDL2 keyboard/frame events, frame-rate-independent movement, gravity, smooth value transitions, timed animation frames, boundaries, native rectangle, circle, line, and filled polygon drawing plus collision detection between every shape pair, BMP/PNG/JPEG/WebP sprites, WAV and compressed overlapping sound effects, streamed music controls, readable frame-time state, and state-driven rendering, native lists and maps, selectable HDB or transactional SQLite storage, recoverable runtime errors, an HTTP/HTTPS client, local packages, reusable actions, native file access, foldered project generation, versioned migrations, persistent CRUD models, safe HTML and typed JSON, authentication and authorization, middleware, formatting, and English tests.
 
 Windows arm64 release coverage and bundled native Windows desktop/game dependencies remain future portability work.

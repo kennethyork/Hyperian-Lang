@@ -1237,6 +1237,17 @@ static int render_range(const Bytecode *code, size_t from, size_t to, Buffer *bo
                 if (truthy(resolve(scope, in->args[0]))) render_range(code, i + 1, end, body, scope, records);
                 i = end; break;
             }
+            case OP_VIEW_ROW:
+            case OP_VIEW_COLUMN:
+            case OP_VIEW_CARD: {
+                uint8_t close = in->opcode == OP_VIEW_ROW ? OP_END_VIEW_ROW :
+                    in->opcode == OP_VIEW_COLUMN ? OP_END_VIEW_COLUMN : OP_END_VIEW_CARD;
+                const char *kind = in->opcode == OP_VIEW_ROW ? "row" : in->opcode == OP_VIEW_COLUMN ? "column" : "card";
+                size_t end = find_end(code, i, in->opcode, close);
+                buffer_format(body, "<div class=\"hyperian-%s\">", kind);
+                render_range(code, i + 1, end, body, scope, records);
+                buffer_add(body, "</div>"); i = end; break;
+            }
             case OP_USE_COMPONENT: {
                 for (size_t component = 0; component < code->count; component++) if (code->items[component].opcode == OP_COMPONENT && !strcmp(code->items[component].args[0], in->args[0])) {
                     size_t end = find_end(code, component, OP_COMPONENT, OP_END_COMPONENT);
@@ -1272,7 +1283,7 @@ static char *render_view(const Bytecode *code, const char *view, Scope *scope, R
     buffer_html(&result, title);
     buffer_add(&result, "</title>");
     if (pwa) buffer_add(&result, "<meta name=\"theme-color\" content=\"#2563eb\"><meta name=\"apple-mobile-web-app-capable\" content=\"yes\"><link rel=\"manifest\" href=\"/assets/manifest.webmanifest\"><link rel=\"icon\" href=\"/assets/icon.svg\"><script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js'))}</script>");
-    buffer_add(&result, "<style>:root{font:17px/1.5 system-ui,sans-serif;color-scheme:light dark}body{width:min(44rem,calc(100% - 2rem));margin:3rem auto}h1{line-height:1.1}form{display:flex;gap:.6rem;margin:1rem 0}input,button,textarea{font:inherit;padding:.65rem .8rem}input,textarea{flex:1}button{cursor:pointer}li{margin:.45rem 0}img{max-width:100%;height:auto}</style>");
+    buffer_add(&result, "<style>:root{font:17px/1.5 system-ui,sans-serif;color-scheme:light dark}body{width:min(44rem,calc(100% - 2rem));margin:3rem auto}h1{line-height:1.1}form{display:flex;gap:.6rem;margin:1rem 0}input,button,textarea{font:inherit;padding:.65rem .8rem}input,textarea{flex:1}button{cursor:pointer}li{margin:.45rem 0}img{max-width:100%;height:auto}.hyperian-row,.hyperian-column{display:flex;gap:1rem;margin:1rem 0}.hyperian-row{flex-flow:row wrap;align-items:flex-start}.hyperian-row>*{flex:1 1 12rem}.hyperian-column{flex-direction:column}.hyperian-card{padding:1rem;border:1px solid color-mix(in srgb,currentColor 25%,transparent);border-radius:.75rem;margin:1rem 0;box-shadow:0 .2rem .8rem #0002}@media(max-width:38rem){.hyperian-row{flex-direction:column}.hyperian-row>*{width:100%}}</style>");
     for (size_t i = start; i < end; i++) if (code->items[i].opcode == OP_STYLE) {
         buffer_add(&result, "<link rel=\"stylesheet\" href=\""); buffer_dynamic_html(&result, code->items[i].args[0], scope); buffer_add(&result, "\">");
     }

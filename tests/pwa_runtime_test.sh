@@ -31,6 +31,8 @@ done
 
 grep 'rel="manifest" href="/assets/manifest.webmanifest"' "$home"
 grep "serviceWorker.register('/service-worker.js')" "$home"
+grep 'class="hyperian-row"' "$home"
+grep 'class="hyperian-card"' "$home"
 curl -fsS -D "$headers" "http://127.0.0.1:$port/assets/manifest.webmanifest" | grep '"display": "standalone"'
 grep -i 'content-type: application/manifest+json' "$headers"
 curl -fsS "http://127.0.0.1:$port/service-worker.js" | grep 'hyperian-pocket-tasks-v1'

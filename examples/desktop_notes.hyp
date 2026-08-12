@@ -53,18 +53,24 @@ that is all
 that is all
 
 view "notes"
+show the following in a card
 heading "Native desktop notes"
 text "This window and its controls are rendered by GTK, not a browser."
+arrange the following in a column
 input "Note title" as title
 show live_preview
 textarea "Note details" as details
 checkbox "Important" as important
+that is all
+arrange the following in a row
 button "Save note" runs action "save note"
 text "Application status:"
 show status
+that is all
 show window_status
 text "Saved note titles:"
 for each note_title in note_titles show
 show note_title
+that is all
 that is all
 that is all
