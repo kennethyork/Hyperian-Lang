@@ -1,0 +1,15 @@
+application "Too Few Polygon Points" is game
+
+model Shape
+    field name is text
+end
+
+controller Main
+    when application starts
+        show view "main"
+    end
+end
+
+view "main"
+    draw polygon through 0 0 then 10 10 with color 255 255 255
+end

@@ -54,6 +54,17 @@ controller World
         check whether circle centered at 20 20 with radius 2 touches line from 0 0 to 10 0 as "circle misses line"
         check whether line from 0 5 to 20 5 touches rectangle at 5 2 sized 4 by 6 as "line touches rectangle"
         check whether rectangle at 30 30 sized 4 by 4 touches line from 0 0 to 10 0 as "rectangle misses line"
+        check whether polygon through 0 0 then 20 0 then 20 20 then 0 20 touches polygon through 5 5 then 10 5 then 5 10 as "polygon contains polygon"
+        check whether polygon through 0 0 then 20 0 then 20 20 then 0 20 touches polygon through 30 30 then 40 30 then 35 40 as "polygons miss"
+        check whether polygon through 0 0 then 20 0 then 20 20 then 0 20 touches line from 5 5 to 15 5 as "polygon contains line"
+        check whether line from 30 30 to 40 40 touches polygon through 0 0 then 20 0 then 20 20 then 0 20 as "line misses polygon"
+        check whether polygon through 0 0 then 20 0 then 20 20 then 0 20 touches circle centered at 10 10 with radius 2 as "polygon contains circle"
+        check whether circle centered at 22 10 with radius 2 touches polygon through 0 0 then 20 0 then 20 20 then 0 20 as "circle touches polygon"
+        check whether circle centered at 30 30 with radius 2 touches polygon through 0 0 then 20 0 then 20 20 then 0 20 as "circle misses polygon"
+        check whether polygon through 0 0 then 20 0 then 20 20 then 0 20 touches rectangle at 5 5 sized 4 by 4 as "polygon contains rectangle"
+        check whether rectangle at 30 30 sized 4 by 4 touches polygon through 0 0 then 20 0 then 20 20 then 0 20 as "rectangle misses polygon"
+        check whether polygon through 0 0 then 20 0 then 20 20 then 15 20 then 15 5 then 5 5 then 5 20 then 0 20 touches circle centered at 10 10 with radius 1 as "concave opening touches circle"
+        check whether polygon through 0 0 then 20 0 then 20 20 then 15 20 then 15 5 then 5 5 then 5 20 then 0 20 touches circle centered at 2 10 with radius 1 as "concave body touches circle"
     end
 end
 
@@ -63,4 +74,5 @@ view "world"
     draw rectangle at "obstacle left" "obstacle top" sized 30 by 30 with color 255 110 90
     draw circle centered at "ball horizontal center" "ball vertical center" with radius "ball radius" and color 255 220 70
     draw line from "laser start horizontal" "laser start vertical" to "laser end horizontal" "laser end vertical" with color 120 230 160
+    draw polygon through "laser start horizontal" "laser start vertical" then 20 0 then 20 20 then 15 20 then 15 5 then 5 5 then 5 20 then 0 20 with color 180 100 240
 end

@@ -23,6 +23,12 @@ int main(int argc, char **argv) {
         expected(&state, "crossing lines touch", "true") && expected(&state, "overlapping lines touch", "true") &&
         expected(&state, "line touches circle", "true") && expected(&state, "circle misses line", "false") &&
         expected(&state, "line touches rectangle", "true") && expected(&state, "rectangle misses line", "false") &&
+        expected(&state, "polygon contains polygon", "true") && expected(&state, "polygons miss", "false") &&
+        expected(&state, "polygon contains line", "true") && expected(&state, "line misses polygon", "false") &&
+        expected(&state, "polygon contains circle", "true") && expected(&state, "circle touches polygon", "true") &&
+        expected(&state, "circle misses polygon", "false") && expected(&state, "polygon contains rectangle", "true") &&
+        expected(&state, "rectangle misses polygon", "false") && expected(&state, "concave opening touches circle", "false") &&
+        expected(&state, "concave body touches circle", "true") &&
         expected(&state, "glow", "0.5") && expected(&state, "shrink", "1.5") && expected(&state, "animation frame", "3");
     hyperian_state_set(&state, "seconds_since_last_frame", "0.2");
     if (okay) okay = hyperian_execute_event(&code, "FRAME", &state, error, sizeof(error));

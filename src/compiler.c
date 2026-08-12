@@ -7,8 +7,9 @@
 #include <string.h>
 
 #define MAX_LINE 4096
-#define MAX_WORDS 32
+#define MAX_WORDS 256
 #define MAX_DEPTH 64
+#define MAX_POLYGON_POINTS 32
 
 typedef enum { BLOCK_ROOT, BLOCK_MODEL, BLOCK_CONTROLLER, BLOCK_ROUTE, BLOCK_VIEW, BLOCK_FORM, BLOCK_EACH, BLOCK_IF,
     BLOCK_LAYOUT, BLOCK_COMPONENT, BLOCK_ACTION, BLOCK_LOGIC_IF, BLOCK_REPEAT, BLOCK_TEST, BLOCK_MIGRATION, BLOCK_TRY } Block;
@@ -75,6 +76,91 @@ static int is_name(const char *value) {
         else return 0;
     }
     return 1;
+}
+
+static int encode_polygon_points(char *output, size_t size, char **words, int from, int to, char *error, size_t error_size) {
+    int points = 0; size_t used = 0; output[0] = 0;
+    for (int at = from; at < to;) {
+        if (at + 1 >= to) { snprintf(error, error_size, "each polygon point needs a horizontal and vertical position"); return 0; }
+        if (strchr(words[at], ',') || strchr(words[at], ';') || strchr(words[at + 1], ',') || strchr(words[at + 1], ';')) {
+            snprintf(error, error_size, "polygon point values cannot contain commas or semicolons"); return 0;
+        }
+        if (++points > MAX_POLYGON_POINTS) { snprintf(error, error_size, "a polygon can have at most %d points", MAX_POLYGON_POINTS); return 0; }
+        int written = snprintf(output + used, size - used, "%s%s,%s", points > 1 ? ";" : "", words[at], words[at + 1]);
+        if (written < 0 || (size_t)written >= size - used) { snprintf(error, error_size, "the polygon points are too long"); return 0; }
+        used += (size_t)written; at += 2;
+        if (at < to) {
+            if (strcmp(words[at], "then")) { snprintf(error, error_size, "say: polygon through 10 10 then 40 10 then 25 40"); return 0; }
+            at++;
+        }
+    }
+    if (points < 3) { snprintf(error, error_size, "a polygon needs at least three points"); return 0; }
+    return 1;
+}
+
+typedef enum { COLLISION_SHAPE_NONE, COLLISION_SHAPE_POLYGON, COLLISION_SHAPE_LINE,
+    COLLISION_SHAPE_CIRCLE, COLLISION_SHAPE_RECTANGLE } CollisionShapeKind;
+
+typedef struct {
+    CollisionShapeKind kind;
+    char points[MAX_LINE];
+    char *values[4];
+} CollisionShape;
+
+static int parse_collision_shape(CollisionShape *shape, char **words, int from, int to, char *error, size_t error_size) {
+    memset(shape, 0, sizeof(*shape)); int count = to - from;
+    if (count >= 2 && !strcmp(words[from], "polygon") && !strcmp(words[from + 1], "through")) {
+        shape->kind = COLLISION_SHAPE_POLYGON;
+        return encode_polygon_points(shape->points, sizeof(shape->points), words, from + 2, to, error, error_size);
+    }
+    if (count == 7 && !strcmp(words[from], "line") && !strcmp(words[from + 1], "from") && !strcmp(words[from + 4], "to")) {
+        shape->kind = COLLISION_SHAPE_LINE; shape->values[0] = words[from + 2]; shape->values[1] = words[from + 3];
+        shape->values[2] = words[from + 5]; shape->values[3] = words[from + 6]; return 1;
+    }
+    if (count == 8 && !strcmp(words[from], "circle") && !strcmp(words[from + 1], "centered") && !strcmp(words[from + 2], "at") &&
+        !strcmp(words[from + 5], "with") && !strcmp(words[from + 6], "radius")) {
+        shape->kind = COLLISION_SHAPE_CIRCLE; shape->values[0] = words[from + 3]; shape->values[1] = words[from + 4];
+        shape->values[2] = words[from + 7]; return 1;
+    }
+    if (count == 8 && !strcmp(words[from], "rectangle") && !strcmp(words[from + 1], "at") &&
+        !strcmp(words[from + 4], "sized") && !strcmp(words[from + 6], "by")) {
+        shape->kind = COLLISION_SHAPE_RECTANGLE; shape->values[0] = words[from + 2]; shape->values[1] = words[from + 3];
+        shape->values[2] = words[from + 5]; shape->values[3] = words[from + 7]; return 1;
+    }
+    snprintf(error, error_size, "a polygon can touch another polygon, line, circle, or rectangle"); return 0;
+}
+
+static int compile_polygon_collision(Bytecode *code, char **words, const unsigned char *quoted, int count,
+    const char *path, unsigned line) {
+    if (count < 9 || strcmp(words[0], "check") || strcmp(words[1], "whether") || strcmp(words[count - 2], "as")) return 0;
+    int touches = -1;
+    for (int at = 2; at < count - 2; at++) if (!quoted[at] && !strcmp(words[at], "touches")) { touches = at; break; }
+    if (touches < 0) return 0;
+    int has_polygon = !strcmp(words[2], "polygon") || (touches + 1 < count && !strcmp(words[touches + 1], "polygon"));
+    if (!has_polygon) return 0;
+    if (!is_name(words[count - 1])) { source_error(path, line, "a collision result needs a valid value name"); return -1; }
+    char error[256]; CollisionShape left, right;
+    if (!parse_collision_shape(&left, words, 2, touches, error, sizeof(error)) ||
+        !parse_collision_shape(&right, words, touches + 1, count - 2, error, sizeof(error))) {
+        source_error(path, line, error); return -1;
+    }
+    if (left.kind != COLLISION_SHAPE_POLYGON && right.kind != COLLISION_SHAPE_POLYGON) return 0;
+    CollisionShape *polygon = left.kind == COLLISION_SHAPE_POLYGON ? &left : &right;
+    CollisionShape *other = left.kind == COLLISION_SHAPE_POLYGON ? &right : &left;
+    char *result = words[count - 1]; int okay = 0;
+    if (other->kind == COLLISION_SHAPE_POLYGON) {
+        char *args[3] = {polygon->points, other->points, result}; okay = emit(code, OP_CHECK_POLYGON_COLLISION, 3, args, line);
+    } else if (other->kind == COLLISION_SHAPE_LINE) {
+        char *args[6] = {polygon->points, other->values[0], other->values[1], other->values[2], other->values[3], result};
+        okay = emit(code, OP_CHECK_POLYGON_LINE_COLLISION, 6, args, line);
+    } else if (other->kind == COLLISION_SHAPE_CIRCLE) {
+        char *args[5] = {polygon->points, other->values[0], other->values[1], other->values[2], result};
+        okay = emit(code, OP_CHECK_POLYGON_CIRCLE_COLLISION, 5, args, line);
+    } else if (other->kind == COLLISION_SHAPE_RECTANGLE) {
+        char *args[6] = {polygon->points, other->values[0], other->values[1], other->values[2], other->values[3], result};
+        okay = emit(code, OP_CHECK_POLYGON_RECTANGLE_COLLISION, 6, args, line);
+    }
+    return okay ? 1 : -1;
 }
 
 static int known_name(const Bytecode *code, uint8_t op, const char *name) {
@@ -307,7 +393,10 @@ static int validate(Bytecode *code, const char *path) {
             code->items[i].opcode == OP_CIRCLE || code->items[i].opcode == OP_CHECK_CIRCLE_COLLISION ||
             code->items[i].opcode == OP_CHECK_CIRCLE_RECTANGLE_COLLISION || code->items[i].opcode == OP_LINE ||
             code->items[i].opcode == OP_CHECK_LINE_COLLISION || code->items[i].opcode == OP_CHECK_LINE_CIRCLE_COLLISION ||
-            code->items[i].opcode == OP_CHECK_LINE_RECTANGLE_COLLISION || code->items[i].opcode == OP_BACKGROUND ||
+            code->items[i].opcode == OP_CHECK_LINE_RECTANGLE_COLLISION || code->items[i].opcode == OP_POLYGON ||
+            code->items[i].opcode == OP_CHECK_POLYGON_COLLISION || code->items[i].opcode == OP_CHECK_POLYGON_LINE_COLLISION ||
+            code->items[i].opcode == OP_CHECK_POLYGON_CIRCLE_COLLISION || code->items[i].opcode == OP_CHECK_POLYGON_RECTANGLE_COLLISION ||
+            code->items[i].opcode == OP_BACKGROUND ||
             code->items[i].opcode == OP_RECTANGLE || code->items[i].opcode == OP_SPRITE) {
             source_error(path, code->items[i].line, "game drawing, physics, and animation instructions require an application declared as game"); return 0;
         }
@@ -579,7 +668,9 @@ int compile_file(const char *source_path, const char *output_path) {
             if (!method || w[3][0] != '/') { source_error(source_path, number, "say: when someone visits \"/path\""); okay = 0; }
             else { char *args[2] = {(char *)method, w[3]}; okay = emit(&code, OP_ROUTE, 2, args, number); stack[depth++] = BLOCK_ROUTE; }
         } else if (current == BLOCK_ROUTE || current == BLOCK_ACTION || current == BLOCK_LOGIC_IF || current == BLOCK_REPEAT || current == BLOCK_TEST || current == BLOCK_TRY) {
-            if (n == 9 && !strcmp(w[0], "move") && !strcmp(w[1], "value") && !strcmp(w[3], "toward") &&
+            int polygon_collision = compile_polygon_collision(&code, w, quoted, n, source_path, number);
+            if (polygon_collision) okay = polygon_collision > 0;
+            else if (n == 9 && !strcmp(w[0], "move") && !strcmp(w[1], "value") && !strcmp(w[3], "toward") &&
                 !strcmp(w[5], "at") && !strcmp(w[7], "per") && !strcmp(w[8], "second") && is_name(w[2])) {
                 char *args[3] = {w[2], w[4], w[6]}; okay = emit(&code, OP_MOVE_VALUE_TOWARD, 3, args, number);
             } else if (n == 10 && !strcmp(w[0], "advance") && !strcmp(w[1], "animation") && !strcmp(w[3], "from") &&
@@ -827,6 +918,15 @@ int compile_file(const char *source_path, const char *output_path) {
             else if (n == 13 && !strcmp(w[0], "draw") && !strcmp(w[1], "line") && !strcmp(w[2], "from") &&
                 !strcmp(w[5], "to") && !strcmp(w[8], "with") && !strcmp(w[9], "color")) {
                 char *args[7] = {w[3], w[4], w[6], w[7], w[10], w[11], w[12]}; okay = emit(&code, OP_LINE, 7, args, number);
+            }
+            else if (n >= 8 && !strcmp(w[0], "draw") && !strcmp(w[1], "polygon") && !strcmp(w[2], "through") &&
+                !strcmp(w[n - 5], "with") && !strcmp(w[n - 4], "color")) {
+                char points[MAX_LINE];
+                if (!encode_polygon_points(points, sizeof(points), w, 3, n - 5, error, sizeof(error))) {
+                    source_error(source_path, number, error); okay = 0;
+                } else {
+                    char *args[4] = {points, w[n - 3], w[n - 2], w[n - 1]}; okay = emit(&code, OP_POLYGON, 4, args, number);
+                }
             }
             else if (n == 10 && !strcmp(w[0], "draw") && !strcmp(w[1], "image") && !strcmp(w[3], "at") &&
                 !strcmp(w[6], "sized") && !strcmp(w[8], "by")) {

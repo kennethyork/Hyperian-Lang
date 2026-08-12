@@ -19,6 +19,8 @@
 
 #define REQUEST_MAX 65536
 #define FIELD_MAX 32
+#define POLYGON_POINTS_MAX 32
+#define POLYGON_DATA_MAX 4096
 
 typedef struct { char *data; size_t length, capacity; } Buffer;
 typedef struct { char *key, *value; } Pair;
@@ -392,7 +394,9 @@ static int is_logic_instruction(uint8_t opcode) {
         opcode == OP_MOVE_POSITION || opcode == OP_APPLY_GRAVITY || opcode == OP_KEEP_INSIDE || opcode == OP_CHECK_COLLISION || opcode == OP_COLLECT_QUERY ||
         opcode == OP_MOVE_VALUE_TOWARD || opcode == OP_ADVANCE_ANIMATION ||
         opcode == OP_CHECK_CIRCLE_COLLISION || opcode == OP_CHECK_CIRCLE_RECTANGLE_COLLISION ||
-        opcode == OP_CHECK_LINE_COLLISION || opcode == OP_CHECK_LINE_CIRCLE_COLLISION || opcode == OP_CHECK_LINE_RECTANGLE_COLLISION;
+        opcode == OP_CHECK_LINE_COLLISION || opcode == OP_CHECK_LINE_CIRCLE_COLLISION || opcode == OP_CHECK_LINE_RECTANGLE_COLLISION ||
+        opcode == OP_CHECK_POLYGON_COLLISION || opcode == OP_CHECK_POLYGON_LINE_COLLISION ||
+        opcode == OP_CHECK_POLYGON_CIRCLE_COLLISION || opcode == OP_CHECK_POLYGON_RECTANGLE_COLLISION;
 }
 
 static HyperianSoundHandler sound_handler = NULL;
@@ -401,6 +405,13 @@ void hyperian_set_sound_handler(HyperianSoundHandler handler) { sound_handler = 
 static int execute_logic_range(const Bytecode *code, size_t from, size_t to, Scope *scope, int depth, char *error, size_t error_size);
 
 static int debugger_active = 0;
+
+static void debug_polygon_points(const char *points) {
+    for (; *points; points++) {
+        if (*points == ';') printf(" then ");
+        else putchar(*points == ',' ? ' ' : *points);
+    }
+}
 
 static void debug_instruction(const Instruction *in, int depth) {
     printf("%*sLine %u: ", depth * 2, "", in->line);
@@ -448,6 +459,14 @@ static void debug_instruction(const Instruction *in, int depth) {
         case OP_CHECK_LINE_COLLISION: printf("check whether line from %s %s to %s %s touches line from %s %s to %s %s as %s", in->args[0], in->args[1], in->args[2], in->args[3], in->args[4], in->args[5], in->args[6], in->args[7], in->args[8]); break;
         case OP_CHECK_LINE_CIRCLE_COLLISION: printf("check whether line from %s %s to %s %s touches circle centered at %s %s with radius %s as %s", in->args[0], in->args[1], in->args[2], in->args[3], in->args[4], in->args[5], in->args[6], in->args[7]); break;
         case OP_CHECK_LINE_RECTANGLE_COLLISION: printf("check whether line from %s %s to %s %s touches rectangle at %s %s sized %s by %s as %s", in->args[0], in->args[1], in->args[2], in->args[3], in->args[4], in->args[5], in->args[6], in->args[7], in->args[8]); break;
+        case OP_CHECK_POLYGON_COLLISION: printf("check whether polygon through "); debug_polygon_points(in->args[0]);
+            printf(" touches polygon through "); debug_polygon_points(in->args[1]); printf(" as %s", in->args[2]); break;
+        case OP_CHECK_POLYGON_LINE_COLLISION: printf("check whether polygon through "); debug_polygon_points(in->args[0]);
+            printf(" touches line from %s %s to %s %s as %s", in->args[1], in->args[2], in->args[3], in->args[4], in->args[5]); break;
+        case OP_CHECK_POLYGON_CIRCLE_COLLISION: printf("check whether polygon through "); debug_polygon_points(in->args[0]);
+            printf(" touches circle centered at %s %s with radius %s as %s", in->args[1], in->args[2], in->args[3], in->args[4]); break;
+        case OP_CHECK_POLYGON_RECTANGLE_COLLISION: printf("check whether polygon through "); debug_polygon_points(in->args[0]);
+            printf(" touches rectangle at %s %s sized %s by %s as %s", in->args[1], in->args[2], in->args[3], in->args[4], in->args[5]); break;
         default: printf("execute %s", opcode_name(in->opcode)); break;
     }
     putchar('\n');
@@ -522,6 +541,69 @@ static int line_touches_rectangle(double ax, double ay, double bx, double by, do
     if ((ax >= left && ax <= right && ay >= top && ay <= bottom) || (bx >= left && bx <= right && by >= top && by <= bottom)) return 1;
     return lines_touch(ax, ay, bx, by, left, top, right, top) || lines_touch(ax, ay, bx, by, right, top, right, bottom) ||
         lines_touch(ax, ay, bx, by, right, bottom, left, bottom) || lines_touch(ax, ay, bx, by, left, bottom, left, top);
+}
+
+typedef struct { double x, y; } GeometryPoint;
+
+static int polygon_points(Scope *scope, const char *encoded, GeometryPoint *points, int *count, char *error, size_t error_size) {
+    char text[POLYGON_DATA_MAX]; size_t length = strlen(encoded);
+    if (length >= sizeof(text)) { snprintf(error, error_size, "polygon point data is too long"); return 0; }
+    memcpy(text, encoded, length + 1); *count = 0; char *point = text;
+    while (*point) {
+        if (*count >= POLYGON_POINTS_MAX) { snprintf(error, error_size, "a polygon can have at most %d points", POLYGON_POINTS_MAX); return 0; }
+        char *next = strchr(point, ';'); if (next) *next = 0;
+        char *middle = strchr(point, ',');
+        if (!middle || strchr(middle + 1, ',')) { snprintf(error, error_size, "polygon point data is damaged"); return 0; }
+        *middle = 0;
+        if (!physics_number(scope, point, &points[*count].x, error, error_size) ||
+            !physics_number(scope, middle + 1, &points[*count].y, error, error_size)) return 0;
+        (*count)++;
+        if (!next) break;
+        point = next + 1;
+    }
+    if (*count < 3) { snprintf(error, error_size, "a polygon needs at least three points"); return 0; }
+    return 1;
+}
+
+static int point_in_polygon(double x, double y, const GeometryPoint *points, int count) {
+    int inside = 0;
+    for (int current = 0, previous = count - 1; current < count; previous = current++) {
+        if (point_on_segment(x, y, points[previous].x, points[previous].y, points[current].x, points[current].y)) return 1;
+        int crosses = (points[current].y > y) != (points[previous].y > y);
+        if (crosses) {
+            double boundary_x = (points[previous].x - points[current].x) * (y - points[current].y) /
+                (points[previous].y - points[current].y) + points[current].x;
+            if (x < boundary_x) inside = !inside;
+        }
+    }
+    return inside;
+}
+
+static int polygon_touches_line(const GeometryPoint *points, int count, double ax, double ay, double bx, double by) {
+    if (point_in_polygon(ax, ay, points, count) || point_in_polygon(bx, by, points, count)) return 1;
+    for (int current = 0, previous = count - 1; current < count; previous = current++)
+        if (lines_touch(points[previous].x, points[previous].y, points[current].x, points[current].y, ax, ay, bx, by)) return 1;
+    return 0;
+}
+
+static int polygons_touch(const GeometryPoint *first, int first_count, const GeometryPoint *second, int second_count) {
+    for (int current = 0, previous = first_count - 1; current < first_count; previous = current++)
+        if (polygon_touches_line(second, second_count, first[previous].x, first[previous].y, first[current].x, first[current].y)) return 1;
+    return point_in_polygon(first[0].x, first[0].y, second, second_count) || point_in_polygon(second[0].x, second[0].y, first, first_count);
+}
+
+static int polygon_touches_circle(const GeometryPoint *points, int count, double center_x, double center_y, double radius) {
+    if (point_in_polygon(center_x, center_y, points, count)) return 1;
+    for (int current = 0, previous = count - 1; current < count; previous = current++)
+        if (line_touches_circle(points[previous].x, points[previous].y, points[current].x, points[current].y, center_x, center_y, radius)) return 1;
+    return 0;
+}
+
+static int polygon_touches_rectangle(const GeometryPoint *points, int count, double left, double top, double width, double height) {
+    for (int current = 0, previous = count - 1; current < count; previous = current++)
+        if (line_touches_rectangle(points[previous].x, points[previous].y, points[current].x, points[current].y, left, top, width, height)) return 1;
+    return point_in_polygon(left, top, points, count) || point_in_polygon(left + width, top, points, count) ||
+        point_in_polygon(left + width, top + height, points, count) || point_in_polygon(left, top + height, points, count);
 }
 
 static int compare_query_values(const char *left, const char *right) {
@@ -663,6 +745,31 @@ static int execute_logic_at(const Bytecode *code, size_t *position, Scope *scope
             !physics_number(scope, in->args[6], &width, error, error_size) || !physics_number(scope, in->args[7], &height, error, error_size)) return 0;
         if (width < 0 || height < 0) { snprintf(error, error_size, "line and rectangle collision size cannot be negative"); return 0; }
         local_set(scope->locals, in->args[8], line_touches_rectangle(ax, ay, bx, by, left, top, width, height) ? "true" : "false");
+    } else if (in->opcode == OP_CHECK_POLYGON_COLLISION) {
+        GeometryPoint first[POLYGON_POINTS_MAX], second[POLYGON_POINTS_MAX]; int first_count, second_count;
+        if (!polygon_points(scope, in->args[0], first, &first_count, error, error_size) ||
+            !polygon_points(scope, in->args[1], second, &second_count, error, error_size)) return 0;
+        local_set(scope->locals, in->args[2], polygons_touch(first, first_count, second, second_count) ? "true" : "false");
+    } else if (in->opcode == OP_CHECK_POLYGON_LINE_COLLISION) {
+        GeometryPoint polygon[POLYGON_POINTS_MAX]; int count; double ax, ay, bx, by;
+        if (!polygon_points(scope, in->args[0], polygon, &count, error, error_size) ||
+            !physics_number(scope, in->args[1], &ax, error, error_size) || !physics_number(scope, in->args[2], &ay, error, error_size) ||
+            !physics_number(scope, in->args[3], &bx, error, error_size) || !physics_number(scope, in->args[4], &by, error, error_size)) return 0;
+        local_set(scope->locals, in->args[5], polygon_touches_line(polygon, count, ax, ay, bx, by) ? "true" : "false");
+    } else if (in->opcode == OP_CHECK_POLYGON_CIRCLE_COLLISION) {
+        GeometryPoint polygon[POLYGON_POINTS_MAX]; int count; double center_x, center_y, radius;
+        if (!polygon_points(scope, in->args[0], polygon, &count, error, error_size) ||
+            !physics_number(scope, in->args[1], &center_x, error, error_size) || !physics_number(scope, in->args[2], &center_y, error, error_size) ||
+            !physics_number(scope, in->args[3], &radius, error, error_size)) return 0;
+        if (radius < 0) { snprintf(error, error_size, "polygon and circle collision radius cannot be negative"); return 0; }
+        local_set(scope->locals, in->args[4], polygon_touches_circle(polygon, count, center_x, center_y, radius) ? "true" : "false");
+    } else if (in->opcode == OP_CHECK_POLYGON_RECTANGLE_COLLISION) {
+        GeometryPoint polygon[POLYGON_POINTS_MAX]; int count; double left, top, width, height;
+        if (!polygon_points(scope, in->args[0], polygon, &count, error, error_size) ||
+            !physics_number(scope, in->args[1], &left, error, error_size) || !physics_number(scope, in->args[2], &top, error, error_size) ||
+            !physics_number(scope, in->args[3], &width, error, error_size) || !physics_number(scope, in->args[4], &height, error, error_size)) return 0;
+        if (width < 0 || height < 0) { snprintf(error, error_size, "polygon and rectangle collision size cannot be negative"); return 0; }
+        local_set(scope->locals, in->args[5], polygon_touches_rectangle(polygon, count, left, top, width, height) ? "true" : "false");
     } else if (in->opcode == OP_LOGIC_IF) {
         size_t end = find_end(code, *position, OP_LOGIC_IF, OP_END_LOGIC_IF), otherwise = logic_otherwise(code, *position, end);
         if (end == code->count) { snprintf(error, error_size, "an if instruction is missing its end"); return 0; }

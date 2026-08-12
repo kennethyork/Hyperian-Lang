@@ -1,0 +1,16 @@
+application "Bad Polygon Target" is console
+
+model Shape
+    field name is text
+end
+
+controller Main
+    when application starts
+        check whether polygon through 0 0 then 20 0 then 10 20 touches line from 0 10 to 20 10 as touching
+        show view "main"
+    end
+end
+
+view "main"
+    show touching
+end

@@ -8,6 +8,8 @@
 #include <SDL.h>
 
 #define GAME_SPRITES_MAX 64
+#define GAME_POLYGON_POINTS_MAX 32
+#define GAME_POLYGON_DATA_MAX 4096
 typedef struct { char path[2048]; SDL_Texture *texture; } GameSprite;
 static SDL_AudioDeviceID game_audio_device = 0;
 
@@ -83,6 +85,49 @@ static void draw_filled_circle(SDL_Renderer *renderer, int center_x, int center_
     }
 }
 
+static int evaluated_polygon_points(HyperianState *state, const char *encoded, SDL_Point *points) {
+    char text[GAME_POLYGON_DATA_MAX]; size_t length = strlen(encoded);
+    if (length >= sizeof(text)) return 0;
+    memcpy(text, encoded, length + 1); int count = 0; char *point = text;
+    while (*point && count < GAME_POLYGON_POINTS_MAX) {
+        char *next = strchr(point, ';'); if (next) *next = 0;
+        char *middle = strchr(point, ','); if (!middle || strchr(middle + 1, ',')) return 0; *middle = 0;
+        points[count].x = evaluated_number(state, point); points[count].y = evaluated_number(state, middle + 1); count++;
+        if (!next) break;
+        if (count == GAME_POLYGON_POINTS_MAX) return 0;
+        point = next + 1;
+    }
+    return count >= 3 ? count : 0;
+}
+
+static void draw_filled_polygon(SDL_Renderer *renderer, const SDL_Point *points, int count) {
+    int minimum_y = points[0].y, maximum_y = points[0].y;
+    for (int at = 1; at < count; at++) {
+        if (points[at].y < minimum_y) minimum_y = points[at].y;
+        if (points[at].y > maximum_y) maximum_y = points[at].y;
+    }
+    if (minimum_y < 0) minimum_y = 0;
+    if (maximum_y > 539) maximum_y = 539;
+    for (int y = minimum_y; y <= maximum_y; y++) {
+        int intersections[GAME_POLYGON_POINTS_MAX], found = 0;
+        for (int current = 0, previous = count - 1; current < count; previous = current++) {
+            int first_y = points[previous].y, second_y = points[current].y;
+            if ((first_y <= y && second_y > y) || (second_y <= y && first_y > y)) {
+                double portion = (double)(y - first_y) / (double)(second_y - first_y);
+                intersections[found++] = (int)(points[previous].x + portion * (points[current].x - points[previous].x));
+            }
+        }
+        for (int at = 1; at < found; at++) {
+            int value = intersections[at], before = at - 1;
+            while (before >= 0 && intersections[before] > value) { intersections[before + 1] = intersections[before]; before--; }
+            intersections[before + 1] = value;
+        }
+        for (int at = 0; at + 1 < found; at += 2) SDL_RenderDrawLine(renderer, intersections[at], y, intersections[at + 1], y);
+    }
+    for (int current = 0, previous = count - 1; current < count; previous = current++)
+        SDL_RenderDrawLine(renderer, points[previous].x, points[previous].y, points[current].x, points[current].y);
+}
+
 int run_game_app(const Bytecode *code, const char *name) {
     size_t view_from, view_to;
     if (!game_view_range(code, &view_from, &view_to)) { fprintf(stderr, "error: game application needs a starting view\n"); return 1; }
@@ -135,6 +180,13 @@ int run_game_app(const Bytecode *code, const char *name) {
                 (Uint8)evaluated_channel(&state, code->items[i].args[6]), 255);
             SDL_RenderDrawLine(renderer, evaluated_number(&state, code->items[i].args[0]), evaluated_number(&state, code->items[i].args[1]),
                 evaluated_number(&state, code->items[i].args[2]), evaluated_number(&state, code->items[i].args[3]));
+        } else if (code->items[i].opcode == OP_POLYGON) {
+            SDL_Point points[GAME_POLYGON_POINTS_MAX]; int count = evaluated_polygon_points(&state, code->items[i].args[0], points);
+            if (count) {
+                SDL_SetRenderDrawColor(renderer, (Uint8)evaluated_channel(&state, code->items[i].args[1]), (Uint8)evaluated_channel(&state, code->items[i].args[2]),
+                    (Uint8)evaluated_channel(&state, code->items[i].args[3]), 255);
+                draw_filled_polygon(renderer, points, count);
+            }
         } else if (code->items[i].opcode == OP_SPRITE) {
             char path[2048]; hyperian_state_evaluate(&state, code->items[i].args[0], path, sizeof(path)); SDL_Texture *texture = NULL;
             for (int at = 0; at < sprite_count; at++) if (!strcmp(sprites[at].path, path)) texture = sprites[at].texture;

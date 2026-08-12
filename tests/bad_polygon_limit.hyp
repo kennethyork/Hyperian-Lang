@@ -1,0 +1,15 @@
+application "Too Many Polygon Points" is game
+
+model Shape
+    field name is text
+end
+
+controller Main
+    when application starts
+        show view "main"
+    end
+end
+
+view "main"
+    draw polygon through 0 0 then 1 0 then 2 0 then 3 0 then 4 0 then 5 0 then 6 0 then 7 0 then 8 0 then 9 0 then 10 0 then 11 0 then 12 0 then 13 0 then 14 0 then 15 0 then 16 0 then 17 0 then 18 0 then 19 0 then 20 0 then 21 0 then 22 0 then 23 0 then 24 0 then 25 0 then 26 0 then 27 0 then 28 0 then 29 0 then 30 0 then 31 0 then 32 0 with color 255 255 255
+end

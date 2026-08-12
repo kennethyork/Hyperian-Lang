@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(Hyperian VERSION 0.39.0 LANGUAGES C)
+project(Hyperian VERSION 0.40.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -473,6 +473,14 @@ set_tests_properties(inspect_line_collision PROPERTIES DEPENDS compile_game_phys
 add_test(NAME debug_line_collision
     COMMAND hyperian debug ${CMAKE_SOURCE_DIR}/examples/physics_game.hyp --event FRAME)
 set_tests_properties(debug_line_collision PROPERTIES PASS_REGULAR_EXPRESSION "check whether line from 0 0 to 10 10 touches line from 0 10 to 10 0 as crossing lines touch")
+add_test(NAME inspect_polygon_collision
+    COMMAND hyperian inspect ${CMAKE_BINARY_DIR}/physics_game.hyc)
+set_tests_properties(inspect_polygon_collision PROPERTIES DEPENDS compile_game_physics PASS_REGULAR_EXPRESSION "CHECK_POLYGON_COLLISION 0,0;20,0;20,20;0,20 5,5;10,5;5,10 polygon contains polygon")
+add_test(NAME debug_polygon_collision
+    COMMAND hyperian debug ${CMAKE_SOURCE_DIR}/examples/physics_game.hyp --event FRAME)
+set_tests_properties(debug_polygon_collision PROPERTIES PASS_REGULAR_EXPRESSION "check whether polygon through 0 0 then 20 0 then 20 20 then 0 20 touches polygon through 5 5 then 10 5 then 5 10 as polygon contains polygon")
+add_test(NAME compile_maximum_polygon
+    COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/tests/polygon_max_points.hyp -o ${CMAKE_BINARY_DIR}/polygon_max_points.hyc)
 add_test(NAME preserve_legacy_rectangle_collision
     COMMAND hyperian debug ${CMAKE_SOURCE_DIR}/tests/legacy_rectangle_collision.hyp --event FRAME)
 set_tests_properties(preserve_legacy_rectangle_collision PROPERTIES PASS_REGULAR_EXPRESSION "touched = true")
@@ -488,6 +496,18 @@ set_tests_properties(reject_line_outside_game PROPERTIES WILL_FAIL TRUE)
 add_test(NAME reject_line_collision_outside_game
     COMMAND hyperian check ${CMAKE_SOURCE_DIR}/tests/bad_line_collision_target.hyp)
 set_tests_properties(reject_line_collision_outside_game PROPERTIES WILL_FAIL TRUE)
+add_test(NAME reject_polygon_collision_outside_game
+    COMMAND hyperian check ${CMAKE_SOURCE_DIR}/tests/bad_polygon_target.hyp)
+set_tests_properties(reject_polygon_collision_outside_game PROPERTIES WILL_FAIL TRUE)
+add_test(NAME reject_polygon_drawing_outside_game
+    COMMAND hyperian check ${CMAKE_SOURCE_DIR}/tests/bad_polygon_drawing_target.hyp)
+set_tests_properties(reject_polygon_drawing_outside_game PROPERTIES WILL_FAIL TRUE)
+add_test(NAME reject_polygon_with_too_few_points
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/reject_with_message_test.sh "a polygon needs at least three points"
+        $<TARGET_FILE:hyperian> check ${CMAKE_SOURCE_DIR}/tests/bad_polygon_points.hyp)
+add_test(NAME reject_polygon_with_too_many_points
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/reject_with_message_test.sh "a polygon can have at most 32 points"
+        $<TARGET_FILE:hyperian> check ${CMAKE_SOURCE_DIR}/tests/bad_polygon_limit.hyp)
 add_test(NAME reject_game_drawing_outside_game
     COMMAND hyperian check ${CMAKE_SOURCE_DIR}/tests/bad_game_drawing_target.hyp)
 set_tests_properties(reject_game_drawing_outside_game PROPERTIES WILL_FAIL TRUE)
@@ -500,6 +520,12 @@ add_test(NAME reject_negative_line_circle_radius
 add_test(NAME reject_negative_line_rectangle_size
     COMMAND sh ${CMAKE_SOURCE_DIR}/tests/reject_with_message_test.sh "line and rectangle collision size cannot be negative"
         $<TARGET_FILE:hyperian> debug ${CMAKE_SOURCE_DIR}/tests/bad_line_rectangle_size.hyp --event FRAME)
+add_test(NAME reject_negative_polygon_circle_radius
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/reject_with_message_test.sh "polygon and circle collision radius cannot be negative"
+        $<TARGET_FILE:hyperian> debug ${CMAKE_SOURCE_DIR}/tests/bad_polygon_circle_radius.hyp --event FRAME)
+add_test(NAME reject_negative_polygon_rectangle_size
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/reject_with_message_test.sh "polygon and rectangle collision size cannot be negative"
+        $<TARGET_FILE:hyperian> debug ${CMAKE_SOURCE_DIR}/tests/bad_polygon_rectangle_size.hyp --event FRAME)
 add_test(NAME reject_animation_outside_game
     COMMAND hyperian check ${CMAKE_SOURCE_DIR}/tests/bad_animation_target.hyp)
 set_tests_properties(reject_animation_outside_game PROPERTIES WILL_FAIL TRUE)
@@ -537,6 +563,10 @@ if(SDL2_FOUND)
         COMMAND ${CMAKE_COMMAND} -E env SDL_VIDEODRIVER=dummy HYPERIAN_VISUAL_TEST=1 "HYPERIAN_VISUAL_TEST_STATE=player hit"
             $<TARGET_FILE:hyperian> run ${CMAKE_BINARY_DIR}/physics_game.hyc)
     set_tests_properties(run_game_physics_headless PROPERTIES DEPENDS compile_game_physics PASS_REGULAR_EXPRESSION "player hit=true")
+    add_test(NAME run_maximum_polygon_headless
+        COMMAND ${CMAKE_COMMAND} -E env SDL_VIDEODRIVER=dummy HYPERIAN_VISUAL_TEST=1
+            $<TARGET_FILE:hyperian> run ${CMAKE_BINARY_DIR}/polygon_max_points.hyc)
+    set_tests_properties(run_maximum_polygon_headless PROPERTIES DEPENDS compile_maximum_polygon)
     add_test(NAME create_game_media_assets COMMAND hyperian_game_media_fixture)
     add_test(NAME run_game_media_headless
         COMMAND ${CMAKE_COMMAND} -E env SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy HYPERIAN_VISUAL_TEST=1

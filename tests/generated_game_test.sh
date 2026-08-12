@@ -14,4 +14,6 @@ grep 'check whether rectangle .* touches circle centered at' "$project/controlle
 grep 'draw circle centered at' "$project/views/main.hyp" >/dev/null
 grep 'check whether line from .* touches circle centered at' "$project/controllers/items.hyp" >/dev/null
 grep 'draw line from' "$project/views/main.hyp" >/dev/null
+grep 'check whether polygon through .* touches circle centered at' "$project/controllers/items.hyp" >/dev/null
+grep 'draw polygon through' "$project/views/main.hyp" >/dev/null
 "$compiler" check "$project/app.hyp"

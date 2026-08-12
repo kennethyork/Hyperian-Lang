@@ -1,0 +1,15 @@
+application "Maximum Polygon" is game
+
+model Shape
+    field name is text
+end
+
+controller Main
+    when application starts
+        show view "main"
+    end
+end
+
+view "main"
+    draw polygon through 0 0 then 1 0 then 2 0 then 3 0 then 4 0 then 5 0 then 6 0 then 7 0 then 8 0 then 9 0 then 10 0 then 11 0 then 12 0 then 13 0 then 14 0 then 15 0 then 15 10 then 14 10 then 13 10 then 12 10 then 11 10 then 10 10 then 9 10 then 8 10 then 7 10 then 6 10 then 5 10 then 4 10 then 3 10 then 2 10 then 1 10 then 0 10 with color 100 150 200
+end
