@@ -375,26 +375,41 @@ static void source_directory(const char *source, char *directory, size_t size) {
     else { size_t length = (size_t)(slash - source); if (length >= size) length = size - 1; memcpy(directory, source, length); directory[length] = 0; }
 }
 
-static int bundle_application(const char *source, const char *output, const char *self_path) {
+static int bundle_application_with_runtime(const char *source, const char *output, const char *runtime_path,
+    const char *self_path, const char *platform) {
     struct stat existing;
     if (!stat(output, &existing)) { fprintf(stderr, "error: bundle output %s already exists\n", output); return 1; }
     if (errno != ENOENT || mkdir(output, 0755)) { fprintf(stderr, "error: cannot create bundle %s: %s\n", output, strerror(errno)); return 1; }
     char executable[PATH_MAX], manifest[PATH_MAX], project[PATH_MAX], from[PATH_MAX], to[PATH_MAX];
-    if (snprintf(executable, sizeof(executable), "%s/run", output) >= (int)sizeof(executable) ||
+    const char *executable_name = platform && !strncmp(platform, "windows-", 8) ? "run.exe" : "run";
+    if (snprintf(executable, sizeof(executable), "%s/%s", output, executable_name) >= (int)sizeof(executable) ||
         snprintf(manifest, sizeof(manifest), "%s/hyperian.bundle", output) >= (int)sizeof(manifest)) {
-        fprintf(stderr, "error: bundle path is too long\n"); return 1;
+        fprintf(stderr, "error: bundle path is too long\n"); remove_bundle_tree(output); return 1;
     }
-    if (build_executable(source, executable, self_path, 1)) return 1;
+    if (build_executable_with_runtime(source, executable, runtime_path, self_path, 1)) { remove_bundle_tree(output); return 1; }
     source_directory(source, project, sizeof(project));
     const char *folders[] = {"assets", "public"};
     for (size_t i = 0; i < sizeof(folders) / sizeof(folders[0]); i++) {
         if (snprintf(from, sizeof(from), "%s/%s", project, folders[i]) >= (int)sizeof(from) ||
-            snprintf(to, sizeof(to), "%s/%s", output, folders[i]) >= (int)sizeof(to) || !copy_bundle_tree(from, to)) return 1;
+            snprintf(to, sizeof(to), "%s/%s", output, folders[i]) >= (int)sizeof(to) || !copy_bundle_tree(from, to)) {
+            remove_bundle_tree(output); return 1;
+        }
     }
     char contents[512]; snprintf(contents, sizeof(contents),
-        "Hyperian application bundle\nformat: HYBN1\ntoolchain: %s\nexecutable: run\nassets: assets, public\n", HYPERIAN_VERSION);
-    if (!write_project_file(manifest, contents)) return 1;
-    printf("Bundled %s with its assets in %s.\n", source, output); return 0;
+        "Hyperian application bundle\nformat: HYBN1\ntoolchain: %s\nplatform: %s\nexecutable: %s\nassets: assets, public\n",
+        HYPERIAN_VERSION, platform ? platform : "unknown", executable_name);
+    if (!write_project_file(manifest, contents)) { remove_bundle_tree(output); return 1; }
+    printf("Bundled %s with its assets for %s in %s.\n", source, platform ? platform : "this computer", output); return 0;
+}
+
+static int bundle_application(const char *source, const char *output, const char *self_path) {
+    return bundle_application_with_runtime(source, output, NULL, self_path, host_platform_name());
+}
+
+static int bundle_for_native_platform(const char *source, const char *platform, const char *pack, const char *output) {
+    if (!safe_platform_name(platform)) { fprintf(stderr, "error: native platform names use lowercase letters, numbers, and hyphens\n"); return 2; }
+    char runtime_path[PATH_MAX]; if (!runtime_pack_executable(pack, platform, runtime_path, sizeof(runtime_path))) return 1;
+    return bundle_application_with_runtime(source, output, runtime_path, NULL, platform);
 }
 
 static int resource_folders(const char *self_path, const char *platform, char *adapter, size_t adapter_size, char *runtime, size_t runtime_size) {
@@ -727,7 +742,8 @@ static int doctor(void) {
     const char *platform = host_platform_name();
     if (platform) printf("  native runtime pack creation (%s): ready\n", platform);
     else puts("  native runtime pack creation: unavailable on this processor");
-    puts("  standalone executables and asset bundles: ready\n"
+    puts("  standalone executables and host asset bundles: ready\n"
+         "  verified cross-platform executables and asset bundles: ready with a runtime pack\n"
          "  Android and iOS bytecode deployment packages: ready\n"
          "  native mobile runtime bridge library: ready\n"
          "  generated native Android Studio projects: ready\n"
@@ -857,7 +873,9 @@ static void help(void) {
          "  hyperian build app.hyp for PLATFORM using RuntimePack as App\n"
          "                                          Build with another native runtime\n"
          "  hyperian bundle app.hyp -o App        Bundle an executable and assets\n"
-         "  hyperian pack runtime to RuntimePack Create a runtime pack for this computer\n"
+         "  hyperian bundle app.hyp for PLATFORM using RuntimePack to App\n"
+         "                                          Bundle for another native runtime\n"
+         "  hyperian pack runtime to RuntimePack  Create a runtime pack for this computer\n"
          "  hyperian export app.hyp for android to App\n"
          "                                          Export a phone deployment package\n"
          "  hyperian new MyApp [--target web]     Create a foldered MVC project\n"
@@ -922,8 +940,11 @@ int main(int argc, char **argv) {
         return create_runtime_pack(argv[4], argv[0]);
     }
     if (!strcmp(argv[1], "bundle")) {
-        if (argc != 5 || strcmp(argv[3], "-o")) { fprintf(stderr, "usage: hyperian bundle app.hyp -o App\n"); return 2; }
-        return bundle_application(argv[2], argv[4], argv[0]);
+        if (argc == 5 && !strcmp(argv[3], "-o")) return bundle_application(argv[2], argv[4], argv[0]);
+        if (argc == 9 && !strcmp(argv[3], "for") && !strcmp(argv[5], "using") && !strcmp(argv[7], "to"))
+            return bundle_for_native_platform(argv[2], argv[4], argv[6], argv[8]);
+        fprintf(stderr, "usage: hyperian bundle app.hyp -o App\n"
+                        "   or: hyperian bundle app.hyp for PLATFORM using RuntimePack to App\n"); return 2;
     }
     if (!strcmp(argv[1], "export")) {
         if (argc != 7 || strcmp(argv[3], "for") || strcmp(argv[5], "to")) {

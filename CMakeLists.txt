@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(Hyperian VERSION 0.45.0 LANGUAGES C)
+project(Hyperian VERSION 0.46.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -250,10 +250,49 @@ add_test(NAME reject_tampered_native_runtime_pack
         ${CMAKE_SOURCE_DIR}/examples/report_service.hyp ${CMAKE_BINARY_DIR}/NativeRuntime
         ${CMAKE_BINARY_DIR}/TamperedNativeRuntime ${CMAKE_BINARY_DIR}/tampered_runtime_report)
 set_tests_properties(reject_tampered_native_runtime_pack PROPERTIES DEPENDS "create_native_runtime_pack;clean_tampered_native_runtime_pack")
+add_test(NAME clean_cross_platform_console_bundle
+    COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}/CrossPlatformConsoleBundle)
+add_test(NAME clean_cross_platform_bundle_work
+    COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}/CrossPlatformBundleWork)
+add_test(NAME build_cross_platform_console_bundle
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/runtime_pack_bundle_test.sh $<TARGET_FILE:hyperian>
+        ${CMAKE_SOURCE_DIR}/examples/bundle_console/app.hyp ${CMAKE_BINARY_DIR}/NativeRuntime
+        ${CMAKE_BINARY_DIR}/CrossPlatformConsoleBundle ${CMAKE_BINARY_DIR}/CrossPlatformBundleWork)
+set_tests_properties(build_cross_platform_console_bundle PROPERTIES
+    DEPENDS "create_native_runtime_pack;clean_cross_platform_console_bundle;clean_cross_platform_bundle_work"
+    PASS_REGULAR_EXPRESSION "Hello from a bundled asset")
+add_test(NAME clean_cross_platform_web_bundle
+    COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}/CrossPlatformWebBundle)
+add_test(NAME build_cross_platform_web_bundle
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/runtime_pack_web_bundle_test.sh $<TARGET_FILE:hyperian>
+        ${CMAKE_SOURCE_DIR}/examples/pwa_tasks/app.hyp ${CMAKE_BINARY_DIR}/NativeRuntime
+        ${CMAKE_BINARY_DIR}/CrossPlatformWebBundle)
+set_tests_properties(build_cross_platform_web_bundle PROPERTIES
+    DEPENDS "create_native_runtime_pack;clean_cross_platform_web_bundle")
+add_test(NAME clean_cross_platform_bundle_rejections
+    COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}/DamagedBundleRuntime)
+add_test(NAME reject_invalid_cross_platform_bundles
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/runtime_pack_bundle_rejection_test.sh $<TARGET_FILE:hyperian>
+        ${CMAKE_SOURCE_DIR}/examples/bundle_console/app.hyp ${CMAKE_BINARY_DIR}/NativeRuntime
+        ${CMAKE_BINARY_DIR}/WrongPlatformBundle ${CMAKE_BINARY_DIR}/DamagedBundleRuntime
+        ${CMAKE_BINARY_DIR}/DamagedRuntimeBundle)
+set_tests_properties(reject_invalid_cross_platform_bundles PROPERTIES
+    DEPENDS "create_native_runtime_pack;clean_cross_platform_bundle_rejections")
+add_test(NAME clean_failed_cross_platform_bundle
+    COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}/UnsafeBundleProject)
+add_test(NAME reject_unsafe_bundle_asset_and_clean_output
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/bundle_cleanup_test.sh $<TARGET_FILE:hyperian>
+        ${CMAKE_SOURCE_DIR}/examples/bundle_console/app.hyp ${CMAKE_BINARY_DIR}/NativeRuntime
+        ${CMAKE_BINARY_DIR}/UnsafeBundleProject ${CMAKE_BINARY_DIR}/UnsafeBundleOutput)
+set_tests_properties(reject_unsafe_bundle_asset_and_clean_output PROPERTIES
+    DEPENDS "create_native_runtime_pack;clean_failed_cross_platform_bundle")
 add_test(NAME clean_console_bundle COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}/BundleConsole)
 add_test(NAME build_console_bundle
     COMMAND hyperian bundle ${CMAKE_SOURCE_DIR}/examples/bundle_console/app.hyp -o ${CMAKE_BINARY_DIR}/BundleConsole)
 set_tests_properties(build_console_bundle PROPERTIES DEPENDS clean_console_bundle)
+add_test(NAME verify_console_bundle_manifest
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/bundle_manifest_test.sh $<TARGET_FILE:hyperian> ${CMAKE_BINARY_DIR}/BundleConsole)
+set_tests_properties(verify_console_bundle_manifest PROPERTIES DEPENDS build_console_bundle)
 add_test(NAME run_console_bundle COMMAND ${CMAKE_BINARY_DIR}/BundleConsole/run)
 set_tests_properties(run_console_bundle PROPERTIES DEPENDS build_console_bundle WORKING_DIRECTORY ${CMAKE_SOURCE_DIR} PASS_REGULAR_EXPRESSION "Hello from a bundled asset")
 add_test(NAME format_source
