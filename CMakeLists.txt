@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(Hyperian VERSION 0.46.0 LANGUAGES C)
+project(Hyperian VERSION 0.47.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -197,7 +197,7 @@ add_test(NAME compile_authentication
 add_executable(hyperian_security_test tests/security_test.c src/security.c)
 target_include_directories(hyperian_security_test PRIVATE src)
 target_compile_options(hyperian_security_test PRIVATE -Wall -Wextra -Wpedantic)
-add_test(NAME native_security COMMAND hyperian_security_test)
+add_test(NAME native_security COMMAND hyperian_security_test ${CMAKE_SOURCE_DIR}/tests/sha256_fixture.txt)
 add_test(NAME compile_english_logic
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/english_logic.hyp -o ${CMAKE_BINARY_DIR}/english_logic.hyc)
 add_test(NAME run_service
@@ -227,6 +227,30 @@ add_test(NAME reject_existing_native_runtime_pack
     COMMAND sh ${CMAKE_SOURCE_DIR}/tests/reject_with_message_test.sh "already exists"
         $<TARGET_FILE:hyperian> pack runtime to ${CMAKE_BINARY_DIR}/NativeRuntime)
 set_tests_properties(reject_existing_native_runtime_pack PROPERTIES DEPENDS create_native_runtime_pack)
+add_test(NAME clean_native_runtime_archive
+    COMMAND ${CMAKE_COMMAND} -E remove ${CMAKE_BINARY_DIR}/hyperian-${PROJECT_VERSION}-runtime.hyr)
+add_test(NAME create_native_runtime_archive
+    COMMAND hyperian pack runtime as ${CMAKE_BINARY_DIR}/hyperian-${PROJECT_VERSION}-runtime.hyr)
+set_tests_properties(create_native_runtime_archive PROPERTIES DEPENDS clean_native_runtime_archive
+    PASS_REGULAR_EXPRESSION "Packed the native Hyperian runtime")
+add_test(NAME reject_existing_native_runtime_archive
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/reject_with_message_test.sh "already exists"
+        $<TARGET_FILE:hyperian> pack runtime as ${CMAKE_BINARY_DIR}/hyperian-${PROJECT_VERSION}-runtime.hyr)
+set_tests_properties(reject_existing_native_runtime_archive PROPERTIES DEPENDS create_native_runtime_archive)
+add_test(NAME build_with_native_runtime_archive
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/runtime_pack_test.sh $<TARGET_FILE:hyperian>
+        ${CMAKE_SOURCE_DIR}/examples/report_service.hyp ${CMAKE_BINARY_DIR}/hyperian-${PROJECT_VERSION}-runtime.hyr
+        ${CMAKE_BINARY_DIR}/runtime_archive_report)
+set_tests_properties(build_with_native_runtime_archive PROPERTIES DEPENDS create_native_runtime_archive
+    PASS_REGULAR_EXPRESSION "Daily service report")
+add_test(NAME clean_native_runtime_archive_rejections
+    COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}/RuntimeArchiveRejections)
+add_test(NAME reject_damaged_native_runtime_archives
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/runtime_archive_rejection_test.sh $<TARGET_FILE:hyperian>
+        ${CMAKE_SOURCE_DIR}/examples/report_service.hyp ${CMAKE_BINARY_DIR}/hyperian-${PROJECT_VERSION}-runtime.hyr
+        ${CMAKE_BINARY_DIR}/RuntimeArchiveRejections)
+set_tests_properties(reject_damaged_native_runtime_archives PROPERTIES
+    DEPENDS "create_native_runtime_archive;clean_native_runtime_archive_rejections")
 add_test(NAME build_with_native_runtime_pack
     COMMAND sh ${CMAKE_SOURCE_DIR}/tests/runtime_pack_test.sh $<TARGET_FILE:hyperian>
         ${CMAKE_SOURCE_DIR}/examples/report_service.hyp ${CMAKE_BINARY_DIR}/NativeRuntime ${CMAKE_BINARY_DIR}/runtime_pack_report)
@@ -260,6 +284,17 @@ add_test(NAME build_cross_platform_console_bundle
         ${CMAKE_BINARY_DIR}/CrossPlatformConsoleBundle ${CMAKE_BINARY_DIR}/CrossPlatformBundleWork)
 set_tests_properties(build_cross_platform_console_bundle PROPERTIES
     DEPENDS "create_native_runtime_pack;clean_cross_platform_console_bundle;clean_cross_platform_bundle_work"
+    PASS_REGULAR_EXPRESSION "Hello from a bundled asset")
+add_test(NAME clean_runtime_archive_console_bundle
+    COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}/RuntimeArchiveConsoleBundle)
+add_test(NAME clean_runtime_archive_bundle_work
+    COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}/RuntimeArchiveBundleWork)
+add_test(NAME build_console_bundle_from_runtime_archive
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/runtime_pack_bundle_test.sh $<TARGET_FILE:hyperian>
+        ${CMAKE_SOURCE_DIR}/examples/bundle_console/app.hyp ${CMAKE_BINARY_DIR}/hyperian-${PROJECT_VERSION}-runtime.hyr
+        ${CMAKE_BINARY_DIR}/RuntimeArchiveConsoleBundle ${CMAKE_BINARY_DIR}/RuntimeArchiveBundleWork)
+set_tests_properties(build_console_bundle_from_runtime_archive PROPERTIES
+    DEPENDS "create_native_runtime_archive;clean_runtime_archive_console_bundle;clean_runtime_archive_bundle_work"
     PASS_REGULAR_EXPRESSION "Hello from a bundled asset")
 add_test(NAME clean_cross_platform_web_bundle
     COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}/CrossPlatformWebBundle)

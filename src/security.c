@@ -63,6 +63,14 @@ static void sha256_bytes(const unsigned char *data, size_t length, unsigned char
     Sha256 sha; sha_init(&sha); sha_add(&sha, data, length); sha_finish(&sha, output);
 }
 
+int hyperian_sha256_file(const char *path, char output[65]) {
+    FILE *file = fopen(path, "rb"); if (!file) return 0;
+    Sha256 sha; sha_init(&sha); unsigned char data[65536], digest[32]; size_t count;
+    while ((count = fread(data, 1, sizeof(data), file)) != 0) sha_add(&sha, data, count);
+    int okay = !ferror(file); if (fclose(file)) okay = 0; if (!okay) return 0;
+    sha_finish(&sha, digest); hex(digest, sizeof(digest), output); return 1;
+}
+
 static void hmac_sha256(const unsigned char *key, size_t key_length, const unsigned char *data, size_t length, unsigned char output[32]) {
     unsigned char key_block[64] = {0}, inner_pad[64], outer_pad[64], inner[32];
     if (key_length > 64) { sha256_bytes(key, key_length, key_block); key_length = 32; }

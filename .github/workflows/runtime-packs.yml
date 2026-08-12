@@ -1,0 +1,83 @@
+name: Native runtime packs
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-runtime-pack:
+    name: Build ${{ matrix.platform }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux-x64
+            runner: ubuntu-24.04
+          - platform: linux-arm64
+            runner: ubuntu-24.04-arm
+          - platform: macos-x64
+            runner: macos-15-intel
+          - platform: macos-arm64
+            runner: macos-15
+    steps:
+      - name: Check out Hyperian
+        uses: actions/checkout@v6
+
+      - name: Build the native compiler and runtime
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --parallel
+
+      - name: Run the native test suite
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Verify the runner platform
+        run: test "$(build/hyperian platform)" = "${{ matrix.platform }}"
+
+      - name: Create the downloadable runtime archive
+        run: |
+          version=$(build/hyperian version | awk '{print $2}')
+          test "v${version}" = "${GITHUB_REF_NAME}" || test "${GITHUB_EVENT_NAME}" = "workflow_dispatch"
+          mkdir -p dist
+          build/hyperian pack runtime as "dist/hyperian-${version}-${{ matrix.platform }}.hyr"
+          cd dist
+          cmake -E sha256sum "hyperian-${version}-${{ matrix.platform }}.hyr" > "hyperian-${version}-${{ matrix.platform }}.hyr.sha256"
+
+      - name: Upload the verified runtime archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-${{ matrix.platform }}
+          path: dist/*
+          if-no-files-found: error
+
+  publish-release:
+    name: Publish runtime packs
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build-runtime-pack
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download every native runtime
+        uses: actions/download-artifact@v5
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Verify the release payload
+        run: |
+          test "$(find dist -maxdepth 1 -name '*.hyr' -type f | wc -l)" -eq 4
+          test "$(find dist -maxdepth 1 -name '*.sha256' -type f | wc -l)" -eq 4
+          cd dist
+          sha256sum --check *.sha256
+
+      - name: Publish the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${GITHUB_REF_NAME}" dist/* --repo "${GITHUB_REPOSITORY}" --verify-tag --generate-notes --title "Hyperian ${GITHUB_REF_NAME#v}"
