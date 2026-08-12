@@ -20,6 +20,9 @@ int main(int argc, char **argv) {
     if (okay) okay = expected(&state, "vertical speed", "50") && expected(&state, "player left", "30") &&
         expected(&state, "player top", "22.5") && expected(&state, "player hit", "true") &&
         expected(&state, "coin hit", "true") && expected(&state, "wall hit", "true") && expected(&state, "far hit", "false") &&
+        expected(&state, "crossing lines touch", "true") && expected(&state, "overlapping lines touch", "true") &&
+        expected(&state, "line touches circle", "true") && expected(&state, "circle misses line", "false") &&
+        expected(&state, "line touches rectangle", "true") && expected(&state, "rectangle misses line", "false") &&
         expected(&state, "glow", "0.5") && expected(&state, "shrink", "1.5") && expected(&state, "animation frame", "3");
     hyperian_state_set(&state, "seconds_since_last_frame", "0.2");
     if (okay) okay = hyperian_execute_event(&code, "FRAME", &state, error, sizeof(error));

@@ -130,6 +130,11 @@ int run_game_app(const Bytecode *code, const char *name) {
                 (Uint8)evaluated_channel(&state, code->items[i].args[5]), 255);
             draw_filled_circle(renderer, evaluated_number(&state, code->items[i].args[0]), evaluated_number(&state, code->items[i].args[1]),
                 evaluated_number(&state, code->items[i].args[2]));
+        } else if (code->items[i].opcode == OP_LINE) {
+            SDL_SetRenderDrawColor(renderer, (Uint8)evaluated_channel(&state, code->items[i].args[4]), (Uint8)evaluated_channel(&state, code->items[i].args[5]),
+                (Uint8)evaluated_channel(&state, code->items[i].args[6]), 255);
+            SDL_RenderDrawLine(renderer, evaluated_number(&state, code->items[i].args[0]), evaluated_number(&state, code->items[i].args[1]),
+                evaluated_number(&state, code->items[i].args[2]), evaluated_number(&state, code->items[i].args[3]));
         } else if (code->items[i].opcode == OP_SPRITE) {
             char path[2048]; hyperian_state_evaluate(&state, code->items[i].args[0], path, sizeof(path)); SDL_Texture *texture = NULL;
             for (int at = 0; at < sprite_count; at++) if (!strcmp(sprites[at].path, path)) texture = sprites[at].texture;

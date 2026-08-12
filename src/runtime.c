@@ -391,7 +391,8 @@ static int is_logic_instruction(uint8_t opcode) {
         opcode == OP_CREATE_STATE || opcode == OP_FIND_STATE || opcode == OP_UPDATE_STATE || opcode == OP_DELETE_STATE || opcode == OP_COUNT_RECORDS || opcode == OP_COLLECT_FIELD ||
         opcode == OP_MOVE_POSITION || opcode == OP_APPLY_GRAVITY || opcode == OP_KEEP_INSIDE || opcode == OP_CHECK_COLLISION || opcode == OP_COLLECT_QUERY ||
         opcode == OP_MOVE_VALUE_TOWARD || opcode == OP_ADVANCE_ANIMATION ||
-        opcode == OP_CHECK_CIRCLE_COLLISION || opcode == OP_CHECK_CIRCLE_RECTANGLE_COLLISION;
+        opcode == OP_CHECK_CIRCLE_COLLISION || opcode == OP_CHECK_CIRCLE_RECTANGLE_COLLISION ||
+        opcode == OP_CHECK_LINE_COLLISION || opcode == OP_CHECK_LINE_CIRCLE_COLLISION || opcode == OP_CHECK_LINE_RECTANGLE_COLLISION;
 }
 
 static HyperianSoundHandler sound_handler = NULL;
@@ -444,6 +445,9 @@ static void debug_instruction(const Instruction *in, int depth) {
         case OP_CIRCLE: printf("draw circle centered at %s %s with radius %s and color %s %s %s", in->args[0], in->args[1], in->args[2], in->args[3], in->args[4], in->args[5]); break;
         case OP_CHECK_CIRCLE_COLLISION: printf("check whether circle centered at %s %s with radius %s touches circle centered at %s %s with radius %s as %s", in->args[0], in->args[1], in->args[2], in->args[3], in->args[4], in->args[5], in->args[6]); break;
         case OP_CHECK_CIRCLE_RECTANGLE_COLLISION: printf("check whether circle centered at %s %s with radius %s touches rectangle at %s %s sized %s by %s as %s", in->args[0], in->args[1], in->args[2], in->args[3], in->args[4], in->args[5], in->args[6], in->args[7]); break;
+        case OP_CHECK_LINE_COLLISION: printf("check whether line from %s %s to %s %s touches line from %s %s to %s %s as %s", in->args[0], in->args[1], in->args[2], in->args[3], in->args[4], in->args[5], in->args[6], in->args[7], in->args[8]); break;
+        case OP_CHECK_LINE_CIRCLE_COLLISION: printf("check whether line from %s %s to %s %s touches circle centered at %s %s with radius %s as %s", in->args[0], in->args[1], in->args[2], in->args[3], in->args[4], in->args[5], in->args[6], in->args[7]); break;
+        case OP_CHECK_LINE_RECTANGLE_COLLISION: printf("check whether line from %s %s to %s %s touches rectangle at %s %s sized %s by %s as %s", in->args[0], in->args[1], in->args[2], in->args[3], in->args[4], in->args[5], in->args[6], in->args[7], in->args[8]); break;
         default: printf("execute %s", opcode_name(in->opcode)); break;
     }
     putchar('\n');
@@ -479,6 +483,45 @@ static int physics_number(Scope *scope, const char *expression, double *number, 
 
 static void set_physics_number(HyperianState *state, const char *name, double number) {
     char value[64]; snprintf(value, sizeof(value), "%.15g", number); local_set(state, name, value);
+}
+
+static double geometry_cross(double ax, double ay, double bx, double by, double cx, double cy) {
+    return (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
+}
+
+static double geometry_absolute(double value) { return value < 0 ? -value : value; }
+
+static int point_on_segment(double px, double py, double ax, double ay, double bx, double by) {
+    const double epsilon = 0.000000001;
+    if (geometry_absolute(geometry_cross(ax, ay, bx, by, px, py)) > epsilon) return 0;
+    return px >= (ax < bx ? ax : bx) - epsilon && px <= (ax > bx ? ax : bx) + epsilon &&
+        py >= (ay < by ? ay : by) - epsilon && py <= (ay > by ? ay : by) + epsilon;
+}
+
+static int lines_touch(double ax, double ay, double bx, double by, double cx, double cy, double dx, double dy) {
+    const double epsilon = 0.000000001;
+    double first = geometry_cross(ax, ay, bx, by, cx, cy), second = geometry_cross(ax, ay, bx, by, dx, dy);
+    double third = geometry_cross(cx, cy, dx, dy, ax, ay), fourth = geometry_cross(cx, cy, dx, dy, bx, by);
+    if (((first > epsilon && second < -epsilon) || (first < -epsilon && second > epsilon)) &&
+        ((third > epsilon && fourth < -epsilon) || (third < -epsilon && fourth > epsilon))) return 1;
+    return point_on_segment(cx, cy, ax, ay, bx, by) || point_on_segment(dx, dy, ax, ay, bx, by) ||
+        point_on_segment(ax, ay, cx, cy, dx, dy) || point_on_segment(bx, by, cx, cy, dx, dy);
+}
+
+static int line_touches_circle(double ax, double ay, double bx, double by, double cx, double cy, double radius) {
+    double line_x = bx - ax, line_y = by - ay, length_squared = line_x * line_x + line_y * line_y, portion = 0;
+    if (length_squared > 0) portion = ((cx - ax) * line_x + (cy - ay) * line_y) / length_squared;
+    if (portion < 0) portion = 0; else if (portion > 1) portion = 1;
+    double nearest_x = ax + portion * line_x, nearest_y = ay + portion * line_y;
+    double difference_x = cx - nearest_x, difference_y = cy - nearest_y;
+    return difference_x * difference_x + difference_y * difference_y <= radius * radius;
+}
+
+static int line_touches_rectangle(double ax, double ay, double bx, double by, double left, double top, double width, double height) {
+    double right = left + width, bottom = top + height;
+    if ((ax >= left && ax <= right && ay >= top && ay <= bottom) || (bx >= left && bx <= right && by >= top && by <= bottom)) return 1;
+    return lines_touch(ax, ay, bx, by, left, top, right, top) || lines_touch(ax, ay, bx, by, right, top, right, bottom) ||
+        lines_touch(ax, ay, bx, by, right, bottom, left, bottom) || lines_touch(ax, ay, bx, by, left, bottom, left, top);
 }
 
 static int compare_query_values(const char *left, const char *right) {
@@ -597,6 +640,29 @@ static int execute_logic_at(const Bytecode *code, size_t *position, Scope *scope
         double nearest_y = circle_y < rectangle_y ? rectangle_y : circle_y > rectangle_y + rectangle_height ? rectangle_y + rectangle_height : circle_y;
         double difference_x = circle_x - nearest_x, difference_y = circle_y - nearest_y;
         local_set(scope->locals, in->args[7], difference_x * difference_x + difference_y * difference_y <= radius * radius ? "true" : "false");
+    } else if (in->opcode == OP_CHECK_LINE_COLLISION) {
+        double ax, ay, bx, by, cx, cy, dx, dy;
+        if (!physics_number(scope, in->args[0], &ax, error, error_size) || !physics_number(scope, in->args[1], &ay, error, error_size) ||
+            !physics_number(scope, in->args[2], &bx, error, error_size) || !physics_number(scope, in->args[3], &by, error, error_size) ||
+            !physics_number(scope, in->args[4], &cx, error, error_size) || !physics_number(scope, in->args[5], &cy, error, error_size) ||
+            !physics_number(scope, in->args[6], &dx, error, error_size) || !physics_number(scope, in->args[7], &dy, error, error_size)) return 0;
+        local_set(scope->locals, in->args[8], lines_touch(ax, ay, bx, by, cx, cy, dx, dy) ? "true" : "false");
+    } else if (in->opcode == OP_CHECK_LINE_CIRCLE_COLLISION) {
+        double ax, ay, bx, by, cx, cy, radius;
+        if (!physics_number(scope, in->args[0], &ax, error, error_size) || !physics_number(scope, in->args[1], &ay, error, error_size) ||
+            !physics_number(scope, in->args[2], &bx, error, error_size) || !physics_number(scope, in->args[3], &by, error, error_size) ||
+            !physics_number(scope, in->args[4], &cx, error, error_size) || !physics_number(scope, in->args[5], &cy, error, error_size) ||
+            !physics_number(scope, in->args[6], &radius, error, error_size)) return 0;
+        if (radius < 0) { snprintf(error, error_size, "line and circle collision radius cannot be negative"); return 0; }
+        local_set(scope->locals, in->args[7], line_touches_circle(ax, ay, bx, by, cx, cy, radius) ? "true" : "false");
+    } else if (in->opcode == OP_CHECK_LINE_RECTANGLE_COLLISION) {
+        double ax, ay, bx, by, left, top, width, height;
+        if (!physics_number(scope, in->args[0], &ax, error, error_size) || !physics_number(scope, in->args[1], &ay, error, error_size) ||
+            !physics_number(scope, in->args[2], &bx, error, error_size) || !physics_number(scope, in->args[3], &by, error, error_size) ||
+            !physics_number(scope, in->args[4], &left, error, error_size) || !physics_number(scope, in->args[5], &top, error, error_size) ||
+            !physics_number(scope, in->args[6], &width, error, error_size) || !physics_number(scope, in->args[7], &height, error, error_size)) return 0;
+        if (width < 0 || height < 0) { snprintf(error, error_size, "line and rectangle collision size cannot be negative"); return 0; }
+        local_set(scope->locals, in->args[8], line_touches_rectangle(ax, ay, bx, by, left, top, width, height) ? "true" : "false");
     } else if (in->opcode == OP_LOGIC_IF) {
         size_t end = find_end(code, *position, OP_LOGIC_IF, OP_END_LOGIC_IF), otherwise = logic_otherwise(code, *position, end);
         if (end == code->count) { snprintf(error, error_size, "an if instruction is missing its end"); return 0; }

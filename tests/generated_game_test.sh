@@ -12,4 +12,6 @@ grep 'field "item name" is text required' "$project/models/item.hyp" >/dev/null
 grep 'set "player left" to' "$project/controllers/items.hyp" >/dev/null
 grep 'check whether rectangle .* touches circle centered at' "$project/controllers/items.hyp" >/dev/null
 grep 'draw circle centered at' "$project/views/main.hyp" >/dev/null
+grep 'check whether line from .* touches circle centered at' "$project/controllers/items.hyp" >/dev/null
+grep 'draw line from' "$project/views/main.hyp" >/dev/null
 "$compiler" check "$project/app.hyp"

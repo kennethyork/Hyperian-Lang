@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(Hyperian VERSION 0.38.0 LANGUAGES C)
+project(Hyperian VERSION 0.39.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -467,6 +467,12 @@ set_tests_properties(inspect_circle_collision PROPERTIES DEPENDS compile_game_ph
 add_test(NAME debug_circle_collision
     COMMAND hyperian debug ${CMAKE_SOURCE_DIR}/examples/physics_game.hyp --event FRAME)
 set_tests_properties(debug_circle_collision PROPERTIES PASS_REGULAR_EXPRESSION "check whether circle centered at ball horizontal center ball vertical center with radius ball radius touches circle centered at coin horizontal center coin vertical center with radius coin radius as coin hit")
+add_test(NAME inspect_line_collision
+    COMMAND hyperian inspect ${CMAKE_BINARY_DIR}/physics_game.hyc)
+set_tests_properties(inspect_line_collision PROPERTIES DEPENDS compile_game_physics PASS_REGULAR_EXPRESSION "CHECK_LINE_COLLISION 0 0 10 10 0 10 10 0 crossing lines touch")
+add_test(NAME debug_line_collision
+    COMMAND hyperian debug ${CMAKE_SOURCE_DIR}/examples/physics_game.hyp --event FRAME)
+set_tests_properties(debug_line_collision PROPERTIES PASS_REGULAR_EXPRESSION "check whether line from 0 0 to 10 10 touches line from 0 10 to 10 0 as crossing lines touch")
 add_test(NAME preserve_legacy_rectangle_collision
     COMMAND hyperian debug ${CMAKE_SOURCE_DIR}/tests/legacy_rectangle_collision.hyp --event FRAME)
 set_tests_properties(preserve_legacy_rectangle_collision PROPERTIES PASS_REGULAR_EXPRESSION "touched = true")
@@ -476,12 +482,24 @@ set_tests_properties(reject_physics_outside_game PROPERTIES WILL_FAIL TRUE)
 add_test(NAME reject_circle_outside_game
     COMMAND hyperian check ${CMAKE_SOURCE_DIR}/tests/bad_circle_target.hyp)
 set_tests_properties(reject_circle_outside_game PROPERTIES WILL_FAIL TRUE)
+add_test(NAME reject_line_outside_game
+    COMMAND hyperian check ${CMAKE_SOURCE_DIR}/tests/bad_line_target.hyp)
+set_tests_properties(reject_line_outside_game PROPERTIES WILL_FAIL TRUE)
+add_test(NAME reject_line_collision_outside_game
+    COMMAND hyperian check ${CMAKE_SOURCE_DIR}/tests/bad_line_collision_target.hyp)
+set_tests_properties(reject_line_collision_outside_game PROPERTIES WILL_FAIL TRUE)
 add_test(NAME reject_game_drawing_outside_game
     COMMAND hyperian check ${CMAKE_SOURCE_DIR}/tests/bad_game_drawing_target.hyp)
 set_tests_properties(reject_game_drawing_outside_game PROPERTIES WILL_FAIL TRUE)
 add_test(NAME reject_negative_circle_radius
     COMMAND sh ${CMAKE_SOURCE_DIR}/tests/reject_with_message_test.sh "circle radius cannot be negative"
         $<TARGET_FILE:hyperian> debug ${CMAKE_SOURCE_DIR}/tests/bad_circle_radius.hyp --event FRAME)
+add_test(NAME reject_negative_line_circle_radius
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/reject_with_message_test.sh "line and circle collision radius cannot be negative"
+        $<TARGET_FILE:hyperian> debug ${CMAKE_SOURCE_DIR}/tests/bad_line_circle_radius.hyp --event FRAME)
+add_test(NAME reject_negative_line_rectangle_size
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/reject_with_message_test.sh "line and rectangle collision size cannot be negative"
+        $<TARGET_FILE:hyperian> debug ${CMAKE_SOURCE_DIR}/tests/bad_line_rectangle_size.hyp --event FRAME)
 add_test(NAME reject_animation_outside_game
     COMMAND hyperian check ${CMAKE_SOURCE_DIR}/tests/bad_animation_target.hyp)
 set_tests_properties(reject_animation_outside_game PROPERTIES WILL_FAIL TRUE)

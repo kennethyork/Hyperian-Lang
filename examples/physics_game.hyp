@@ -26,6 +26,10 @@ controller World
         set "wall top" to 14
         set "far left" to 30
         set "far top" to 30
+        set "laser start horizontal" to 0
+        set "laser start vertical" to 0
+        set "laser end horizontal" to 40
+        set "laser end vertical" to 40
     end
 
     when application starts
@@ -44,6 +48,12 @@ controller World
         check whether circle centered at "ball horizontal center" "ball vertical center" with radius "ball radius" touches circle centered at "coin horizontal center" "coin vertical center" with radius "coin radius" as "coin hit"
         check whether circle centered at "ball horizontal center" "ball vertical center" with radius "ball radius" touches rectangle at "wall left" "wall top" sized 4 by 6 as "wall hit"
         check whether rectangle at "far left" "far top" sized 4 by 4 touches circle centered at "ball horizontal center" "ball vertical center" with radius "ball radius" as "far hit"
+        check whether line from 0 0 to 10 10 touches line from 0 10 to 10 0 as "crossing lines touch"
+        check whether line from 0 0 to 10 0 touches line from 5 0 to 15 0 as "overlapping lines touch"
+        check whether line from 0 0 to 10 0 touches circle centered at 5 2 with radius 2 as "line touches circle"
+        check whether circle centered at 20 20 with radius 2 touches line from 0 0 to 10 0 as "circle misses line"
+        check whether line from 0 5 to 20 5 touches rectangle at 5 2 sized 4 by 6 as "line touches rectangle"
+        check whether rectangle at 30 30 sized 4 by 4 touches line from 0 0 to 10 0 as "rectangle misses line"
     end
 end
 
@@ -52,4 +62,5 @@ view "world"
     draw rectangle at "player left" "player top" sized 10 by 10 with color 70 170 255
     draw rectangle at "obstacle left" "obstacle top" sized 30 by 30 with color 255 110 90
     draw circle centered at "ball horizontal center" "ball vertical center" with radius "ball radius" and color 255 220 70
+    draw line from "laser start horizontal" "laser start vertical" to "laser end horizontal" "laser end vertical" with color 120 230 160
 end
