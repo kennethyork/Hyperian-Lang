@@ -1,54 +1,54 @@
 application "Native Model Queries" is service
 
 model Task
-    field title is text required
-    field group is text required
-    field priority is number required
-end
+field title is text required
+field group is text required
+field priority is number required
+that is all
 
 controller Tasks
-    action "exercise native queries"
-        set title to Gamma
-        set group to open
-        set priority to 3
-        create a Task using the current values as gamma_id
+action "exercise native queries"
+set title to Gamma
+set group to open
+set priority to 3
+create a Task using the current values as gamma_id
 
-        set title to Alpha
-        set group to open
-        set priority to 1
-        create a Task using the current values as alpha_id
+set title to Alpha
+set group to open
+set priority to 1
+create a Task using the current values as alpha_id
 
-        set title to Beta
-        set group to closed
-        set priority to 2
-        create a Task using the current values as beta_id
+set title to Beta
+set group to closed
+set priority to 2
+create a Task using the current values as beta_id
 
-        set wanted_group to open
-        collect every Task title where group is wanted_group ordered by priority as open_titles
-        take item 1 from open_titles as first_open_title
-        take item 2 from open_titles as second_open_title
+set wanted_group to open
+collect every Task title where group is wanted_group ordered by priority as open_titles
+take item 1 from open_titles as first_open_title
+take item 2 from open_titles as second_open_title
 
-        collect every Task title where group is wanted_group as filtered_titles
-        count filtered_titles as filtered_count
+collect every Task title where group is wanted_group as filtered_titles
+count filtered_titles as filtered_count
 
-        collect every Task title ordered by priority as ascending_titles
-        take item 1 from ascending_titles as lowest_priority_title
+collect every Task title ordered by priority as ascending_titles
+take item 1 from ascending_titles as lowest_priority_title
 
-        collect every Task title ordered by priority descending as descending_titles
-        take item 1 from descending_titles as highest_priority_title
-        set query_result to first_open_title joined with "/" joined with second_open_title joined with "/" joined with highest_priority_title joined with "/" joined with filtered_count joined with "/" joined with lowest_priority_title
-    end
+collect every Task title ordered by priority descending as descending_titles
+take item 1 from descending_titles as highest_priority_title
+set query_result to first_open_title joined with "/" joined with second_open_title joined with "/" joined with highest_priority_title joined with "/" joined with filtered_count joined with "/" joined with lowest_priority_title
+that is all
 
-    when application starts
-        run action "exercise native queries"
-        show view "result"
-    end
-end
+when application starts
+run action "exercise native queries"
+show view "result"
+that is all
+that is all
 
 view "result"
-    heading "Filtered and ordered tasks"
-    show query_result
-    for each task_title in open_titles show
-        show task_title
-    end
-end
+heading "Filtered and ordered tasks"
+show query_result
+for each task_title in open_titles show
+show task_title
+that is all
+that is all

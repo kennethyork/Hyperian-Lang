@@ -1,54 +1,54 @@
 application "English Names" is console
 
 model "Saved Greeting"
-    field "display text" is text
-end
+field "display text" is text
+that is all
 
 controller "Greeting Controller"
-    action "make greeting" using "person name"
-        set "welcome message" to "Hello, " joined with value called "person name"
-        return value called "welcome message"
-    end
+action "make greeting" using "person name"
+set "welcome message" to "Hello, " joined with value called "person name"
+return value called "welcome message"
+that is all
 
-    test "multi-word value names"
-        set "item count" to 2
-        set "item count" to value called "item count" plus 3
-        expect "item count" to be 5
+test "multi-word value names"
+set "item count" to 2
+set "item count" to value called "item count" plus 3
+expect "item count" to be 5
 
-        set "price plus tax" to 9
-        set "copied price" to value called "price plus tax"
-        expect "copied price" to be 9
+set "price plus tax" to 9
+set "copied price" to value called "price plus tax"
+expect "copied price" to be 9
 
-        set "order is ready" to yes
-        if value called "order is ready" is yes
-            set "condition result" to passed
-        otherwise
-            set "condition result" to failed
-        end
-        expect "condition result" to be passed
+set "order is ready" to yes
+if value called "order is ready" is yes
+set "condition result" to passed
+otherwise
+set "condition result" to failed
+that is all
+expect "condition result" to be passed
 
-        set "literal copy" to "price plus tax"
-        expect "literal copy" to be "price plus tax"
+set "literal copy" to "price plus tax"
+expect "literal copy" to be "price plus tax"
 
-        set "comparison text" to "order is ready"
-        if value called "comparison text" is "order is ready"
-            set "comparison result" to passed
-        otherwise
-            set "comparison result" to failed
-        end
-        expect "comparison result" to be passed
-    end
+set "comparison text" to "order is ready"
+if value called "comparison text" is "order is ready"
+set "comparison result" to passed
+otherwise
+set "comparison result" to failed
+that is all
+expect "comparison result" to be passed
+that is all
 
-    when application starts
-        set "visit count" to 1
-        set "visit count" to value called "visit count" plus 1
-        run action "make greeting" using "Ada Lovelace" as "final greeting"
-        show view "result"
-    end
-end
+when application starts
+set "visit count" to 1
+set "visit count" to value called "visit count" plus 1
+run action "make greeting" using "Ada Lovelace" as "final greeting"
+show view "result"
+that is all
+that is all
 
 view "result"
-    heading "Readable names"
-    show "visit count"
-    show "final greeting"
-end
+heading "Readable names"
+show "visit count"
+show "final greeting"
+that is all

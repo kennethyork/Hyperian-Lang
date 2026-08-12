@@ -3,42 +3,42 @@ application "Blog API" is api
 listen on 8081
 
 model Author
-    field name is text required unique minimum 2 maximum 80
-end
+field name is text required unique minimum 2 maximum 80
+that is all
 
 model Post
-    field author is reference Author required
-    field title is text required minimum 2 maximum 120
-    field body is text maximum 5000
-end
+field author is reference Author required
+field title is text required minimum 2 maximum 120
+field body is text maximum 5000
+that is all
 
 controller Authors
-    when someone submits "/authors"
-        create Author from form
-        find all Author ordered by name as authors
-        show json authors
-    end
-end
+when someone submits "/authors"
+create Author from form
+find all Author ordered by name as authors
+show json authors
+that is all
+that is all
 
 controller Posts
-    when someone visits "/posts"
-        find all Post ordered by title as posts
-        show json posts
-    end
+when someone visits "/posts"
+find all Post ordered by title as posts
+show json posts
+that is all
 
-    when someone submits "/posts"
-        create Post from form
-        find all Post ordered by title as posts
-        show json posts
-    end
+when someone submits "/posts"
+create Post from form
+find all Post ordered by title as posts
+show json posts
+that is all
 
-    when someone visits "/posts/{id}"
-        find Post by route id as post
-        show json post
-    end
+when someone visits "/posts/{id}"
+find Post by route id as post
+show json post
+that is all
 
-    when someone visits "/authors/{id}/posts"
-        find Post where author is route id as posts
-        show json posts
-    end
-end
+when someone visits "/authors/{id}/posts"
+find Post where author is route id as posts
+show json posts
+that is all
+that is all

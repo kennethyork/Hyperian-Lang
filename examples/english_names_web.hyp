@@ -2,37 +2,37 @@ application "Readable Web Names" is web
 listen on 8086
 
 model "Todo Item"
-    field "display title" is text required
-end
+field "display title" is text required
+that is all
 
 controller "Todo Controller"
-    when someone visits "/"
-        set "page message" to "Names can read like English."
-        find all "Todo Item" as "todo items"
-        show view "home" with "todo items"
-    end
+when someone visits "/"
+set "page message" to "Names can read like English."
+find all "Todo Item" as "todo items"
+show view "home" with "todo items"
+that is all
 
-    when someone submits "/items"
-        create "Todo Item" from form
-        redirect to "/"
-    end
+when someone submits "/items"
+create "Todo Item" from form
+redirect to "/"
+that is all
 
-    when someone visits "/items"
-        find all "Todo Item" as "todo items"
-        show json "todo items"
-    end
-end
+when someone visits "/items"
+find all "Todo Item" as "todo items"
+show json "todo items"
+that is all
+that is all
 
 view "home"
-    heading "Readable web names"
-    show "page message"
+heading "Readable web names"
+show "page message"
 
-    form posts to "/items"
-        input "Task title" as "display title" required
-        button "Save task"
-    end
+form posts to "/items"
+input "Task title" as "display title" required
+button "Save task"
+that is all
 
-    for each "todo item" in "todo items" show
-        show "todo item.display title"
-    end
-end
+for each "todo item" in "todo items" show
+show "todo item.display title"
+that is all
+that is all

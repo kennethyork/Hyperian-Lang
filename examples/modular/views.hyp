@@ -1,16 +1,16 @@
 view "home"
-    style "/assets/app.css"
-    script "/assets/app.js"
-    heading "A modular Hyperian program"
-    image "/assets/hyperian.svg" described as "Hyperian diamond"
-    show greeting
-    form posts to "/greetings"
-        input "Short greeting" as message required
-        textarea "Longer details" as details
-        checkbox "Feature this greeting" as featured
-        button "Save greeting"
-    end
-    for each greeting in greetings show
-        show greeting.message
-    end
-end
+style "/assets/app.css"
+script "/assets/app.js"
+heading "A modular Hyperian program"
+image "/assets/hyperian.svg" described as "Hyperian diamond"
+show greeting
+form posts to "/greetings"
+input "Short greeting" as message required
+textarea "Longer details" as details
+checkbox "Feature this greeting" as featured
+button "Save greeting"
+that is all
+for each greeting in greetings show
+show greeting.message
+that is all
+that is all

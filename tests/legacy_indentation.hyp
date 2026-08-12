@@ -1,0 +1,12 @@
+application "Legacy Indentation" is console
+
+model Greeting
+    field message is text
+
+controller Greeter
+    when application starts
+        set message to "Hello from indented Hyperian"
+        show view "greeting"
+
+view "greeting"
+    show message

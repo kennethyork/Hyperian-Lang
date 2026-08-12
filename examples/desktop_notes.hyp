@@ -1,70 +1,70 @@
 application "Desktop Notes" is desktop
 
 model Note
-    field title is text required
-    field details is text
-    field important is boolean default false
-end
+field title is text required
+field details is text
+field important is boolean default false
+that is all
 
 controller Notes
-    action "initialize desktop"
-        set status to "Ready for a note"
-        set live_preview to "Start typing a note"
-        set window_status to "Window opened"
-        collect every Note title as note_titles
-    end
+action "initialize desktop"
+set status to "Ready for a note"
+set live_preview to "Start typing a note"
+set window_status to "Window opened"
+collect every Note title as note_titles
+that is all
 
-    action "save note"
-        create a Note using the current values as note_id
-        count all Note records as note_count
-        collect every Note title as note_titles
-        set status to "Saved note:" joined with note_id
-        open view "notes"
-    end
+action "save note"
+create a Note using the current values as note_id
+count all Note records as note_count
+collect every Note title as note_titles
+set status to "Saved note:" joined with note_id
+open view "notes"
+that is all
 
-    when application starts
-        run action "initialize desktop"
-        show view "notes"
-    end
+when application starts
+run action "initialize desktop"
+show view "notes"
+that is all
 
-    when input title changes
-        set live_preview to "Typing:" joined with title
-    end
+when input title changes
+set live_preview to "Typing:" joined with title
+that is all
 
-    when input title is submitted
-        run action "save note"
-    end
+when input title is submitted
+run action "save note"
+that is all
 
-    when input details changes
-        set status to "Editing details"
-    end
+when input details changes
+set status to "Editing details"
+that is all
 
-    when input important changes
-        set status to "Importance changed"
-    end
+when input important changes
+set status to "Importance changed"
+that is all
 
-    when window gains focus
-        set window_status to "Window focused"
-    end
+when window gains focus
+set window_status to "Window focused"
+that is all
 
-    when window loses focus
-        set window_status to "Window unfocused"
-    end
-end
+when window loses focus
+set window_status to "Window unfocused"
+that is all
+that is all
 
 view "notes"
-    heading "Native desktop notes"
-    text "This window and its controls are rendered by GTK, not a browser."
-    input "Note title" as title
-    show live_preview
-    textarea "Note details" as details
-    checkbox "Important" as important
-    button "Save note" runs action "save note"
-    text "Application status:"
-    show status
-    show window_status
-    text "Saved note titles:"
-    for each note_title in note_titles show
-        show note_title
-    end
-end
+heading "Native desktop notes"
+text "This window and its controls are rendered by GTK, not a browser."
+input "Note title" as title
+show live_preview
+textarea "Note details" as details
+checkbox "Important" as important
+button "Save note" runs action "save note"
+text "Application status:"
+show status
+show window_status
+text "Saved note titles:"
+for each note_title in note_titles show
+show note_title
+that is all
+that is all

@@ -1,33 +1,33 @@
 application "Scheduled Worker" is service
 
 model Job
-    field name is text
-end
+field name is text
+that is all
 
 controller Work
-    action initialize
-        set runs to 0
-    end
+action initialize
+set runs to 0
+that is all
 
-    action "run scheduled work"
-        set runs to runs plus 1
-    end
+action "run scheduled work"
+set runs to runs plus 1
+that is all
 
-    when application starts
-        run action initialize
-        show view "status"
-    end
+when application starts
+run action initialize
+show view "status"
+that is all
 
-    every 1 millisecond
-        run action "run scheduled work"
-    end
+every 1 millisecond
+run action "run scheduled work"
+that is all
 
-    every 1 millisecond
-        run action "run scheduled work"
-    end
-end
+every 1 millisecond
+run action "run scheduled work"
+that is all
+that is all
 
 view "status"
-    heading "Scheduled worker"
-    text "Waiting for scheduled work."
-end
+heading "Scheduled worker"
+text "Waiting for scheduled work."
+that is all

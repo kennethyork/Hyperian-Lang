@@ -1,123 +1,123 @@
 application "Mobile Tasks" is mobile
 
 model Task
-    field title is text required
-end
+field title is text required
+that is all
 
 controller Tasks
-    action initialize
-        set status to "Ready on mobile"
-        set live_preview to "Start typing a task"
-        set details_preview to "No details yet"
-        set urgency_preview to "Urgent:false"
-        set lifecycle_status to "Application started"
-        set gesture_status to "No gesture yet"
-        set heartbeat to 0
-        collect every Task title as task_titles
-    end
+action initialize
+set status to "Ready on mobile"
+set live_preview to "Start typing a task"
+set details_preview to "No details yet"
+set urgency_preview to "Urgent:false"
+set lifecycle_status to "Application started"
+set gesture_status to "No gesture yet"
+set heartbeat to 0
+collect every Task title as task_titles
+that is all
 
-    action "add task"
-        create a Task using the current values as task_id
-        collect every Task title as task_titles
-        set status to "Added: " plus title
-    end
+action "add task"
+create a Task using the current values as task_id
+collect every Task title as task_titles
+set status to "Added: " plus title
+that is all
 
-    action "show completed"
-        open view "completed"
-    end
+action "show completed"
+open view "completed"
+that is all
 
-    action "show home"
-        open view "home"
-    end
+action "show home"
+open view "home"
+that is all
 
-    when application starts
-        run action initialize
-        show view "home"
-    end
+when application starts
+run action initialize
+show view "home"
+that is all
 
-    when input title changes
-        set live_preview to "Typing:" joined with title
-    end
+when input title changes
+set live_preview to "Typing:" joined with title
+that is all
 
-    when input title is submitted
-        run action "add task"
-    end
+when input title is submitted
+run action "add task"
+that is all
 
-    when input details changes
-        set details_preview to "Details:" joined with details
-    end
+when input details changes
+set details_preview to "Details:" joined with details
+that is all
 
-    when input urgent changes
-        set urgency_preview to "Urgent:" joined with urgent
-    end
+when input urgent changes
+set urgency_preview to "Urgent:" joined with urgent
+that is all
 
-    when application pauses
-        set lifecycle_status to "Application paused"
-    end
+when application pauses
+set lifecycle_status to "Application paused"
+that is all
 
-    when application resumes
-        set lifecycle_status to "Application resumed"
-    end
+when application resumes
+set lifecycle_status to "Application resumed"
+that is all
 
-    when window gains focus
-        set lifecycle_status to "Window focused"
-    end
+when window gains focus
+set lifecycle_status to "Window focused"
+that is all
 
-    when window loses focus
-        set lifecycle_status to "Window unfocused"
-    end
+when window loses focus
+set lifecycle_status to "Window unfocused"
+that is all
 
-    when someone swipes left
-        set gesture_status to "Swiped left"
-    end
+when someone swipes left
+set gesture_status to "Swiped left"
+that is all
 
-    when someone swipes right
-        set gesture_status to "Swiped right"
-    end
+when someone swipes right
+set gesture_status to "Swiped right"
+that is all
 
-    when someone swipes up
-        set gesture_status to "Swiped up"
-    end
+when someone swipes up
+set gesture_status to "Swiped up"
+that is all
 
-    when someone swipes down
-        set gesture_status to "Swiped down"
-    end
+when someone swipes down
+set gesture_status to "Swiped down"
+that is all
 
-    when someone taps
-        set gesture_status to "Tapped"
-    end
+when someone taps
+set gesture_status to "Tapped"
+that is all
 
-    when someone presses and holds
-        set gesture_status to "Pressed and held"
-    end
+when someone presses and holds
+set gesture_status to "Pressed and held"
+that is all
 
-    every 1 second
-        set heartbeat to heartbeat plus 1
-    end
-end
+every 1 second
+set heartbeat to heartbeat plus 1
+that is all
+that is all
 
 view "home"
-    heading "My mobile tasks"
-    text "The same English MVC code drives this phone-sized preview."
-    input "Task title" as title
-    textarea "Task details" as details
-    checkbox "Urgent" as urgent
-    show live_preview
-    show details_preview
-    show urgency_preview
-    show lifecycle_status
-    show gesture_status
-    button "Add task" runs action "add task"
-    button "Completed tasks" runs action "show completed"
-    show status
-    for each task_title in task_titles show
-        show task_title
-    end
-end
+heading "My mobile tasks"
+text "The same English MVC code drives this phone-sized preview."
+input "Task title" as title
+textarea "Task details" as details
+checkbox "Urgent" as urgent
+show live_preview
+show details_preview
+show urgency_preview
+show lifecycle_status
+show gesture_status
+button "Add task" runs action "add task"
+button "Completed tasks" runs action "show completed"
+show status
+for each task_title in task_titles show
+show task_title
+that is all
+that is all
 
 
 view "completed"
-    heading "Completed tasks"
-    text "This is a second native mobile view."
-    button "Back" runs action "show home"
-end
+heading "Completed tasks"
+text "This is a second native mobile view."
+button "Back" runs action "show home"
+that is all

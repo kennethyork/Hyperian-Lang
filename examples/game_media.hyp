@@ -1,36 +1,36 @@
 application "Media Game" is game
 
 model Player
-    field name is text
-end
+field name is text
+that is all
 
 controller Game
-    action initialize
-        set "player left" to 100
-        set "player top" to 100
-    end
+action initialize
+set "player left" to 100
+set "player top" to 100
+that is all
 
-    action jump
-        play sound "assets/jump.wav"
-        set "player top" to value called "player top" minus 20
-    end
+action jump
+play sound "assets/jump.wav"
+set "player top" to value called "player top" minus 20
+that is all
 
-    when application starts
-        run action initialize
-        show view "world"
-    end
+when application starts
+run action initialize
+show view "world"
+that is all
 
-    when player presses space
-        run action jump
-    end
+when player presses space
+run action jump
+that is all
 
-    when game updates
-        set "last frame time" to value called "seconds since last frame"
-        set "legacy frame time" to seconds_since_last_frame
-    end
-end
+when game updates
+set "last frame time" to value called "seconds since last frame"
+set "legacy frame time" to seconds_since_last_frame
+that is all
+that is all
 
 view "world"
-    fill background with color 18 24 38
-    draw image "assets/player.bmp" at "player left" "player top" sized 64 by 64
-end
+fill background with color 18 24 38
+draw image "assets/player.bmp" at "player left" "player top" sized 64 by 64
+that is all

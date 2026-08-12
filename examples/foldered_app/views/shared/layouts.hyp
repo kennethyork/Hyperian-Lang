@@ -1,4 +1,4 @@
 layout "application"
-    heading "My Hyperian project"
-    content
-end
+heading "My Hyperian project"
+content
+that is all

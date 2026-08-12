@@ -1,37 +1,26 @@
-application "Indented Greeting" is console
+application "Left Aligned Greeting" is console
 
 model Greeting
 field message is text
-
 that is all
+
 controller Greeter
 action "choose greeting"
 set "person is known" to yes
-set count to 0
-repeat 2 times
-set count to count plus 1
-
-that is all
 if value called "person is known" is yes
-set message to "Hello from indented Hyperian"
+set message to "Hello from left aligned Hyperian"
 otherwise
 set message to "Hello, stranger"
+that is all
+that is all
 
-that is all
-try
-set "try result" to success
-when it fails as problem
-set "try result" to recovered
-
-that is all
-that is all
 when application starts
 run action "choose greeting"
 show view "greeting"
+that is all
+that is all
 
-that is all
-that is all
 view "greeting"
-heading "Whitespace defines these MVC blocks"
+heading "Every sentence begins at the left edge"
 show message
 that is all

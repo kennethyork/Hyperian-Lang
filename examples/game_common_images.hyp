@@ -1,19 +1,19 @@
 application "Common Image Game" is game
 
 model Artwork
-    field name is text
-end
+field name is text
+that is all
 
 controller Gallery
-    when application starts
-        set "images loaded" to yes
-        show view "gallery"
-    end
-end
+when application starts
+set "images loaded" to yes
+show view "gallery"
+that is all
+that is all
 
 view "gallery"
-    fill background with color 18 24 38
-    draw image "assets/player.png" at 40 40 sized 64 by 64
-    draw image "assets/player.jpg" at 120 40 sized 64 by 64
-    draw image "assets/player.webp" at 200 40 sized 64 by 64
-end
+fill background with color 18 24 38
+draw image "assets/player.png" at 40 40 sized 64 by 64
+draw image "assets/player.jpg" at 120 40 sized 64 by 64
+draw image "assets/player.webp" at 200 40 sized 64 by 64
+that is all

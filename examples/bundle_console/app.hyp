@@ -1,17 +1,17 @@
 application "Bundle Reader" is console
 
 model Message
-    field text is text
-end
+field text is text
+that is all
 
 controller Messages
-    when application starts
-        read file "assets/message.txt" as message
-        show view "main" with message
-    end
-end
+when application starts
+read file "assets/message.txt" as message
+show view "main" with message
+that is all
+that is all
 
 view "main"
-    heading "Bundle Reader"
-    show message
-end
+heading "Bundle Reader"
+show message
+that is all

@@ -1,39 +1,39 @@
 application "Blocks Game" is game
 
 model Player
-    field score is number default 0
-end
+field score is number default 0
+that is all
 
 controller Game
-    action "initialize player"
-        set player_x to 100
-        set player_y to 100
-    end
+action "initialize player"
+set player_x to 100
+set player_y to 100
+that is all
 
-    action "move right"
-        set player_x to player_x plus 20
-    end
+action "move right"
+set player_x to player_x plus 20
+that is all
 
-    action "update world"
-        set player_y to player_y plus 1
-    end
+action "update world"
+set player_y to player_y plus 1
+that is all
 
-    when application starts
-        run action "initialize player"
-        show view "playfield"
-    end
+when application starts
+run action "initialize player"
+show view "playfield"
+that is all
 
-    when player presses right
-        run action "move right"
-    end
+when player presses right
+run action "move right"
+that is all
 
-    when game updates
-        run action "update world"
-    end
-end
+when game updates
+run action "update world"
+that is all
+that is all
 
 view "playfield"
-    fill background with color 18 24 38
-    draw rectangle at player_x player_y sized 180 by 80 with color 70 170 255
-    draw rectangle at 400 260 sized 120 by 120 with color 255 110 90
-end
+fill background with color 18 24 38
+draw rectangle at player_x player_y sized 180 by 80 with color 70 170 255
+draw rectangle at 400 260 sized 120 by 120 with color 255 110 90
+that is all

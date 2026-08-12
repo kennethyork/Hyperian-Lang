@@ -3,74 +3,74 @@ application "Core Features" is service
 use package "text_tools"
 
 model Result
-    field message is text
-end
+field message is text
+that is all
 
 controller Core
-    test "lists hold and remove values"
-        make list colors
-        add red to colors
-        add "deep blue" to colors
-        add green to colors
-        count colors as color_count
-        take item 2 from colors as second_color
-        expect color_count to be 3
-        expect second_color to be "deep blue"
-        remove red from colors
-        count colors as remaining
-        expect remaining to be 2
-    end
+test "lists hold and remove values"
+make list colors
+add red to colors
+add "deep blue" to colors
+add green to colors
+count colors as color_count
+take item 2 from colors as second_color
+expect color_count to be 3
+expect second_color to be "deep blue"
+remove red from colors
+count colors as remaining
+expect remaining to be 2
+that is all
 
-    test "runtime errors can be recovered"
-        set recovered to no
-        try
-            read file "/tmp/hyperian-file-that-does-not-exist.txt" as missing
-        when it fails as problem
-            set recovered to yes
-        end
-        expect recovered to be yes
-    end
+test "runtime errors can be recovered"
+set recovered to no
+try
+read file "/tmp/hyperian-file-that-does-not-exist.txt" as missing
+when it fails as problem
+set recovered to yes
+that is all
+expect recovered to be yes
+that is all
 
-    test "project packages provide actions"
-        run action "decorate text" using Hyperian as decorated
-        expect decorated to be "[Hyperian]"
-    end
+test "project packages provide actions"
+run action "decorate text" using Hyperian as decorated
+expect decorated to be "[Hyperian]"
+that is all
 
-    test "web requests return a body and status"
-        write "Loaded through the native web client" to file "/tmp/hyperian-http-source.txt"
-        get "file:///tmp/hyperian-http-source.txt" from web as response and status as status_code
-        expect response to be "Loaded through the native web client"
-        expect status_code to be 0
-    end
+test "web requests return a body and status"
+write "Loaded through the native web client" to file "/tmp/hyperian-http-source.txt"
+get "file:///tmp/hyperian-http-source.txt" from web as response and status as status_code
+expect response to be "Loaded through the native web client"
+expect status_code to be 0
+that is all
 
-    test "maps store named values"
-        make map settings
-        put dark as theme in settings
-        put 20 as page_size in settings
-        take key theme from settings as selected_theme
-        count entries in settings as setting_count
-        expect selected_theme to be dark
-        expect setting_count to be 2
-        put light as theme in settings
-        take key theme from settings as changed_theme
-        expect changed_theme to be light
-        remove key page_size from settings
-        count entries in settings as remaining_settings
-        expect remaining_settings to be 1
-    end
+test "maps store named values"
+make map settings
+put dark as theme in settings
+put 20 as page_size in settings
+take key theme from settings as selected_theme
+count entries in settings as setting_count
+expect selected_theme to be dark
+expect setting_count to be 2
+put light as theme in settings
+take key theme from settings as changed_theme
+expect changed_theme to be light
+remove key page_size from settings
+count entries in settings as remaining_settings
+expect remaining_settings to be 1
+that is all
 
-    when application starts
-        make list messages
-        add "Lists are ready" to messages
-        add "Errors are recoverable" to messages
-        add "Packages are loaded" to messages
-        show view "report"
-    end
-end
+when application starts
+make list messages
+add "Lists are ready" to messages
+add "Errors are recoverable" to messages
+add "Packages are loaded" to messages
+show view "report"
+that is all
+that is all
 
 view "report"
-    heading "Hyperian core features"
-    for each message in messages show
-        show message
-    end
-end
+heading "Hyperian core features"
+for each message in messages show
+show message
+that is all
+that is all

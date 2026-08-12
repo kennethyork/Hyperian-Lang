@@ -3,71 +3,71 @@ application "Notes" is web
 listen on 8080
 
 model Note
-    field title is text required unique minimum 2 maximum 80
-    field body is text maximum 2000
-end
+field title is text required unique minimum 2 maximum 80
+field body is text maximum 2000
+that is all
 
 controller Notes
-    when someone visits "/"
-        find all Note as notes
-        show view "notes" with notes
-    end
+when someone visits "/"
+find all Note as notes
+show view "notes" with notes
+that is all
 
-    when someone submits "/notes"
-        create Note from form
-        redirect to "/"
-    end
+when someone submits "/notes"
+create Note from form
+redirect to "/"
+that is all
 
-    when someone visits "/notes/{id}"
-        find Note by route id as note
-        show view "edit-note" with note
-    end
+when someone visits "/notes/{id}"
+find Note by route id as note
+show view "edit-note" with note
+that is all
 
-    when someone submits "/notes/{id}"
-        update Note using route id from form
-        redirect to "/"
-    end
+when someone submits "/notes/{id}"
+update Note using route id from form
+redirect to "/"
+that is all
 
-    when someone submits "/notes/{id}/delete"
-        delete Note using route id
-        redirect to "/"
-    end
-end
+when someone submits "/notes/{id}/delete"
+delete Note using route id
+redirect to "/"
+that is all
+that is all
 
 layout "application"
-    heading "Hyperian Notes"
-    content
-end
+heading "Hyperian Notes"
+content
+that is all
 
 component "note-link"
-    show note.title
-    link "Edit" to "/notes/{note.id}"
-end
+show note.title
+link "Edit" to "/notes/{note.id}"
+that is all
 
 view "notes"
-    use layout "application"
-    title "My Notes"
-    form posts to "/notes"
-        input "Note title" as title required
-        input "Write your note" as body
-        button "Save note"
-    end
-    for each note in notes show
-        use component "note-link"
-    end
-end
+use layout "application"
+title "My Notes"
+form posts to "/notes"
+input "Note title" as title required
+input "Write your note" as body
+button "Save note"
+that is all
+for each note in notes show
+use component "note-link"
+that is all
+that is all
 
 view "edit-note"
-    use layout "application"
-    title "Edit Note"
-    heading "Edit Note"
-    form posts to "/notes/{note.id}"
-        input "Note title" as title required
-        input "Write your note" as body
-        button "Save changes"
-    end
-    form posts to "/notes/{note.id}/delete"
-        button "Delete note"
-    end
-    link "Back to notes" to "/"
-end
+use layout "application"
+title "Edit Note"
+heading "Edit Note"
+form posts to "/notes/{note.id}"
+input "Note title" as title required
+input "Write your note" as body
+button "Save changes"
+that is all
+form posts to "/notes/{note.id}/delete"
+button "Delete note"
+that is all
+link "Back to notes" to "/"
+that is all

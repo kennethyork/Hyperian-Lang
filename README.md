@@ -221,31 +221,28 @@ application "Tiny Tasks" is web
 listen on 8080
 
 model Task
-    field title is text required
-end
-
+field title is text required
+that is all
 controller Tasks
-    when someone visits "/"
-        find all Task as tasks
-        show view "tasks" with tasks
-    end
-
-    when someone submits "/tasks"
-        create Task from form
-        redirect to "/"
-    end
-end
-
+when someone visits "/"
+find all Task as tasks
+show view "tasks" with tasks
+that is all
+when someone submits "/tasks"
+create Task from form
+redirect to "/"
+that is all
+that is all
 view "tasks"
-    heading "My tasks"
-    form posts to "/tasks"
-        input "New task" as title required
-        button "Add"
-    end
-    for each task in tasks show
-        show task.title
-    end
-end
+heading "My tasks"
+form posts to "/tasks"
+input "New task" as title required
+button "Add"
+that is all
+for each task in tasks show
+show task.title
+that is all
+that is all
 ```
 
 ## Console example
@@ -254,21 +251,19 @@ end
 application "Greeter" is console
 
 model Person
-    field name is text required
-end
-
+field name is text required
+that is all
 controller Greeting
-    when application starts
-        ask "What is your name?" as name
-        show view "hello" with name
-    end
-end
-
+when application starts
+ask "What is your name?" as name
+show view "hello" with name
+that is all
+that is all
 view "hello"
-    heading "Welcome"
-    say "Hello,"
-    show name
-end
+heading "Welcome"
+say "Hello,"
+show name
+that is all
 ```
 
 ## Language words
@@ -321,20 +316,18 @@ Layouts and components keep views reusable:
 
 ```hyperian
 layout "application"
-    heading "My App"
-    content
-end
-
+heading "My App"
+content
+that is all
 component "post-link"
-    show post.title
-end
-
+show post.title
+that is all
 view "posts"
-    use layout "application"
-    for each post in posts show
-        use component "post-link"
-    end
-end
+use layout "application"
+for each post in posts show
+use component "post-link"
+that is all
+that is all
 ```
 
 API applications return correctly typed native JSON:
@@ -343,11 +336,11 @@ API applications return correctly typed native JSON:
 application "Blog API" is api
 
 controller Posts
-    when someone visits "/posts"
-        find all Post ordered by title as posts
-        show json posts
-    end
-end
+when someone visits "/posts"
+find all Post ordered by title as posts
+show json posts
+that is all
+that is all
 ```
 
 See [examples/blog_api.hyp](examples/blog_api.hyp) for models with relationships, ordered and filtered queries, and collection and record JSON responses.
@@ -358,10 +351,10 @@ Declare passwords or API credentials as `secret`. Hyperian derives a password ha
 
 ```hyperian
 model User
-    field email is text required unique
-    field password is secret required minimum 8 maximum 200
-    field role is text default member protected
-end
+field email is text required unique
+field password is secret required minimum 8 maximum 200
+field role is text default member protected
+that is all
 ```
 
 `protected` fields ignore browser form values, which prevents people from assigning themselves roles or other server-controlled values.
@@ -370,20 +363,18 @@ Authentication remains English-like:
 
 ```hyperian
 when someone submits "/login"
-    sign in User using email and password
-    redirect to "/dashboard"
-end
-
+sign in User using email and password
+redirect to "/dashboard"
+that is all
 when someone visits "/dashboard"
-    require sign in or redirect to "/"
-    find signed in User as user
-    show view "dashboard" with user
-end
-
+require sign in or redirect to "/"
+find signed in User as user
+show view "dashboard" with user
+that is all
 when someone submits "/logout"
-    sign out
-    redirect to "/"
-end
+sign out
+redirect to "/"
+that is all
 ```
 
 Field-based authorization can protect a controller after loading the signed-in record:
@@ -404,25 +395,23 @@ Reusable actions, variables, arithmetic, conditions, and loops use words instead
 
 ```hyperian
 controller Calculator
-    action "calculate the total"
-        set total to 2
+action "calculate the total"
+set total to 2
 
-        repeat 4 times
-            set total to total plus 3
-        end
-
-        if total is greater than 10
-            set message to "The total is large"
-        otherwise
-            set message to "The total is small"
-        end
-    end
-
-    when someone visits "/"
-        run action "calculate the total"
-        show view "result"
-    end
-end
+repeat 4 times
+set total to total plus 3
+that is all
+if total is greater than 10
+set message to "The total is large"
+otherwise
+set message to "The total is small"
+that is all
+that is all
+when someone visits "/"
+run action "calculate the total"
+show view "result"
+that is all
+that is all
 ```
 
 Expressions support `plus`, `minus`, `times`, `divided by`, and `joined with`. Conditions support `is`, `is not`, `is greater than`, `is less than`, and `contains`. Controller variables can be shown directly in views or returned as JSON.
@@ -431,16 +420,14 @@ Names can be readable quoted phrases instead of programming-style underscore nam
 
 ```hyperian
 model "Blog Post"
-    field "display title" is text required
-end
-
+field "display title" is text required
+that is all
 set "visit count" to 1
 set "visit count" to value called "visit count" plus 1
 
 if value called "visit count" is greater than 1
-    set "page message" to "Welcome back"
-end
-
+set "page message" to "Welcome back"
+that is all
 show "page message"
 ```
 
@@ -460,7 +447,10 @@ Hyperian also includes a source formatter:
 
 ```sh
 build/hyperian format examples/english_logic.hyp
+build/hyperian format examples/english_logic.hyp --write
 ```
+
+The first command previews canonical left-aligned English. The second safely rewrites the file in place, replacing older `end` markers with `that is all`.
 
 ## Tests written in English
 
@@ -468,12 +458,12 @@ Tests live beside the controller actions they verify:
 
 ```hyperian
 test "repeating addition"
-    set total to 2
-    repeat 4 times
-        set total to total plus 3
-    end
-    expect total to be 14
-end
+set total to 2
+repeat 4 times
+set total to total plus 3
+that is all
+expect total to be 14
+that is all
 ```
 
 Run every test without starting the application:
@@ -488,9 +478,8 @@ A controller action can prepare every route:
 
 ```hyperian
 action "prepare every request"
-    set application_name to "My App"
-end
-
+set application_name to "My App"
+that is all
 before every route run action "prepare every request"
 
 before route "/admin" run action "require an administrator"
@@ -500,9 +489,8 @@ Actions can accept an input and return a result, making them readable functions:
 
 ```hyperian
 action "greet person" using person
-    return "Hello," joined with person
-end
-
+return "Hello," joined with person
+that is all
 run action "greet person" using Ada as greeting
 ```
 
@@ -541,20 +529,20 @@ Risky work can be recovered without stopping the application:
 
 ```hyperian
 try
-    read file "settings.txt" as settings
+read file "settings.txt" as settings
 when it fails as problem
-    set settings to "default settings"
-end
+set settings to "default settings"
+that is all
 ```
 
 The native HTTP client supports HTTP, HTTPS, redirects, timeouts, response bodies, and status codes:
 
 ```hyperian
 try
-    get "https://example.com/api" from web as response and status as status_code
+get "https://example.com/api" from web as response and status as status_code
 when it fails as problem
-    set response to problem
-end
+set response to problem
+that is all
 ```
 
 Applications can replace built-in responses for any HTTP error from 400 through 599. The error view can show the numeric `status` value:
@@ -572,24 +560,22 @@ Desktop views become real GTK controls:
 application "Desktop Notes" is desktop
 
 controller Notes
-    action "save note"
-        set status to "Saved:" joined with title
-    end
-
-    when application starts
-        set status to ready
-        show view "notes"
-    end
-end
-
+action "save note"
+set status to "Saved:" joined with title
+that is all
+when application starts
+set status to ready
+show view "notes"
+that is all
+that is all
 view "notes"
-    heading "Native desktop notes"
-    input "Note title" as title
-    textarea "Note details" as details
-    checkbox "Important" as important
-    button "Save note" runs action "save note"
-    show status
-end
+heading "Native desktop notes"
+input "Note title" as title
+textarea "Note details" as details
+checkbox "Important" as important
+button "Save note" runs action "save note"
+show status
+that is all
 ```
 
 GTK inputs synchronize into controller state before the action runs. Afterwards, `show` labels refresh from the updated state. Actions may use the same calculations, lists, maps, files, HTTP requests, and recoverable errors as every other target.
@@ -598,12 +584,11 @@ Controllers can respond to native controls using complete English sentences:
 
 ```hyperian
 when input title changes
-    set live_preview to "Typing:" joined with title
-end
-
+set live_preview to "Typing:" joined with title
+that is all
 when input title is submitted
-    run action "save note"
-end
+run action "save note"
+that is all
 ```
 
 Change events work with single-line inputs, text areas, and checkboxes. Submission events run when someone submits a single-line field from the keyboard. The GTK desktop and mobile-preview backends, native mobile C bridge, generated Android project, and generated iOS project all dispatch the same compiled controller events. The compiler rejects missing controls, text-area submission handlers, and use outside desktop or mobile applications.
@@ -612,20 +597,17 @@ Application and focus lifecycle behavior is English too:
 
 ```hyperian
 when application pauses
-    set connection_status to paused
-end
-
+set connection_status to paused
+that is all
 when application resumes
-    run action "refresh data"
-end
-
+run action "refresh data"
+that is all
 when window gains focus
-    set window_status to focused
-end
-
+set window_status to focused
+that is all
 when window loses focus
-    set window_status to unfocused
-end
+set window_status to unfocused
+that is all
 ```
 
 Android lifecycle methods and iOS scene phases send pause/resume and focus/unfocus events through the native bridge. GTK windows send the same focus events for desktop applications and mobile previews. Pause and resume are mobile-only; the compiler prevents accidental use on targets that cannot deliver them. The source formatter and debugger understand the complete English phrases.
@@ -634,20 +616,17 @@ Touch gestures are controller events rather than platform callbacks:
 
 ```hyperian
 when someone swipes left
-    open view "next page"
-end
-
+open view "next page"
+that is all
 when someone swipes down
-    run action "refresh data"
-end
-
+run action "refresh data"
+that is all
 when someone taps
-    set gesture_status to "Tapped"
-end
-
+set gesture_status to "Tapped"
+that is all
 when someone presses and holds
-    open view "details"
-end
+open view "details"
+that is all
 ```
 
 The Android project recognizes native taps, holds, and fling distance and velocity. iOS recognizes exclusive taps and holds plus simultaneous drags without replacing scrolling. The GTK mobile preview recognizes short presses, half-second holds, and mouse or touch drags. Every platform dispatches the same native VM events. These gesture sentences are mobile-only, invalid swipe directions produce a friendly compiler error, and the debugger accepts phrases such as `--event "someone taps"`, `--event "someone presses and holds"`, and `--event "someone swipes right"`.
@@ -656,12 +635,11 @@ Desktop and mobile actions can navigate between native MVC views in English:
 
 ```hyperian
 action "show settings"
-    open view "settings"
-end
-
+open view "settings"
+that is all
 when window closes
-    write settings to file "settings.txt"
-end
+write settings to file "settings.txt"
+that is all
 ```
 
 Opening a view rebuilds the native controls while keeping controller state. The close event can run ordinary action logic for cleanup or saving.
@@ -670,16 +648,15 @@ Native controller actions use the same persistent models, validation rules, secr
 
 ```hyperian
 action "save note"
-    create a Note using the current values as note_id
-    find the Note numbered note_id as saved_note
-    set title to "A better title"
-    update the Note numbered note_id using the current values
-    count all Note records as note_count
-end
-
+create a Note using the current values as note_id
+find the Note numbered note_id as saved_note
+set title to "A better title"
+update the Note numbered note_id using the current values
+count all Note records as note_count
+that is all
 action "remove note"
-    delete the Note numbered note_id
-end
+delete the Note numbered note_id
+that is all
 ```
 
 “Current values” are controller values and synchronized view inputs whose names match model fields. Finding a record exposes values such as `saved_note_title`, `saved_note_id`, and `saved_note_found`, making them available to later actions and reactive views. See [examples/native_crud.hyp](examples/native_crud.hyp) and [examples/desktop_notes.hyp](examples/desktop_notes.hyp).
@@ -688,15 +665,14 @@ Controllers can collect one safe field from every record into a normal Hyperian 
 
 ```hyperian
 action "load note titles"
-    collect every Note title as note_titles
-end
-
+collect every Note title as note_titles
+that is all
 view "notes"
-    heading "Saved notes"
-    for each note_title in note_titles show
-        show note_title
-    end
-end
+heading "Saved notes"
+for each note_title in note_titles show
+show note_title
+that is all
+that is all
 ```
 
 Collections can be filtered by a literal or controller value, ordered numerically or alphabetically, and reversed—all in the same English instruction:
@@ -715,12 +691,11 @@ Services, desktop apps, and mobile previews can schedule recurring controller wo
 
 ```hyperian
 action "check for work"
-    set checks to checks plus 1
-end
-
+set checks to checks plus 1
+that is all
 every 5 seconds
-    run action "check for work"
-end
+run action "check for work"
+that is all
 ```
 
 Intervals may use milliseconds, seconds, or minutes and can be at most one day. Service applications remain alive while scheduled work exists and stop cleanly on Ctrl+C or termination. Native interface timers update reactive values and may open another view.
@@ -731,52 +706,48 @@ Game views are rendered in a native SDL2 window and event loop:
 application "Blocks" is game
 
 model Score
-    field points is number default 0
-end
-
+field points is number default 0
+that is all
 controller Game
-    action initialize
-        set "player left" to 100
-        set "player top" to 100
-        set "horizontal speed" to 200
-        set "vertical speed" to 0
-        set "ball horizontal center" to 500
-        set "ball vertical center" to 320
-        set "coin horizontal center" to 540
-        set "coin vertical center" to 320
-        set glow to 0
-        set "animation frame" to 1
-    end
-
-    when application starts
-        run action initialize
-        show view "playfield"
-    end
-
-    when game updates
-        move value glow toward 1 at 2 per second
-        advance animation "animation frame" from 1 through 4 every 100 milliseconds
-        apply gravity 300 to "vertical speed"
-        move position "player left" "player top" using velocity "horizontal speed" "vertical speed"
-        keep position "player left" "player top" inside 960 by 540 sized 64 by 64
-        check whether rectangle at "player left" "player top" sized 64 by 64 touches rectangle at 400 260 sized 120 by 120 as "player hit"
-        check whether circle centered at "ball horizontal center" "ball vertical center" with radius 24 touches circle centered at "coin horizontal center" "coin vertical center" with radius 12 as "coin hit"
-        check whether rectangle at 400 260 sized 120 by 120 touches circle centered at "ball horizontal center" "ball vertical center" with radius 24 as "wall hit"
-        check whether line from 0 0 to 960 540 touches line from 0 540 to 960 0 as "lines cross"
-        check whether line from 0 0 to 960 540 touches circle centered at "ball horizontal center" "ball vertical center" with radius 24 as "laser hit"
-        check whether rectangle at 400 260 sized 120 by 120 touches line from 0 270 to 960 270 as "wall crosses line"
-        check whether polygon through 430 250 then 530 250 then 480 360 touches circle centered at "ball horizontal center" "ball vertical center" with radius 24 as "polygon hit"
-    end
-end
-
+action initialize
+set "player left" to 100
+set "player top" to 100
+set "horizontal speed" to 200
+set "vertical speed" to 0
+set "ball horizontal center" to 500
+set "ball vertical center" to 320
+set "coin horizontal center" to 540
+set "coin vertical center" to 320
+set glow to 0
+set "animation frame" to 1
+that is all
+when application starts
+run action initialize
+show view "playfield"
+that is all
+when game updates
+move value glow toward 1 at 2 per second
+advance animation "animation frame" from 1 through 4 every 100 milliseconds
+apply gravity 300 to "vertical speed"
+move position "player left" "player top" using velocity "horizontal speed" "vertical speed"
+keep position "player left" "player top" inside 960 by 540 sized 64 by 64
+check whether rectangle at "player left" "player top" sized 64 by 64 touches rectangle at 400 260 sized 120 by 120 as "player hit"
+check whether circle centered at "ball horizontal center" "ball vertical center" with radius 24 touches circle centered at "coin horizontal center" "coin vertical center" with radius 12 as "coin hit"
+check whether rectangle at 400 260 sized 120 by 120 touches circle centered at "ball horizontal center" "ball vertical center" with radius 24 as "wall hit"
+check whether line from 0 0 to 960 540 touches line from 0 540 to 960 0 as "lines cross"
+check whether line from 0 0 to 960 540 touches circle centered at "ball horizontal center" "ball vertical center" with radius 24 as "laser hit"
+check whether rectangle at 400 260 sized 120 by 120 touches line from 0 270 to 960 270 as "wall crosses line"
+check whether polygon through 430 250 then 530 250 then 480 360 touches circle centered at "ball horizontal center" "ball vertical center" with radius 24 as "polygon hit"
+that is all
+that is all
 view "playfield"
-    fill background with color 18 24 38
-    draw rectangle at "player left" "player top" sized 64 by 64 with color 70 170 255
-    draw circle centered at "ball horizontal center" "ball vertical center" with radius 24 and color 255 220 70
-    draw line from 0 0 to 960 540 with color 120 230 160
-    draw polygon through 430 250 then 530 250 then 480 360 with color 180 100 240
-    draw image "assets/player.bmp" at "player left" "player top" sized 64 by 64
-end
+fill background with color 18 24 38
+draw rectangle at "player left" "player top" sized 64 by 64 with color 70 170 255
+draw circle centered at "ball horizontal center" "ball vertical center" with radius 24 and color 255 220 70
+draw line from 0 0 to 960 540 with color 120 230 160
+draw polygon through 430 250 then 530 250 then 480 360 with color 180 100 240
+draw image "assets/player.bmp" at "player left" "player top" sized 64 by 64
+that is all
 ```
 
 The SDL2 backend dispatches arrow, space, and enter keys through `when player presses ...`, runs `when game updates` every frame, and exposes elapsed time as `value called "seconds since last frame"`. English physics instructions apply frame-rate-independent velocity and gravity, clamp an object inside its play area, and test collisions between every pairing of rectangles, circles, lines, and polygons. Either shape may be written first in a mixed collision phrase. Rectangle positions name their upper-left corner; circle positions name their center; lines name their two endpoints; polygons list each point with `then`. Polygons may contain 3–32 dynamically evaluated points and may be convex or concave. Native rendering uses an even-odd fill. Touching endpoints, overlapping collinear lines, and tangent shapes count as contact. Negative sizes or radii stop with a readable error. The older `seconds_since_last_frame` spelling remains compatible.
@@ -856,12 +827,11 @@ Hyperian stores a version inside its native data file. Describe model changes in
 data version 2
 
 when data changes from 1 to 2
-    rename field title to name in model Task
-end
-
+rename field title to name in model Task
+that is all
 model Task
-    field name is text required
-end
+field name is text required
+that is all
 ```
 
 Apply migrations without starting the application:
@@ -887,15 +857,15 @@ application "Connected Tasks" is mobile
 store data in sqlite file "connected-tasks.db"
 
 controller Tasks
-    action "refresh status"
-        try
-            get "https://example.com/status" from web as response and status as code
-            set message to "Internet status:" joined with code joined with response
-        when it fails as problem
-            set message to problem
-        end
-    end
-end
+action "refresh status"
+try
+get "https://example.com/status" from web as response and status as code
+set message to "Internet status:" joined with code joined with response
+when it fails as problem
+set message to problem
+that is all
+that is all
+that is all
 ```
 
 See [examples/mobile_connected.hyp](examples/mobile_connected.hyp) for the complete MVC application.
@@ -906,43 +876,47 @@ Views connect those assets and provide richer form controls in plain English:
 
 ```hyperian
 view "editor"
-    style "/assets/app.css"
-    script "/assets/app.js"
-    image "/assets/logo.svg" described as "Application logo"
+style "/assets/app.css"
+script "/assets/app.js"
+image "/assets/logo.svg" described as "Application logo"
 
-    form posts to "/articles"
-        input "Title" as title required
-        textarea "Article body" as body required
-        checkbox "Publish now" as published
-        button "Save article"
-    end
-end
+form posts to "/articles"
+input "Title" as title required
+textarea "Article body" as body required
+checkbox "Publish now" as published
+button "Save article"
+that is all
+that is all
 ```
 
 Edit views populate text areas and checkbox state from the current model. HTML attributes and values remain escaped. The complete multi-file asset example is in [examples/modular](examples/modular).
 
 Console controllers understand `when application starts` and `ask`. Views share `title`, `heading`, `text`, `say`, `show`, `for each`, and `if`; web views additionally support links and forms.
 
-Quoted text may contain spaces. `#` starts a comment. Indentation is meaningful: indent a line to put it inside the block above, and dedent it to close that block. Use spaces rather than tabs, and keep sibling instructions aligned. `otherwise` aligns with its `if`, while `when it fails as ...` aligns with its `try`. The older explicit `end` spelling remains compatible, so existing programs and indentation-based programs can be mixed across folders and files.
+Quoted text may contain spaces. `#` starts a comment. Canonical Hyperian reads like left-aligned English: every sentence begins at the left edge, and `that is all` closes the current model, controller, action, event, condition, loop, form, or view. A source set that uses `that is all` is checked strictly for left alignment. Older indentation-based source and the shorter `end` spelling remain compatible, so existing projects continue to compile.
 
 ```hyperian
 controller Greeter
-    action "choose greeting"
-        if value called "person is known" is yes
-            set message to "Hello, friend"
-        otherwise
-            set message to "Hello, stranger"
-
-    when application starts
-        run action "choose greeting"
-        show view "greeting"
+action "choose greeting"
+if value called "person is known" is yes
+set message to "Hello, friend"
+otherwise
+set message to "Hello, stranger"
+that is all
+that is all
+when application starts
+run action "choose greeting"
+show view "greeting"
+that is all
+that is all
 
 view "greeting"
-    show message
+show message
+that is all
 ```
 
 ## Project status
 
-Version 0.42 is a small but real MVC platform: meaningful whitespace with optional legacy `end` markers, custom bytecode, a native VM, standalone executable and asset-bundle creation, readable quoted phrase names across MVC and every runtime, literal-safe English expressions, versioned Android/iOS mobile deployment packages, automated signed APK/AAB/IPA orchestration, a linkable native mobile runtime bridge, self-contained native Android Studio and SwiftUI Xcode project generation, native phone HTTPS and SQLite integration, native backend diagnostics, eight compiler targets including installable offline web applications, parallel-safe compiler tooling, an English source-line debugger, persistent model CRUD plus filtered and ordered collection queries inside native controller actions, repeated native collection views, recurring service and native-interface timers, interactive multi-view GTK desktop and phone-sized mobile preview interfaces with close, live-input-change, keyboard-submission, focus, pause, resume, tap, press-and-hold, and four-direction swipe events, matching generated Android/iOS lifecycle and gesture events, SDL2 keyboard/frame events, frame-rate-independent movement, gravity, smooth value transitions, timed animation frames, boundaries, native rectangle, circle, line, and filled polygon drawing plus collision detection between every shape pair, BMP/PNG/JPEG/WebP sprites, WAV sound, readable frame-time state, and state-driven rendering, native lists and maps, selectable HDB or transactional SQLite storage, recoverable runtime errors, an HTTP/HTTPS client, local packages, reusable actions, native file access, foldered project generation, versioned migrations, persistent CRUD models, safe HTML and typed JSON, authentication and authorization, middleware, formatting, and English tests.
+Version 0.43 is a small but real MVC platform: canonical fully left-aligned English source with readable `that is all` block endings and compatibility for older indentation-based programs, custom bytecode, a native VM, standalone executable and asset-bundle creation, readable quoted phrase names across MVC and every runtime, literal-safe English expressions, versioned Android/iOS mobile deployment packages, automated signed APK/AAB/IPA orchestration, a linkable native mobile runtime bridge, self-contained native Android Studio and SwiftUI Xcode project generation, native phone HTTPS and SQLite integration, native backend diagnostics, eight compiler targets including installable offline web applications, parallel-safe compiler tooling, an English source-line debugger, persistent model CRUD plus filtered and ordered collection queries inside native controller actions, repeated native collection views, recurring service and native-interface timers, interactive multi-view GTK desktop and phone-sized mobile preview interfaces with close, live-input-change, keyboard-submission, focus, pause, resume, tap, press-and-hold, and four-direction swipe events, matching generated Android/iOS lifecycle and gesture events, SDL2 keyboard/frame events, frame-rate-independent movement, gravity, smooth value transitions, timed animation frames, boundaries, native rectangle, circle, line, and filled polygon drawing plus collision detection between every shape pair, BMP/PNG/JPEG/WebP sprites, WAV sound, readable frame-time state, and state-driven rendering, native lists and maps, selectable HDB or transactional SQLite storage, recoverable runtime errors, an HTTP/HTTPS client, local packages, reusable actions, native file access, foldered project generation, versioned migrations, persistent CRUD models, safe HTML and typed JSON, authentication and authorization, middleware, formatting, and English tests.
 
 The next major layers are compressed or streaming audio and broader cross-compilation. Those are not claimed as complete yet.

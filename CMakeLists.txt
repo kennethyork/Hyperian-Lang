@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(Hyperian VERSION 0.42.0 LANGUAGES C)
+project(Hyperian VERSION 0.43.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -97,19 +97,36 @@ add_test(NAME inspect_example
     COMMAND hyperian inspect ${CMAKE_BINARY_DIR}/tasks.hyc)
 set_tests_properties(inspect_example PROPERTIES DEPENDS compile_example)
 add_test(NAME compile_indentation_example
-    COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/indentation_console.hyp -o ${CMAKE_BINARY_DIR}/indentation_console.hyc)
+    COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/tests/legacy_indentation.hyp -o ${CMAKE_BINARY_DIR}/indentation_console.hyc)
 add_test(NAME run_indentation_example
     COMMAND hyperian run ${CMAKE_BINARY_DIR}/indentation_console.hyc)
 set_tests_properties(run_indentation_example PROPERTIES DEPENDS compile_indentation_example PASS_REGULAR_EXPRESSION "Hello from indented Hyperian")
 add_test(NAME format_indentation_example
-    COMMAND hyperian format ${CMAKE_SOURCE_DIR}/examples/indentation_console.hyp)
-set_tests_properties(format_indentation_example PROPERTIES PASS_REGULAR_EXPRESSION "        run action \"choose greeting\"")
+    COMMAND hyperian format ${CMAKE_SOURCE_DIR}/tests/legacy_indentation.hyp)
+set_tests_properties(format_indentation_example PROPERTIES PASS_REGULAR_EXPRESSION "that is all")
 add_test(NAME reject_inconsistent_indentation
     COMMAND sh ${CMAKE_SOURCE_DIR}/tests/reject_with_message_test.sh "use the same indentation for instructions in this block"
         $<TARGET_FILE:hyperian> check ${CMAKE_SOURCE_DIR}/tests/bad_inconsistent_indentation.hyp)
 add_test(NAME reject_tab_indentation
     COMMAND sh ${CMAKE_SOURCE_DIR}/tests/reject_with_message_test.sh "use spaces for indentation, not tabs"
         $<TARGET_FILE:hyperian> check ${CMAKE_SOURCE_DIR}/tests/bad_tab_indentation.hyp)
+add_test(NAME compile_left_aligned_example
+    COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/left_aligned_console.hyp -o ${CMAKE_BINARY_DIR}/left_aligned_console.hyc)
+add_test(NAME run_left_aligned_example
+    COMMAND hyperian run ${CMAKE_BINARY_DIR}/left_aligned_console.hyc)
+set_tests_properties(run_left_aligned_example PROPERTIES DEPENDS compile_left_aligned_example PASS_REGULAR_EXPRESSION "Hello from left aligned Hyperian")
+add_test(NAME format_left_aligned_example
+    COMMAND hyperian format ${CMAKE_SOURCE_DIR}/examples/left_aligned_console.hyp)
+set_tests_properties(format_left_aligned_example PROPERTIES PASS_REGULAR_EXPRESSION "that is all")
+add_test(NAME rewrite_legacy_source_as_left_aligned
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/format_write_test.sh $<TARGET_FILE:hyperian>
+        ${CMAKE_SOURCE_DIR}/tests/legacy_indentation.hyp ${CMAKE_BINARY_DIR}/formatted_left_aligned.hyp)
+add_test(NAME reject_non_left_aligned_english
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/reject_with_message_test.sh "start every Hyperian sentence at the left edge"
+        $<TARGET_FILE:hyperian> check ${CMAKE_SOURCE_DIR}/tests/bad_left_alignment.hyp)
+add_test(NAME reject_missing_english_closing_phrase
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/reject_with_message_test.sh "finish this block by saying: that is all"
+        $<TARGET_FILE:hyperian> check ${CMAKE_SOURCE_DIR}/tests/bad_missing_closing_phrase.hyp)
 add_test(NAME compile_pwa
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/pwa_tasks/app.hyp -o ${CMAKE_BINARY_DIR}/pwa_tasks.hyc)
 add_test(NAME reject_pwa_without_route
@@ -455,7 +472,7 @@ add_test(NAME reject_focus_event_outside_native_interface
 set_tests_properties(reject_focus_event_outside_native_interface PROPERTIES WILL_FAIL TRUE)
 add_test(NAME format_native_events
     COMMAND hyperian format ${CMAKE_SOURCE_DIR}/examples/mobile_tasks.hyp)
-set_tests_properties(format_native_events PROPERTIES PASS_REGULAR_EXPRESSION "    when application pauses")
+set_tests_properties(format_native_events PROPERTIES PASS_REGULAR_EXPRESSION "when application pauses")
 add_test(NAME reject_swipe_outside_mobile
     COMMAND hyperian check ${CMAKE_SOURCE_DIR}/tests/bad_swipe_target.hyp)
 set_tests_properties(reject_swipe_outside_mobile PROPERTIES WILL_FAIL TRUE)

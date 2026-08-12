@@ -17,6 +17,11 @@ for target in web pwa console api service desktop mobile game; do
         echo "generated $target project still contains end markers" >&2
         exit 1
     fi
+    if find "$source" -name '*.hyp' -exec grep -H '^[[:space:]]\+' {} + | grep . >/dev/null; then
+        echo "generated $target project is not fully left aligned" >&2
+        exit 1
+    fi
+    grep '^that is all$' "$source/models/item.hyp" >/dev/null
     "$compiler" check "$source/app.hyp"
 done
 

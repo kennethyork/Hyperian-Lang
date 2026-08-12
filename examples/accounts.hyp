@@ -3,65 +3,65 @@ application "Accounts" is web
 listen on 8082
 
 model User
-    field email is text required unique minimum 3 maximum 200
-    field password is secret required minimum 8 maximum 200
-    field role is text default member protected
-end
+field email is text required unique minimum 3 maximum 200
+field password is secret required minimum 8 maximum 200
+field role is text default member protected
+that is all
 
 controller Accounts
-    when someone visits "/"
-        show view "account"
-    end
+when someone visits "/"
+show view "account"
+that is all
 
-    when someone submits "/register"
-        create User from form
-        redirect to "/"
-    end
+when someone submits "/register"
+create User from form
+redirect to "/"
+that is all
 
-    when someone submits "/login"
-        sign in User using email and password
-        redirect to "/dashboard"
-    end
+when someone submits "/login"
+sign in User using email and password
+redirect to "/dashboard"
+that is all
 
-    when someone visits "/dashboard"
-        require sign in or redirect to "/"
-        find signed in User as user
-        require user.role is "member" or redirect to "/"
-        show view "dashboard" with user
-    end
+when someone visits "/dashboard"
+require sign in or redirect to "/"
+find signed in User as user
+require user.role is "member" or redirect to "/"
+show view "dashboard" with user
+that is all
 
-    when someone submits "/logout"
-        sign out
-        redirect to "/"
-    end
-end
+when someone submits "/logout"
+sign out
+redirect to "/"
+that is all
+that is all
 
 layout "account-layout"
-    heading "Accounts"
-    content
-end
+heading "Accounts"
+content
+that is all
 
 view "account"
-    use layout "account-layout"
-    text "Create an account"
-    form posts to "/register"
-        input "Email" as email required
-        secret input "Password" as password required
-        button "Register"
-    end
-    text "Sign in"
-    form posts to "/login"
-        input "Email" as email required
-        secret input "Password" as password required
-        button "Sign in"
-    end
-end
+use layout "account-layout"
+text "Create an account"
+form posts to "/register"
+input "Email" as email required
+secret input "Password" as password required
+button "Register"
+that is all
+text "Sign in"
+form posts to "/login"
+input "Email" as email required
+secret input "Password" as password required
+button "Sign in"
+that is all
+that is all
 
 view "dashboard"
-    use layout "account-layout"
-    text "You are signed in as:"
-    show user.email
-    form posts to "/logout"
-        button "Sign out"
-    end
-end
+use layout "account-layout"
+text "You are signed in as:"
+show user.email
+form posts to "/logout"
+button "Sign out"
+that is all
+that is all

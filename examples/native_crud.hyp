@@ -1,45 +1,45 @@
 application "Native Data Work" is service
 
 model Note
-    field title is text required
-    field important is boolean default false
-end
+field title is text required
+field important is boolean default false
+that is all
 
 controller Notes
-    action "exercise native data"
-        set title to "First title"
-        set important to true
-        create a Note using the current values as note_id
-        count all Note records as first_count
+action "exercise native data"
+set title to "First title"
+set important to true
+create a Note using the current values as note_id
+count all Note records as first_count
 
-        find the Note numbered note_id as note
-        set title to "Updated title"
-        update the Note numbered note_id using the current values
-        find the Note numbered note_id as updated_note
-        set loaded_title to updated_note_title
-        collect every Note title as note_titles
-        count note_titles as collected_count
-        take item 1 from note_titles as first_collected_title
+find the Note numbered note_id as note
+set title to "Updated title"
+update the Note numbered note_id using the current values
+find the Note numbered note_id as updated_note
+set loaded_title to updated_note_title
+collect every Note title as note_titles
+count note_titles as collected_count
+take item 1 from note_titles as first_collected_title
 
-        delete the Note numbered note_id
-        count all Note records as remaining
-    end
+delete the Note numbered note_id
+count all Note records as remaining
+that is all
 
-    when application starts
-        run action "exercise native data"
-        show view "result"
-    end
-end
+when application starts
+run action "exercise native data"
+show view "result"
+that is all
+that is all
 
 view "result"
-    heading "Native persistent data"
-    text "Loaded the updated title:"
-    show loaded_title
-    text "First title from the collected records:"
-    show first_collected_title
-    text "Records remaining after deletion:"
-    show remaining
-    for each note_title in note_titles show
-        show note_title
-    end
-end
+heading "Native persistent data"
+text "Loaded the updated title:"
+show loaded_title
+text "First title from the collected records:"
+show first_collected_title
+text "Records remaining after deletion:"
+show remaining
+for each note_title in note_titles show
+show note_title
+that is all
+that is all

@@ -1,78 +1,78 @@
 application "English Physics" is game
 
 model Player
-    field best_score is number default 0
-end
+field best_score is number default 0
+that is all
 
 controller World
-    action initialize
-        set "player left" to 10
-        set "player top" to 10
-        set "horizontal speed" to 100
-        set "vertical speed" to 0
-        set "obstacle left" to 15
-        set "obstacle top" to 10
-        set "player hit" to false
-        set glow to 0
-        set shrink to 2
-        set "animation frame" to 1
-        set "ball horizontal center" to 10
-        set "ball vertical center" to 10
-        set "ball radius" to 5
-        set "coin horizontal center" to 18
-        set "coin vertical center" to 10
-        set "coin radius" to 3
-        set "wall left" to 13
-        set "wall top" to 14
-        set "far left" to 30
-        set "far top" to 30
-        set "laser start horizontal" to 0
-        set "laser start vertical" to 0
-        set "laser end horizontal" to 40
-        set "laser end vertical" to 40
-    end
+action initialize
+set "player left" to 10
+set "player top" to 10
+set "horizontal speed" to 100
+set "vertical speed" to 0
+set "obstacle left" to 15
+set "obstacle top" to 10
+set "player hit" to false
+set glow to 0
+set shrink to 2
+set "animation frame" to 1
+set "ball horizontal center" to 10
+set "ball vertical center" to 10
+set "ball radius" to 5
+set "coin horizontal center" to 18
+set "coin vertical center" to 10
+set "coin radius" to 3
+set "wall left" to 13
+set "wall top" to 14
+set "far left" to 30
+set "far top" to 30
+set "laser start horizontal" to 0
+set "laser start vertical" to 0
+set "laser end horizontal" to 40
+set "laser end vertical" to 40
+that is all
 
-    when application starts
-        run action initialize
-        show view "world"
-    end
+when application starts
+run action initialize
+show view "world"
+that is all
 
-    when game updates
-        move value glow toward 1 at 2 per second
-        move value shrink toward 1 at 2 per second
-        advance animation "animation frame" from 1 through 4 every 100 milliseconds
-        apply gravity 200 to "vertical speed"
-        move position "player left" "player top" using velocity "horizontal speed" "vertical speed"
-        keep position "player left" "player top" inside 40 by 40 sized 10 by 10
-        check whether rectangle at "player left" "player top" sized 10 by 10 touches rectangle at "obstacle left" "obstacle top" sized 30 by 30 as "player hit"
-        check whether circle centered at "ball horizontal center" "ball vertical center" with radius "ball radius" touches circle centered at "coin horizontal center" "coin vertical center" with radius "coin radius" as "coin hit"
-        check whether circle centered at "ball horizontal center" "ball vertical center" with radius "ball radius" touches rectangle at "wall left" "wall top" sized 4 by 6 as "wall hit"
-        check whether rectangle at "far left" "far top" sized 4 by 4 touches circle centered at "ball horizontal center" "ball vertical center" with radius "ball radius" as "far hit"
-        check whether line from 0 0 to 10 10 touches line from 0 10 to 10 0 as "crossing lines touch"
-        check whether line from 0 0 to 10 0 touches line from 5 0 to 15 0 as "overlapping lines touch"
-        check whether line from 0 0 to 10 0 touches circle centered at 5 2 with radius 2 as "line touches circle"
-        check whether circle centered at 20 20 with radius 2 touches line from 0 0 to 10 0 as "circle misses line"
-        check whether line from 0 5 to 20 5 touches rectangle at 5 2 sized 4 by 6 as "line touches rectangle"
-        check whether rectangle at 30 30 sized 4 by 4 touches line from 0 0 to 10 0 as "rectangle misses line"
-        check whether polygon through 0 0 then 20 0 then 20 20 then 0 20 touches polygon through 5 5 then 10 5 then 5 10 as "polygon contains polygon"
-        check whether polygon through 0 0 then 20 0 then 20 20 then 0 20 touches polygon through 30 30 then 40 30 then 35 40 as "polygons miss"
-        check whether polygon through 0 0 then 20 0 then 20 20 then 0 20 touches line from 5 5 to 15 5 as "polygon contains line"
-        check whether line from 30 30 to 40 40 touches polygon through 0 0 then 20 0 then 20 20 then 0 20 as "line misses polygon"
-        check whether polygon through 0 0 then 20 0 then 20 20 then 0 20 touches circle centered at 10 10 with radius 2 as "polygon contains circle"
-        check whether circle centered at 22 10 with radius 2 touches polygon through 0 0 then 20 0 then 20 20 then 0 20 as "circle touches polygon"
-        check whether circle centered at 30 30 with radius 2 touches polygon through 0 0 then 20 0 then 20 20 then 0 20 as "circle misses polygon"
-        check whether polygon through 0 0 then 20 0 then 20 20 then 0 20 touches rectangle at 5 5 sized 4 by 4 as "polygon contains rectangle"
-        check whether rectangle at 30 30 sized 4 by 4 touches polygon through 0 0 then 20 0 then 20 20 then 0 20 as "rectangle misses polygon"
-        check whether polygon through 0 0 then 20 0 then 20 20 then 15 20 then 15 5 then 5 5 then 5 20 then 0 20 touches circle centered at 10 10 with radius 1 as "concave opening touches circle"
-        check whether polygon through 0 0 then 20 0 then 20 20 then 15 20 then 15 5 then 5 5 then 5 20 then 0 20 touches circle centered at 2 10 with radius 1 as "concave body touches circle"
-    end
-end
+when game updates
+move value glow toward 1 at 2 per second
+move value shrink toward 1 at 2 per second
+advance animation "animation frame" from 1 through 4 every 100 milliseconds
+apply gravity 200 to "vertical speed"
+move position "player left" "player top" using velocity "horizontal speed" "vertical speed"
+keep position "player left" "player top" inside 40 by 40 sized 10 by 10
+check whether rectangle at "player left" "player top" sized 10 by 10 touches rectangle at "obstacle left" "obstacle top" sized 30 by 30 as "player hit"
+check whether circle centered at "ball horizontal center" "ball vertical center" with radius "ball radius" touches circle centered at "coin horizontal center" "coin vertical center" with radius "coin radius" as "coin hit"
+check whether circle centered at "ball horizontal center" "ball vertical center" with radius "ball radius" touches rectangle at "wall left" "wall top" sized 4 by 6 as "wall hit"
+check whether rectangle at "far left" "far top" sized 4 by 4 touches circle centered at "ball horizontal center" "ball vertical center" with radius "ball radius" as "far hit"
+check whether line from 0 0 to 10 10 touches line from 0 10 to 10 0 as "crossing lines touch"
+check whether line from 0 0 to 10 0 touches line from 5 0 to 15 0 as "overlapping lines touch"
+check whether line from 0 0 to 10 0 touches circle centered at 5 2 with radius 2 as "line touches circle"
+check whether circle centered at 20 20 with radius 2 touches line from 0 0 to 10 0 as "circle misses line"
+check whether line from 0 5 to 20 5 touches rectangle at 5 2 sized 4 by 6 as "line touches rectangle"
+check whether rectangle at 30 30 sized 4 by 4 touches line from 0 0 to 10 0 as "rectangle misses line"
+check whether polygon through 0 0 then 20 0 then 20 20 then 0 20 touches polygon through 5 5 then 10 5 then 5 10 as "polygon contains polygon"
+check whether polygon through 0 0 then 20 0 then 20 20 then 0 20 touches polygon through 30 30 then 40 30 then 35 40 as "polygons miss"
+check whether polygon through 0 0 then 20 0 then 20 20 then 0 20 touches line from 5 5 to 15 5 as "polygon contains line"
+check whether line from 30 30 to 40 40 touches polygon through 0 0 then 20 0 then 20 20 then 0 20 as "line misses polygon"
+check whether polygon through 0 0 then 20 0 then 20 20 then 0 20 touches circle centered at 10 10 with radius 2 as "polygon contains circle"
+check whether circle centered at 22 10 with radius 2 touches polygon through 0 0 then 20 0 then 20 20 then 0 20 as "circle touches polygon"
+check whether circle centered at 30 30 with radius 2 touches polygon through 0 0 then 20 0 then 20 20 then 0 20 as "circle misses polygon"
+check whether polygon through 0 0 then 20 0 then 20 20 then 0 20 touches rectangle at 5 5 sized 4 by 4 as "polygon contains rectangle"
+check whether rectangle at 30 30 sized 4 by 4 touches polygon through 0 0 then 20 0 then 20 20 then 0 20 as "rectangle misses polygon"
+check whether polygon through 0 0 then 20 0 then 20 20 then 15 20 then 15 5 then 5 5 then 5 20 then 0 20 touches circle centered at 10 10 with radius 1 as "concave opening touches circle"
+check whether polygon through 0 0 then 20 0 then 20 20 then 15 20 then 15 5 then 5 5 then 5 20 then 0 20 touches circle centered at 2 10 with radius 1 as "concave body touches circle"
+that is all
+that is all
 
 view "world"
-    fill background with color 18 24 38
-    draw rectangle at "player left" "player top" sized 10 by 10 with color 70 170 255
-    draw rectangle at "obstacle left" "obstacle top" sized 30 by 30 with color 255 110 90
-    draw circle centered at "ball horizontal center" "ball vertical center" with radius "ball radius" and color 255 220 70
-    draw line from "laser start horizontal" "laser start vertical" to "laser end horizontal" "laser end vertical" with color 120 230 160
-    draw polygon through "laser start horizontal" "laser start vertical" then 20 0 then 20 20 then 15 20 then 15 5 then 5 5 then 5 20 then 0 20 with color 180 100 240
-end
+fill background with color 18 24 38
+draw rectangle at "player left" "player top" sized 10 by 10 with color 70 170 255
+draw rectangle at "obstacle left" "obstacle top" sized 30 by 30 with color 255 110 90
+draw circle centered at "ball horizontal center" "ball vertical center" with radius "ball radius" and color 255 220 70
+draw line from "laser start horizontal" "laser start vertical" to "laser end horizontal" "laser end vertical" with color 120 230 160
+draw polygon through "laser start horizontal" "laser start vertical" then 20 0 then 20 20 then 15 20 then 15 5 then 5 5 then 5 20 then 0 20 with color 180 100 240
+that is all

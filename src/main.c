@@ -130,6 +130,36 @@ static int write_project_file(const char *path, const char *contents) {
     return okay;
 }
 
+static int write_left_aligned_source(const char *path, const char *contents) {
+    char output[16384]; size_t used = 0; unsigned widths[64] = {0}; int level = 0;
+    for (const char *line = contents; *line;) {
+        const char *ending = strchr(line, '\n'); size_t length = ending ? (size_t)(ending - line) : strlen(line);
+        unsigned width = 0; while (width < length && (line[width] == ' ' || line[width] == '\t')) width++;
+        if (width < length) {
+            while (level > 0 && width < widths[level]) {
+                const char *closing = "that is all\n"; size_t closing_length = strlen(closing);
+                if (used + closing_length >= sizeof(output)) goto too_large;
+                memcpy(output + used, closing, closing_length); used += closing_length; level--;
+            }
+            if (width > widths[level]) {
+                if (level + 1 >= 64) goto too_large;
+                widths[++level] = width;
+            }
+            if (used + length - width + 1 >= sizeof(output)) goto too_large;
+            memcpy(output + used, line + width, length - width); used += length - width;
+        } else if (used + 1 >= sizeof(output)) goto too_large;
+        output[used++] = '\n'; line = ending ? ending + 1 : line + length;
+    }
+    while (level > 0) {
+        const char *closing = "that is all\n"; size_t closing_length = strlen(closing);
+        if (used + closing_length >= sizeof(output)) goto too_large;
+        memcpy(output + used, closing, closing_length); used += closing_length; level--;
+    }
+    output[used] = 0; return write_project_file(path, output);
+too_large:
+    fprintf(stderr, "error: generated Hyperian source for %s is too large\n", path); return 0;
+}
+
 static int copy_bundle_file(const char *source, const char *destination, mode_t mode) {
     FILE *from = fopen(source, "rb"), *to = from ? fopen(destination, "wb") : NULL; int okay = 1;
     if (!from || !to) okay = 0;
@@ -517,6 +547,7 @@ static int build_mobile_application(const char *source, const char *platform, co
 static int doctor(void) {
     puts("Hyperian " HYPERIAN_VERSION " toolchain check\n"
          "  compiler and bytecode VM: ready\n"
+         "  canonical left-aligned English source: ready\n"
          "  web, installable PWA, API, console, service: ready");
 #ifdef HYPERIAN_HAVE_GTK3
     puts("  desktop and mobile preview with English input events (GTK3): ready");
@@ -574,9 +605,9 @@ static int create_project(const char *name, const char *target) {
     snprintf(source, sizeof(source), "application \"%s\" is %s\n%s\ninclude \"models/item.hyp\"\ninclude \"controllers/items.hyp\"\n%s",
         name, source_target, network_setup,
         strcmp(target, "api") ? "include \"views/main.hyp\"\n" : "");
-    snprintf(path, sizeof(path), "%s/app.hyp", name); if (!write_project_file(path, source)) return 1;
+    snprintf(path, sizeof(path), "%s/app.hyp", name); if (!write_left_aligned_source(path, source)) return 1;
     snprintf(path, sizeof(path), "%s/models/item.hyp", name);
-    if (!write_project_file(path, "model Item\n    field \"item name\" is text required\n")) return 1;
+    if (!write_left_aligned_source(path, "model Item\n    field \"item name\" is text required\n")) return 1;
     if (!strcmp(target, "web") || !strcmp(target, "pwa")) snprintf(source, sizeof(source),
         "controller Items\n    when someone visits \"/\"\n        find all Item as items\n        show view \"main\" with items\n");
     else if (!strcmp(target, "api")) snprintf(source, sizeof(source),
@@ -588,7 +619,7 @@ static int create_project(const char *name, const char *target) {
         "controller Items\n    action initialize\n        set \"player left\" to 100\n        set \"player top\" to 100\n        set \"horizontal speed\" to 0\n        set \"vertical speed\" to 0\n        set \"ball horizontal center\" to 500\n        set \"ball vertical center\" to 320\n        set \"ball radius\" to 45\n        set glow to 0\n        set \"animation frame\" to 1\n\n    action \"move right\"\n        set \"horizontal speed\" to 200\n\n    when application starts\n        run action initialize\n        show view \"main\"\n\n    when player presses right\n        run action \"move right\"\n\n    when game updates\n        move value glow toward 1 at 2 per second\n        advance animation \"animation frame\" from 1 through 4 every 100 milliseconds\n        apply gravity 300 to \"vertical speed\"\n        move position \"player left\" \"player top\" using velocity \"horizontal speed\" \"vertical speed\"\n        keep position \"player left\" \"player top\" inside 960 by 540 sized 100 by 100\n        check whether rectangle at \"player left\" \"player top\" sized 100 by 100 touches circle centered at \"ball horizontal center\" \"ball vertical center\" with radius \"ball radius\" as \"player hit\"\n        check whether line from 0 0 to 960 540 touches circle centered at \"ball horizontal center\" \"ball vertical center\" with radius \"ball radius\" as \"laser hit\"\n        check whether polygon through 430 250 then 530 250 then 480 360 touches circle centered at \"ball horizontal center\" \"ball vertical center\" with radius \"ball radius\" as \"polygon hit\"\n");
     else snprintf(source, sizeof(source),
         "controller Items\n    when application starts\n        find all Item as items\n        show view \"main\" with items\n");
-    snprintf(path, sizeof(path), "%s/controllers/items.hyp", name); if (!write_project_file(path, source)) return 1;
+    snprintf(path, sizeof(path), "%s/controllers/items.hyp", name); if (!write_left_aligned_source(path, source)) return 1;
     if (strcmp(target, "api")) {
         snprintf(path, sizeof(path), "%s/views/main.hyp", name);
         const char *view = (!strcmp(target, "desktop") || !strcmp(target, "mobile")) ?
@@ -600,7 +631,7 @@ static int create_project(const char *name, const char *target) {
             !strcmp(target, "pwa") ?
             "view \"main\"\n    title \"Installable Hyperian application\"\n    style \"/assets/app.css\"\n    heading \"Installable Hyperian application\"\n    text \"This English MVC application works online and can be installed.\"\n" :
             "view \"main\"\n    heading \"Welcome to Hyperian\"\n    text \"Your foldered MVC application is ready.\"\n";
-        if (!write_project_file(path, view)) return 1;
+        if (!write_left_aligned_source(path, view)) return 1;
     }
     snprintf(path, sizeof(path), "%s/public/app.css", name);
     if (!write_project_file(path, "body { font-family: system-ui, sans-serif; margin: 3rem auto; max-width: 48rem; }\n")) return 1;
@@ -621,20 +652,49 @@ static int create_project(const char *name, const char *target) {
         !strcmp(target, "pwa") ? "installable web application" : target); return 0;
 }
 
-static int format_source(const char *path) {
+static int format_source(const char *path, int write_back) {
     FILE *file = fopen(path, "r"); if (!file) { fprintf(stderr, "error: cannot open %s\n", path); return 1; }
-    char line[4096]; unsigned widths[64] = {0}; int level = 0;
+    FILE *output = stdout; char temporary[PATH_MAX] = {0}; mode_t mode = 0644;
+    if (write_back) {
+        struct stat information; if (!stat(path, &information)) mode = information.st_mode;
+        if (snprintf(temporary, sizeof(temporary), "%s.format-XXXXXX", path) >= (int)sizeof(temporary)) {
+            fclose(file); fprintf(stderr, "error: source path is too long to format safely\n"); return 1;
+        }
+        int descriptor = mkstemp(temporary); output = descriptor >= 0 ? fdopen(descriptor, "w") : NULL;
+        if (!output) { if (descriptor >= 0) close(descriptor); fclose(file); fprintf(stderr, "error: cannot create formatted source near %s\n", path); return 1; }
+    }
+    char line[4096]; int has_closing_phrases = 0;
+    while (fgets(line, sizeof(line), file)) {
+        char *start = line; while (*start == ' ' || *start == '\t') start++;
+        start[strcspn(start, "\r\n")] = 0;
+        if (!strcmp(start, "end") || !strcmp(start, "that is all")) { has_closing_phrases = 1; break; }
+    }
+    rewind(file); unsigned widths[64] = {0}; int level = 0;
     while (fgets(line, sizeof(line), file)) {
         char *start = line; unsigned width = 0;
         while (*start == ' ' || *start == '\t') { width += *start == '\t' ? 4 : 1; start++; }
         start[strcspn(start, "\r\n")] = 0;
-        if (!*start) { putchar('\n'); continue; }
-        while (level > 0 && width < widths[level]) level--;
-        if (width > widths[level] && level + 1 < 64) widths[++level] = width;
-        for (int i = 0; i < level * 4; i++) putchar(' ');
-        puts(start);
+        if (!*start) { fputc('\n', output); continue; }
+        if (!has_closing_phrases) {
+            int branch = !strcmp(start, "otherwise") || !strncmp(start, "when it fails as ", 17);
+            while (level > 0 && width < widths[level]) {
+                level--;
+                if (!(branch && width == widths[level])) fputs("that is all\n", output);
+            }
+            if (width > widths[level] && level + 1 < 64) widths[++level] = width;
+        }
+        fprintf(output, "%s\n", !strcmp(start, "end") ? "that is all" : start);
     }
-    int failed = ferror(file); fclose(file); return failed ? 1 : 0;
+    while (!has_closing_phrases && level > 0) { fputs("that is all\n", output); level--; }
+    int failed = ferror(file) || ferror(output); fclose(file);
+    if (write_back) {
+        if (fclose(output)) failed = 1;
+        if (!failed && chmod(temporary, mode & 0777)) failed = 1;
+        if (!failed && rename(temporary, path)) failed = 1;
+        if (failed) unlink(temporary);
+        else printf("Formatted %s as left-aligned Hyperian.\n", path);
+    }
+    return failed ? 1 : 0;
 }
 
 static void help(void) {
@@ -656,7 +716,8 @@ static void help(void) {
          "  hyperian debug app.hyp --event PHRASE Trace an event such as \"input name changes\"\n"
          "  hyperian debug app.hyp --action NAME  Trace a particular action\n"
          "  hyperian inspect app.hyc              Show compiled instructions\n"
-         "  hyperian format app.hyp               Print consistently indented source\n"
+         "  hyperian format app.hyp               Print canonical left-aligned source\n"
+         "  hyperian format app.hyp --write       Rewrite source in canonical form\n"
          "  hyperian test app.hyp                 Run English test blocks\n"
          "  hyperian migrate app.hyp              Apply pending data migrations\n"
          "  hyperian doctor                       Check available native backends\n"
@@ -731,8 +792,10 @@ int main(int argc, char **argv) {
         unlink(temporary); return result;
     }
     if (!strcmp(argv[1], "format")) {
-        if (argc != 3) { fprintf(stderr, "usage: hyperian format app.hyp\n"); return 2; }
-        return format_source(argv[2]);
+        if (argc != 3 && !(argc == 4 && !strcmp(argv[3], "--write"))) {
+            fprintf(stderr, "usage: hyperian format app.hyp [--write]\n"); return 2;
+        }
+        return format_source(argv[2], argc == 4);
     }
     if (!strcmp(argv[1], "test")) {
         if (argc != 3) { fprintf(stderr, "usage: hyperian test app.hyp\n"); return 2; }

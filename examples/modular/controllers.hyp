@@ -1,16 +1,16 @@
 controller Home
-    action "prepare greeting"
-        set greeting to "Hello from several Hyperian files"
-    end
+action "prepare greeting"
+set greeting to "Hello from several Hyperian files"
+that is all
 
-    when someone visits "/"
-        run action "prepare greeting"
-        find all Greeting as greetings
-        show view "home"
-    end
+when someone visits "/"
+run action "prepare greeting"
+find all Greeting as greetings
+show view "home"
+that is all
 
-    when someone submits "/greetings"
-        create Greeting from form
-        redirect to "/"
-    end
-end
+when someone submits "/greetings"
+create Greeting from form
+redirect to "/"
+that is all
+that is all

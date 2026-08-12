@@ -1,5 +1,5 @@
 model Greeting
-    field message is text required
-    field details is text maximum 500
-    field featured is boolean default false
-end
+field message is text required
+field details is text maximum 500
+field featured is boolean default false
+that is all

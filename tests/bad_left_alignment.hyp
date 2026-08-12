@@ -1,0 +1,15 @@
+application "Bad Left Alignment" is console
+
+model Setting
+    field name is text
+that is all
+
+controller Main
+when application starts
+show view "main"
+that is all
+that is all
+
+view "main"
+text "This should not compile."
+that is all

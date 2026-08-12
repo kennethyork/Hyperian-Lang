@@ -2,25 +2,25 @@
 application "Daily Report" is service
 
 model Report
-    field name is text
-end
+field name is text
+that is all
 
 controller Reporting
-    action "count work"
-        set completed to 0
-        repeat 5 times
-            set completed to completed plus 1
-        end
-    end
+action "count work"
+set completed to 0
+repeat 5 times
+set completed to completed plus 1
+that is all
+that is all
 
-    when application starts
-        run action "count work"
-        show view "report"
-    end
-end
+when application starts
+run action "count work"
+show view "report"
+that is all
+that is all
 
 view "report"
-    heading "Daily service report"
-    say "Completed jobs:"
-    show completed
-end
+heading "Daily service report"
+say "Completed jobs:"
+show completed
+that is all

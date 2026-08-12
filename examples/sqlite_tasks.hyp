@@ -4,32 +4,32 @@ store data in sqlite file "sqlite-tasks.db"
 listen on 8086
 
 when data changes from 1 to 2
-    rename field title to name in model Task
-end
+rename field title to name in model Task
+that is all
 
 model Task
-    field name is text required
-end
+field name is text required
+that is all
 
 controller Tasks
-    when someone visits "/"
-        find all Task as tasks
-        show view "tasks" with tasks
-    end
+when someone visits "/"
+find all Task as tasks
+show view "tasks" with tasks
+that is all
 
-    when someone submits "/tasks"
-        create Task from form
-        redirect to "/"
-    end
-end
+when someone submits "/tasks"
+create Task from form
+redirect to "/"
+that is all
+that is all
 
 view "tasks"
-    heading "SQLite tasks"
-    form posts to "/tasks"
-        input "Task name" as name required
-        button "Add task"
-    end
-    for each task in tasks show
-        show task.name
-    end
-end
+heading "SQLite tasks"
+form posts to "/tasks"
+input "Task name" as name required
+button "Add task"
+that is all
+for each task in tasks show
+show task.name
+that is all
+that is all

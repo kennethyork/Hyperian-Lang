@@ -3,109 +3,109 @@ application "English Logic" is web
 listen on 8083
 
 model Calculation
-    field name is text
-end
+field name is text
+that is all
 
 controller Calculator
-    action "prepare every route"
-        set prepared to yes
-    end
+action "prepare every route"
+set prepared to yes
+that is all
 
-    action "prepare calculation route"
-        set route_prepared to yes
-    end
+action "prepare calculation route"
+set route_prepared to yes
+that is all
 
-    before every route run action "prepare every route"
-    before route "/calculate" run action "prepare calculation route"
+before every route run action "prepare every route"
+before route "/calculate" run action "prepare calculation route"
 
-    action calculate
-        set total to 2
-        repeat 4 times
-            set total to total plus 3
-        end
+action calculate
+set total to 2
+repeat 4 times
+set total to total plus 3
+that is all
 
-        if total is greater than 10
-            set message to "The total is large"
-        otherwise
-            set message to "The total is small"
-        end
-    end
+if total is greater than 10
+set message to "The total is large"
+otherwise
+set message to "The total is small"
+that is all
+that is all
 
-    action "multiply form numbers"
-        set total to price times quantity
-        set message to "The form was calculated"
-    end
+action "multiply form numbers"
+set total to price times quantity
+set message to "The form was calculated"
+that is all
 
-    action "greet person" using person
-        set greeting to "Hello," joined with person
-        return greeting
-    end
+action "greet person" using person
+set greeting to "Hello," joined with person
+return greeting
+that is all
 
-    action "save and load" using message
-        write message to file "/tmp/hyperian-language-file-test.txt"
-        read file "/tmp/hyperian-language-file-test.txt" as loaded
-        return loaded
-    end
+action "save and load" using message
+write message to file "/tmp/hyperian-language-file-test.txt"
+read file "/tmp/hyperian-language-file-test.txt" as loaded
+return loaded
+that is all
 
-    test "repeating addition"
-        set total to 2
-        repeat 4 times
-            set total to total plus 3
-        end
-        expect total to be 14
-    end
+test "repeating addition"
+set total to 2
+repeat 4 times
+set total to total plus 3
+that is all
+expect total to be 14
+that is all
 
-    test "reusable multiplication action"
-        set price to 7
-        set quantity to 6
-        run action "multiply form numbers"
-        expect total to be 42
-    end
+test "reusable multiplication action"
+set price to 7
+set quantity to 6
+run action "multiply form numbers"
+expect total to be 42
+that is all
 
-    test "actions accept input and return a result"
-        run action "greet person" using Ada as greeting
-        expect greeting to be "Hello,Ada"
-    end
+test "actions accept input and return a result"
+run action "greet person" using Ada as greeting
+expect greeting to be "Hello,Ada"
+that is all
 
-    test "native files preserve text"
-        run action "save and load" using "Saved by Hyperian" as loaded
-        expect loaded to be "Saved by Hyperian"
-    end
+test "native files preserve text"
+run action "save and load" using "Saved by Hyperian" as loaded
+expect loaded to be "Saved by Hyperian"
+that is all
 
-    when someone visits "/"
-        run action calculate
-        show view "result"
-    end
+when someone visits "/"
+run action calculate
+show view "result"
+that is all
 
 
-    when someone submits "/calculate"
-        read price from form as price
-        read quantity from form as quantity
-        run action "multiply form numbers"
-        show view "result"
-    end
-end
+when someone submits "/calculate"
+read price from form as price
+read quantity from form as quantity
+run action "multiply form numbers"
+show view "result"
+that is all
+that is all
 
 view "result"
-    heading "Calculation finished"
-    text "The total is:"
-    show total
-    text "The controller says:"
-    show message
-    text "Middleware prepared:"
-    show prepared
-    text "This route was specially prepared:"
-    show route_prepared
-    form posts to "/calculate"
-        input "Price" as price required
-        input "Quantity" as quantity required
-        button "Calculate"
-    end
-end
+heading "Calculation finished"
+text "The total is:"
+show total
+text "The controller says:"
+show message
+text "Middleware prepared:"
+show prepared
+text "This route was specially prepared:"
+show route_prepared
+form posts to "/calculate"
+input "Price" as price required
+input "Quantity" as quantity required
+button "Calculate"
+that is all
+that is all
 
 view "not-found"
-    heading "That page was not found"
-    link "Return home" to "/"
-end
+heading "That page was not found"
+link "Return home" to "/"
+that is all
 
 when error 404 show view "not-found"

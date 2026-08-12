@@ -479,6 +479,15 @@ int compile_file(const char *source_path, const char *output_path) {
     project_directory[project_prefix] = 0;
     if (!expand_source(source_path, file, 0, project_directory)) { fclose(file); return 1; }
     rewind(file);
+    int left_aligned = 0; char scan_line[MAX_LINE];
+    while (fgets(scan_line, sizeof(scan_line), file)) {
+        char *scan_words[MAX_WORDS], scan_error[128];
+        int scan_count = words(scan_line, scan_words, NULL, MAX_WORDS, scan_error, sizeof(scan_error));
+        if (scan_count == 3 && !strcmp(scan_words[0], "that") && !strcmp(scan_words[1], "is") && !strcmp(scan_words[2], "all")) {
+            left_aligned = 1; break;
+        }
+    }
+    rewind(file);
     Bytecode code; bytecode_init(&code);
     Block stack[MAX_DEPTH] = {BLOCK_ROOT}; unsigned block_indentation[MAX_DEPTH] = {0};
     unsigned child_indentation[MAX_DEPTH]; for (int at = 0; at < MAX_DEPTH; at++) child_indentation[at] = UINT_MAX;
@@ -500,9 +509,13 @@ int compile_file(const char *source_path, const char *output_path) {
         char *w[MAX_WORDS]; unsigned char quoted[MAX_WORDS] = {0}; int n = words(line, w, quoted, MAX_WORDS, error, sizeof(error));
         if (n < 0) { source_error(source_path, number, error); okay = 0; break; }
         if (!n) continue;
-        if (indentation_has_tab) { source_error(source_path, number, "use spaces for indentation, not tabs"); okay = 0; break; }
-        int explicit_end = n == 1 && !strcmp(w[0], "end");
-        while (depth > 1) {
+        if (left_aligned && indentation) {
+            source_error(source_path, number, "start every Hyperian sentence at the left edge"); okay = 0; break;
+        }
+        if (!left_aligned && indentation_has_tab) { source_error(source_path, number, "use spaces for indentation, not tabs"); okay = 0; break; }
+        int explicit_end = (n == 1 && !strcmp(w[0], "end")) ||
+            (n == 3 && !strcmp(w[0], "that") && !strcmp(w[1], "is") && !strcmp(w[2], "all"));
+        while (!left_aligned && depth > 1) {
             Block open = stack[depth - 1]; unsigned opening = block_indentation[depth - 1];
             if (indentation < opening || (indentation == opening && !explicit_end && !indentation_branch(open, w, n))) {
                 okay = emit(&code, block_end_opcode(open), 0, NULL, number); depth--;
@@ -511,11 +524,15 @@ int compile_file(const char *source_path, const char *output_path) {
         }
         if (!okay) break;
         Block current = stack[depth - 1];
-        if (explicit_end) {
+        if (explicit_end && !left_aligned) {
             if (depth == 1) { source_error(source_path, number, "this end does not close anything"); okay = 0; break; }
             if (indentation != block_indentation[depth - 1]) {
                 source_error(source_path, number, "align end with the block it closes"); okay = 0; break;
             }
+        } else if (explicit_end) {
+            if (depth == 1) { source_error(source_path, number, "that is all does not close anything here"); okay = 0; break; }
+        } else if (left_aligned) {
+            /* The English closing phrase, rather than indentation, defines this block. */
         } else if (depth == 1) {
             if (indentation) { source_error(source_path, number, "top-level instructions cannot be indented"); okay = 0; break; }
         } else if (indentation_branch(current, w, n)) {
@@ -532,7 +549,7 @@ int compile_file(const char *source_path, const char *output_path) {
                 source_error(source_path, number, "use the same indentation for instructions in this block"); okay = 0; break;
             }
         }
-        if (n == 1 && !strcmp(w[0], "end")) {
+        if (explicit_end) {
             okay = emit(&code, block_end_opcode(current), 0, NULL, number); depth--; continue;
         }
         if (current == BLOCK_ROOT) {
@@ -1011,11 +1028,14 @@ int compile_file(const char *source_path, const char *output_path) {
         }
     }
     if (ferror(file)) { fprintf(stderr, "error: could not read %s\n", source_path); okay = 0; }
-    while (okay && depth > 1) {
+    while (okay && !left_aligned && depth > 1) {
         okay = emit(&code, block_end_opcode(stack[depth - 1]), 0, NULL, number); depth--;
     }
     fclose(file);
 #undef PUSH_BLOCK
+    if (okay && left_aligned && depth != 1) {
+        source_error(source_path, number, "finish this block by saying: that is all"); okay = 0;
+    }
     if (okay && !saw_application) { source_error(source_path, 1, "start the program with application \"Name\""); okay = 0; }
     if (okay) okay = validate(&code, source_path);
     if (okay) {

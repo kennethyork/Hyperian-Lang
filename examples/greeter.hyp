@@ -2,18 +2,18 @@
 application "Friendly Greeter" is console
 
 model Person
-    field name is text required
-end
+field name is text required
+that is all
 
 controller Greeting
-    when application starts
-        ask "What is your name?" as name
-        show view "greeting" with name
-    end
-end
+when application starts
+ask "What is your name?" as name
+show view "greeting" with name
+that is all
+that is all
 
 view "greeting"
-    heading "Welcome"
-    say "It is good to meet you,"
-    show name
-end
+heading "Welcome"
+say "It is good to meet you,"
+show name
+that is all

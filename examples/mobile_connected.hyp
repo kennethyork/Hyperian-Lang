@@ -2,53 +2,53 @@ application "Connected Tasks" is mobile
 store data in sqlite file "connected-tasks.db"
 
 model Task
-    field "task title" is text required
-end
+field "task title" is text required
+that is all
 
 controller Tasks
-    action initialize
-        set "internet message" to "Not checked yet"
-        collect every Task "task title" ordered by "task title" as "task titles"
-    end
+action initialize
+set "internet message" to "Not checked yet"
+collect every Task "task title" ordered by "task title" as "task titles"
+that is all
 
-    action "save task"
-        create a Task using the current values as number
-        collect every Task "task title" ordered by "task title" as "task titles"
-        set "saved message" to "Saved task:" joined with number
-    end
+action "save task"
+create a Task using the current values as number
+collect every Task "task title" ordered by "task title" as "task titles"
+set "saved message" to "Saved task:" joined with number
+that is all
 
-    action "refresh status"
-        try
-            get "https://example.com/hyperian-status" from web as "web response" and status as "status code"
-            set "internet message" to "Internet status:" joined with value called "status code" joined with ":" joined with value called "web response"
-        when it fails as problem
-            set "internet message" to "Internet problem:" joined with problem
-        end
-    end
+action "refresh status"
+try
+get "https://example.com/hyperian-status" from web as "web response" and status as "status code"
+set "internet message" to "Internet status:" joined with value called "status code" joined with ":" joined with value called "web response"
+when it fails as problem
+set "internet message" to "Internet problem:" joined with problem
+that is all
+that is all
 
-    when application starts
-        run action initialize
-        show view "home"
-    end
+when application starts
+run action initialize
+show view "home"
+that is all
 
-    when input "task title" changes
-        set "saved message" to "Typing:" joined with value called "task title"
-    end
+when input "task title" changes
+set "saved message" to "Typing:" joined with value called "task title"
+that is all
 
-    when input "task title" is submitted
-        set "saved message" to "Submitted:" joined with value called "task title"
-    end
-end
+when input "task title" is submitted
+set "saved message" to "Submitted:" joined with value called "task title"
+that is all
+that is all
 
 view "home"
-    heading "Connected mobile tasks"
-    text "SQLite keeps tasks on the phone and HTTPS loads remote information."
-    input "Task title" as "task title" required
-    button "Save task" runs action "save task"
-    button "Refresh internet status" runs action "refresh status"
-    show "saved message"
-    show "internet message"
-    for each "saved title" in "task titles" show
-        show "saved title"
-    end
-end
+heading "Connected mobile tasks"
+text "SQLite keeps tasks on the phone and HTTPS loads remote information."
+input "Task title" as "task title" required
+button "Save task" runs action "save task"
+button "Refresh internet status" runs action "refresh status"
+show "saved message"
+show "internet message"
+for each "saved title" in "task titles" show
+show "saved title"
+that is all
+that is all
