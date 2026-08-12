@@ -12,9 +12,6 @@
 #ifdef _WIN32
 #include <direct.h>
 #include <io.h>
-#ifndef PATH_MAX
-#define PATH_MAX 4096
-#endif
 #define chmod _chmod
 #define chdir _chdir
 #define close _close
@@ -182,7 +179,7 @@ too_large:
     fprintf(stderr, "error: generated Hyperian source for %s is too large\n", path); return 0;
 }
 
-static int copy_bundle_file(const char *source, const char *destination, mode_t mode) {
+static int copy_bundle_file(const char *source, const char *destination, int mode) {
     FILE *from = fopen(source, "rb"), *to = from ? fopen(destination, "wb") : NULL; int okay = 1;
     if (!from || !to) okay = 0;
     unsigned char data[65536]; size_t count;
@@ -196,7 +193,7 @@ static int copy_bundle_file(const char *source, const char *destination, mode_t 
     return okay;
 }
 
-static int copy_new_file(const char *source, const char *destination, mode_t mode) {
+static int copy_new_file(const char *source, const char *destination, int mode) {
     FILE *from = fopen(source, "rb"), *to = from ? fopen(destination, "wbx") : NULL; int okay = from && to;
     unsigned char data[65536]; size_t count;
     while (okay && (count = fread(data, 1, sizeof(data), from)) != 0)
@@ -894,7 +891,7 @@ static int create_project(const char *name, const char *target) {
 
 static int format_source(const char *path, int write_back) {
     FILE *file = fopen(path, "r"); if (!file) { fprintf(stderr, "error: cannot open %s\n", path); return 1; }
-    FILE *output = stdout; char temporary[PATH_MAX] = {0}; mode_t mode = 0644;
+    FILE *output = stdout; char temporary[PATH_MAX] = {0}; int mode = 0644;
     if (write_back) {
         struct stat information; if (!stat(path, &information)) mode = information.st_mode;
         int descriptor = hyperian_temporary_sibling(temporary, sizeof(temporary), path, "format");

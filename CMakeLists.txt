@@ -6,6 +6,12 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS ON)
 option(HYPERIAN_ENABLE_SDL2_IMAGE "Enable PNG, JPEG, and WebP game images when SDL2_image is available" ON)
 
+if(MSVC)
+    set(HYPERIAN_WARNING_OPTIONS /W4)
+else()
+    set(HYPERIAN_WARNING_OPTIONS -Wall -Wextra -Wpedantic)
+endif()
+
 add_executable(hyperian
     src/main.c
     src/compiler.c
@@ -19,7 +25,7 @@ add_executable(hyperian
     src/platform.c
 )
 target_include_directories(hyperian PRIVATE src)
-target_compile_options(hyperian PRIVATE -Wall -Wextra -Wpedantic)
+target_compile_options(hyperian PRIVATE ${HYPERIAN_WARNING_OPTIONS})
 target_compile_definitions(hyperian PRIVATE HYPERIAN_SOURCE_ROOT="${CMAKE_SOURCE_DIR}")
 
 find_package(PkgConfig QUIET)
@@ -59,7 +65,7 @@ add_library(hyperian_mobile_runtime STATIC
     src/mobile.c src/runtime.c src/bytecode.c src/network.c src/security.c src/platform.c src/desktop.c src/game.c)
 set_target_properties(hyperian_mobile_runtime PROPERTIES OUTPUT_NAME hyperian_mobile POSITION_INDEPENDENT_CODE ON)
 target_include_directories(hyperian_mobile_runtime PUBLIC src)
-target_compile_options(hyperian_mobile_runtime PRIVATE -Wall -Wextra -Wpedantic)
+target_compile_options(hyperian_mobile_runtime PRIVATE ${HYPERIAN_WARNING_OPTIONS})
 if(SQLITE3_FOUND)
     target_compile_definitions(hyperian_mobile_runtime PRIVATE HYPERIAN_HAVE_SQLITE3=1)
     target_link_libraries(hyperian_mobile_runtime PRIVATE PkgConfig::SQLITE3)
@@ -202,7 +208,7 @@ add_test(NAME compile_authentication
 
 add_executable(hyperian_security_test tests/security_test.c src/security.c)
 target_include_directories(hyperian_security_test PRIVATE src)
-target_compile_options(hyperian_security_test PRIVATE -Wall -Wextra -Wpedantic)
+target_compile_options(hyperian_security_test PRIVATE ${HYPERIAN_WARNING_OPTIONS})
 add_test(NAME native_security COMMAND hyperian_security_test ${CMAKE_SOURCE_DIR}/tests/sha256_fixture.txt)
 add_test(NAME compile_english_logic
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/english_logic.hyp -o ${CMAKE_BINARY_DIR}/english_logic.hyc)
@@ -445,7 +451,7 @@ add_test(NAME compile_mobile_connected
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/mobile_connected.hyp -o ${CMAKE_BINARY_DIR}/mobile_connected.hyc)
 add_executable(hyperian_mobile_bridge_test tests/mobile_bridge_test.c)
 target_include_directories(hyperian_mobile_bridge_test PRIVATE src)
-target_compile_options(hyperian_mobile_bridge_test PRIVATE -Wall -Wextra -Wpedantic)
+target_compile_options(hyperian_mobile_bridge_test PRIVATE ${HYPERIAN_WARNING_OPTIONS})
 target_link_libraries(hyperian_mobile_bridge_test PRIVATE hyperian_mobile_runtime)
 add_test(NAME clean_mobile_bridge_data COMMAND ${CMAKE_COMMAND} -E remove ${CMAKE_BINARY_DIR}/mobile_bridge.hdb)
 add_test(NAME run_mobile_bridge
@@ -455,7 +461,7 @@ set_tests_properties(run_mobile_bridge PROPERTIES DEPENDS "compile_mobile_previe
 if(SQLITE3_FOUND)
     add_executable(hyperian_mobile_connected_test tests/mobile_connected_test.c)
     target_include_directories(hyperian_mobile_connected_test PRIVATE src)
-    target_compile_options(hyperian_mobile_connected_test PRIVATE -Wall -Wextra -Wpedantic)
+    target_compile_options(hyperian_mobile_connected_test PRIVATE ${HYPERIAN_WARNING_OPTIONS})
     target_link_libraries(hyperian_mobile_connected_test PRIVATE hyperian_mobile_runtime)
     add_test(NAME clean_mobile_connected_data COMMAND ${CMAKE_COMMAND} -E remove ${CMAKE_BINARY_DIR}/mobile_connected.sqlite)
     add_test(NAME run_mobile_connected
@@ -615,7 +621,7 @@ add_test(NAME compile_game_physics
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/physics_game.hyp -o ${CMAKE_BINARY_DIR}/physics_game.hyc)
 add_executable(hyperian_game_physics_test tests/game_physics_test.c)
 target_include_directories(hyperian_game_physics_test PRIVATE src)
-target_compile_options(hyperian_game_physics_test PRIVATE -Wall -Wextra -Wpedantic)
+target_compile_options(hyperian_game_physics_test PRIVATE ${HYPERIAN_WARNING_OPTIONS})
 target_link_libraries(hyperian_game_physics_test PRIVATE hyperian_mobile_runtime)
 add_test(NAME run_game_physics
     COMMAND hyperian_game_physics_test ${CMAKE_BINARY_DIR}/physics_game.hyc)
@@ -820,13 +826,13 @@ add_test(NAME inspect_data_migrations
 set_tests_properties(inspect_data_migrations PROPERTIES DEPENDS compile_data_migrations)
 
 add_executable(hyperian_migration_fixture tests/migration_fixture.c)
-target_compile_options(hyperian_migration_fixture PRIVATE -Wall -Wextra -Wpedantic)
+target_compile_options(hyperian_migration_fixture PRIVATE ${HYPERIAN_WARNING_OPTIONS})
 add_executable(hyperian_game_media_fixture tests/game_media_fixture.c)
-target_compile_options(hyperian_game_media_fixture PRIVATE -Wall -Wextra -Wpedantic)
+target_compile_options(hyperian_game_media_fixture PRIVATE ${HYPERIAN_WARNING_OPTIONS})
 add_executable(hyperian_embedded_sqlite_test tests/embedded_sqlite_test.c platform/sqlite/sqlite3.c)
 target_include_directories(hyperian_embedded_sqlite_test PRIVATE platform/sqlite)
 target_compile_definitions(hyperian_embedded_sqlite_test PRIVATE SQLITE_THREADSAFE=1 SQLITE_OMIT_LOAD_EXTENSION=1 SQLITE_DEFAULT_FOREIGN_KEYS=1)
-target_compile_options(hyperian_embedded_sqlite_test PRIVATE -Wall -Wextra -Wpedantic)
+target_compile_options(hyperian_embedded_sqlite_test PRIVATE ${HYPERIAN_WARNING_OPTIONS})
 set_source_files_properties(platform/sqlite/sqlite3.c PROPERTIES COMPILE_OPTIONS "-w")
 add_test(NAME embedded_android_sqlite COMMAND hyperian_embedded_sqlite_test)
 add_test(NAME create_legacy_data
@@ -842,7 +848,7 @@ set_tests_properties(verify_migrated_data PROPERTIES DEPENDS migrate_legacy_data
 if(SQLITE3_FOUND)
     add_executable(hyperian_sqlite_fixture tests/sqlite_fixture.c)
     target_link_libraries(hyperian_sqlite_fixture PRIVATE PkgConfig::SQLITE3)
-    target_compile_options(hyperian_sqlite_fixture PRIVATE -Wall -Wextra -Wpedantic)
+    target_compile_options(hyperian_sqlite_fixture PRIVATE ${HYPERIAN_WARNING_OPTIONS})
     add_test(NAME compile_sqlite_storage
         COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/sqlite_tasks.hyp -o ${CMAKE_BINARY_DIR}/sqlite_tasks.hyc)
     add_test(NAME clean_native_sqlite_crud COMMAND ${CMAKE_COMMAND} -E remove ${CMAKE_BINARY_DIR}/native_crud.sqlite)

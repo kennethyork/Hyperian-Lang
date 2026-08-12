@@ -5,6 +5,19 @@
 #include <stdint.h>
 #include <sys/stat.h>
 
+#ifndef PATH_MAX
+#define PATH_MAX 4096
+#endif
+
+#ifdef _WIN32
+#ifndef S_ISDIR
+#define S_ISDIR(mode) (((mode) & _S_IFMT) == _S_IFDIR)
+#endif
+#ifndef S_ISREG
+#define S_ISREG(mode) (((mode) & _S_IFMT) == _S_IFREG)
+#endif
+#endif
+
 typedef struct HyperianDirectory HyperianDirectory;
 
 int hyperian_temporary_file(char *path, size_t size, const char *purpose);
