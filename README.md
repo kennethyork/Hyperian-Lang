@@ -35,8 +35,17 @@ Run either source or compiled bytecode:
 
 ```sh
 build/hyperian run examples/tasks.hyp
+# shorter: build/hyperian examples/tasks.hyp
 # or: build/hyperian run build/tasks.hyc
 ```
+
+The `.hyp` file is your English application source. Hyperian compiles it temporarily and immediately starts the runtime selected by the application sentence. You do not need a `.hyr` file for ordinary development on the current computer. Ask the compiler for focused instructions at any time:
+
+```sh
+build/hyperian help run
+```
+
+Web, installable-web, and API applications print a local address and keep running until Ctrl+C. Console and service applications use the terminal. Desktop and mobile-preview applications open a GTK window, and games open an SDL window; `build/hyperian doctor` reports whether those optional native backends are installed.
 
 Build one executable containing the native runtime and compiled MVC bytecode:
 
@@ -82,7 +91,7 @@ This produces `MyAppBundle/run` (or `run.exe` for a Windows runtime pack), copie
 
 The destination does not need the Hyperian compiler, the `.hyp` source, or a separate `.hyc` file. A runtime pack has an `HYRP1` manifest containing its platform, bytecode format, exact Hyperian toolchain version, executable name, and SHA-256 runtime checksum. The single-file archive has the fixed `HYRPACK1` identity, explicit manifest and runtime lengths, and no stored path names. Hyperian rejects a pack for the wrong platform, a pack from another toolchain version, changed or trailing bytes, a symbolic-link substitute, truncated data, or a damaged manifest before creating the application. Its temporary native runtime is removed after assembling the output. Runtime packs are version-specific because newer language releases may add bytecode instructions; download or recreate them after upgrading Hyperian.
 
-Tagged releases publish tested `.hyr` archives and separate SHA-256 files for Linux x64, Linux arm64, macOS x64, macOS arm64, and Windows x64 on the [GitHub releases page](https://github.com/kennethyork/Hyperian-Lang/releases). Each native runner builds Hyperian, runs its test suite, confirms its real platform name, creates its own archive, and uploads it. The release job verifies all five external checksums before publishing them.
+Tagged releases publish two clearly separated downloads for Linux x64, Linux arm64, macOS x64, macOS arm64, and Windows x64 on the [GitHub releases page](https://github.com/kennethyork/Hyperian-Lang/releases). A `hyperian-toolchain-...zip` is the beginner-friendly compiler package: extract it and use `bin/hyperian` or `bin/hyperian.exe` to run `.hyp` source. A `.hyr` archive is the advanced runtime input used only to build for another native platform. Each download has its own SHA-256 file. Every native runner builds Hyperian, runs its test suite, confirms its real platform name, installs and exercises the user toolchain, and creates both archives. The release job verifies all ten external checksums before publishing them.
 
 This workflow performs cross-platform application assembly rather than compiling C on the development computer: the destination’s native VM is already in the pack, and Hyperian compiles the fully left-aligned English MVC program into portable bytecode before joining the two. Dynamic libraries required by that VM, such as GTK3 or SDL2, must still be installed on the destination. Keep `assets/` and `public/` beside a single standalone executable when the application uses them, or use the cross-platform bundle command to copy them automatically.
 
@@ -239,7 +248,7 @@ The build also produces `libhyperian_mobile.a`, a portable C library for Android
 - `hyperian_mobile_start` runs `when application starts`.
 - `hyperian_mobile_set` synchronizes a native input into controller state.
 - `hyperian_mobile_run_action` and `hyperian_mobile_send_event` execute controller behavior, CRUD, timers, and navigation.
-- `hyperian_mobile_render_json` returns the current view as ordered heading, text, value, input, text-area, checkbox, button, link, and image controls. It expands English `for each` and `if` view blocks.
+- `hyperian_mobile_render_json` returns the current view as ordered heading, text, value, input, text-area, checkbox, button, link, image, row, column, card, table, table-row, table-heading, and table-cell controls. It expands English `for each` and `if` view blocks.
 - `hyperian_mobile_close` releases the session.
 
 This API means platform code renders controls but does not reimplement Hyperian semantics. Models, actions, persistence, view selection, and expressions continue running in Hyperian’s native VM. CMake installs the library under `lib/` and its public header under `include/hyperian/`.
@@ -958,9 +967,26 @@ that is all
 
 These are nested MVC view blocks, not web-only CSS shortcuts. Hyperian renders them as responsive HTML containers, GTK boxes and frames, nested Android layouts, and SwiftUI stacks and cards. Console views preserve their readable content order, and controls inside a group keep their normal events and reactive values.
 
+Collections can be presented as real tables using the same portable view bytecode. Put headings first, repeat rows from controller-provided collections, and put a model field or controller value in each cell:
+
+```hyperian
+show the following in a table
+use "Task" as a table heading
+use "Finished" as a table heading
+for each task in tasks show
+show the following in a table row
+show task.title in a table cell
+show task.finished in a table cell
+that is all
+that is all
+that is all
+```
+
+On the web this becomes a semantic `<table>` with column headings and a horizontally scrollable narrow-screen wrapper. GTK, Android, and SwiftUI render matching native header and row groups. The mobile bridge preserves the nested table structure as JSON, while console applications print a readable tabular sequence. Repetition inside a web table produces rows directly instead of invalid list markup.
+
 Edit views populate text areas and checkbox state from the current model. HTML attributes and values remain escaped. The complete multi-file asset example is in [examples/modular](examples/modular).
 
-Console controllers understand `when application starts` and `ask`. Views share `title`, `heading`, `text`, `say`, `show`, `for each`, `if`, rows, columns, and cards; web views additionally support links and forms.
+Console controllers understand `when application starts` and `ask`. Views share `title`, `heading`, `text`, `say`, `show`, `for each`, `if`, rows, columns, cards, and tables; web views additionally support links and forms.
 
 Quoted text may contain spaces. `#` starts a comment. Canonical Hyperian reads like left-aligned English: every sentence begins at the left edge, and `that is all` closes the current model, controller, action, event, condition, loop, form, or view. A source set that uses `that is all` is checked strictly for left alignment. Older indentation-based source and the shorter `end` spelling remain compatible, so existing projects continue to compile.
 
@@ -986,6 +1012,6 @@ that is all
 
 ## Project status
 
-Version 0.49 is a small but real MVC platform: canonical fully left-aligned English source with readable `that is all` block endings and compatibility for older indentation-based programs, nested English row, column, and card view layouts across responsive web, GTK, Android, and SwiftUI interfaces, custom portable bytecode, a native VM, native Windows x64 compiler/runtime support with Windows files, processes, clocks, services, cryptographic randomness, and Winsock HTTP serving, verified versioned native runtime folders and path-free downloadable `.hyr` archives with SHA-256 integrity, automated five-platform release builds, direct cross-platform executable assembly, transactional cross-platform asset bundles for console, service, web, API, desktop, mobile-preview, and game applications, readable quoted phrase names across MVC and every runtime, literal-safe English expressions, versioned Android/iOS mobile deployment packages, automated signed APK/AAB/IPA orchestration, a linkable native mobile runtime bridge, self-contained native Android Studio and SwiftUI Xcode project generation, native phone HTTPS and SQLite integration, native backend diagnostics, eight compiler targets including installable offline web applications, parallel-safe compiler tooling, an English source-line debugger, persistent model CRUD plus filtered and ordered collection queries inside native controller actions, repeated native collection views, recurring service and native-interface timers, interactive multi-view GTK desktop and phone-sized mobile preview interfaces with close, live-input-change, keyboard-submission, focus, pause, resume, tap, press-and-hold, and four-direction swipe events, matching generated Android/iOS lifecycle and gesture events, SDL2 keyboard/frame events, frame-rate-independent movement, gravity, smooth value transitions, timed animation frames, boundaries, native rectangle, circle, line, and filled polygon drawing plus collision detection between every shape pair, BMP/PNG/JPEG/WebP sprites, WAV and compressed overlapping sound effects, streamed music controls, readable frame-time state, and state-driven rendering, native lists and maps, selectable HDB or transactional SQLite storage, recoverable runtime errors, an HTTP/HTTPS client, local packages, reusable actions, native file access, foldered project generation, versioned migrations, persistent CRUD models, safe HTML and typed JSON, authentication and authorization, middleware, formatting, and English tests.
+Version 0.50 is a small but real MVC platform: canonical fully left-aligned English source with readable `that is all` block endings and compatibility for older indentation-based programs, focused built-in help for directly running `.hyp` source without confusing it with `.hyr` runtime packs, nested English row, column, card, and data-table view layouts across responsive web, GTK, Android, SwiftUI, mobile-bridge JSON, and readable console output, custom portable bytecode, a native VM, native Windows x64 compiler/runtime support with Windows files, processes, clocks, services, cryptographic randomness, and Winsock HTTP serving, verified versioned native runtime folders and path-free downloadable `.hyr` archives with SHA-256 integrity, automated five-platform release builds, direct cross-platform executable assembly, transactional cross-platform asset bundles for console, service, web, API, desktop, mobile-preview, and game applications, readable quoted phrase names across MVC and every runtime, literal-safe English expressions, versioned Android/iOS mobile deployment packages, automated signed APK/AAB/IPA orchestration, a linkable native mobile runtime bridge, self-contained native Android Studio and SwiftUI Xcode project generation, native phone HTTPS and SQLite integration, native backend diagnostics, eight compiler targets including installable offline web applications, parallel-safe compiler tooling, an English source-line debugger, persistent model CRUD plus filtered and ordered collection queries inside native controller actions, repeated native collection views, recurring service and native-interface timers, interactive multi-view GTK desktop and phone-sized mobile preview interfaces with close, live-input-change, keyboard-submission, focus, pause, resume, tap, press-and-hold, and four-direction swipe events, matching generated Android/iOS lifecycle and gesture events, SDL2 keyboard/frame events, frame-rate-independent movement, gravity, smooth value transitions, timed animation frames, boundaries, native rectangle, circle, line, and filled polygon drawing plus collision detection between every shape pair, BMP/PNG/JPEG/WebP sprites, WAV and compressed overlapping sound effects, streamed music controls, readable frame-time state, and state-driven rendering, native lists and maps, selectable HDB or transactional SQLite storage, recoverable runtime errors, an HTTP/HTTPS client, local packages, reusable actions, native file access, foldered project generation, versioned migrations, persistent CRUD models, safe HTML and typed JSON, authentication and authorization, middleware, formatting, and English tests.
 
 Windows arm64 release coverage and bundled native Windows desktop/game dependencies remain future portability work.

@@ -861,8 +861,8 @@ static int create_project(const char *name, const char *target) {
         snprintf(path, sizeof(path), "%s/views/main.hyp", name);
         const char *view = (!strcmp(target, "desktop") || !strcmp(target, "mobile")) ?
             (!strcmp(target, "mobile") ?
-            "view \"main\"\n    heading \"Mobile application\"\n    show the following in a card\n        arrange the following in a column\n            input \"Your name\" as \"item name\"\n            arrange the following in a row\n                button \"Save item\" runs action activate\n            show status\n    show the following in a card\n        for each \"saved item\" in \"item names\" show\n            show \"saved item\"\n" :
-            "view \"main\"\n    heading \"Native desktop application\"\n    show the following in a card\n        arrange the following in a column\n            input \"Your name\" as \"item name\"\n            arrange the following in a row\n                button \"Save item\" runs action activate\n            show status\n    show the following in a card\n        for each \"saved item\" in \"item names\" show\n            show \"saved item\"\n") :
+            "view \"main\"\n    heading \"Mobile application\"\n    show the following in a card\n        arrange the following in a column\n            input \"Your name\" as \"item name\"\n            arrange the following in a row\n                button \"Save item\" runs action activate\n            show status\n    show the following in a card\n        show the following in a table\n            use \"Saved items\" as a table heading\n            for each \"saved item\" in \"item names\" show\n                show the following in a table row\n                    show \"saved item\" in a table cell\n" :
+            "view \"main\"\n    heading \"Native desktop application\"\n    show the following in a card\n        arrange the following in a column\n            input \"Your name\" as \"item name\"\n            arrange the following in a row\n                button \"Save item\" runs action activate\n            show status\n    show the following in a card\n        show the following in a table\n            use \"Saved items\" as a table heading\n            for each \"saved item\" in \"item names\" show\n                show the following in a table row\n                    show \"saved item\" in a table cell\n") :
             !strcmp(target, "game") ?
             "view \"main\"\n    fill background with color 18 24 38\n    draw rectangle at \"player left\" \"player top\" sized 100 by 100 with color 70 170 255\n    draw circle centered at \"ball horizontal center\" \"ball vertical center\" with radius \"ball radius\" and color 255 110 90\n    draw line from 0 0 to 960 540 with color 120 230 160\n    draw polygon through 430 250 then 530 250 then 480 360 with color 180 100 240\n" :
             !strcmp(target, "pwa") ?
@@ -938,6 +938,8 @@ static void help(void) {
     puts("Hyperian " HYPERIAN_VERSION " - English-like MVC for every kind of app\n"
          "\n"
          "Usage:\n"
+         "  hyperian run app.hyp                  Run your English source application\n"
+         "  hyperian help run                     Explain how .hyp applications run\n"
          "  hyperian compile app.hyp -o app.hyc   Compile source to bytecode\n"
          "  hyperian build app.hyp -o MyApp       Build one executable application\n"
          "  hyperian build app.hyp for android as App.aab\n"
@@ -953,7 +955,6 @@ static void help(void) {
          "                                          Export a phone deployment package\n"
          "  hyperian new MyApp [--target web]     Create a foldered MVC project\n"
          "  hyperian check app.hyp                Check source for mistakes\n"
-         "  hyperian run app.hyp                  Compile and run an app\n"
          "  hyperian run app.hyc [--port 9000]    Run compiled bytecode\n"
          "  hyperian debug app.hyp                Trace its start event and state\n"
          "  hyperian debug app.hyp --event PHRASE Trace an event such as \"input name changes\"\n"
@@ -968,12 +969,52 @@ static void help(void) {
          "  hyperian version                      Show the version\n");
 }
 
+static void run_help(void) {
+    puts("Run a Hyperian .hyp source program\n"
+         "\n"
+         "Your .hyp file contains the left-aligned English MVC source. Run it directly:\n"
+         "  hyperian run app.hyp\n"
+         "  hyperian run MyProject/app.hyp\n"
+         "\n"
+         "For a web, installable web, or API application, you may choose a port:\n"
+         "  hyperian run app.hyp --port 9000\n"
+         "\n"
+         "Hyperian compiles the .hyp file to temporary bytecode and starts the correct runtime.\n"
+         "Console and service apps use the terminal. Web and API apps print their local address.\n"
+         "Desktop and mobile-preview apps open a native window. Game apps open a game window.\n"
+         "Use 'hyperian doctor' if a native window or game cannot start.\n"
+         "\n"
+         "You do not need a .hyr file to run a .hyp file on this computer. A .hyr file is a\n"
+         "downloadable native runtime pack used when building for a different platform.\n");
+}
+
 static int ends_with(const char *text, const char *suffix) {
     size_t a = strlen(text), b = strlen(suffix); return a >= b && !strcmp(text + a - b, suffix);
 }
 
+static int run_application_file(const char *path, int port) {
+    if (ends_with(path, ".hyp")) {
+        char temporary[128]; if (!temporary_bytecode(temporary, sizeof(temporary))) return 1;
+        int result = compile_file(path, temporary);
+        if (!result) result = run_bytecode(temporary, port);
+        unlink(temporary); return result;
+    }
+    return run_bytecode(path, port);
+}
+
 int main(int argc, char **argv) {
     int embedded = 0, embedded_result = run_embedded_program(argc, argv, &embedded); if (embedded) return embedded_result;
+    if (argc >= 2 && (ends_with(argv[1], ".hyp") || ends_with(argv[1], ".hyc"))) {
+        int port = 0;
+        if (argc == 4 && !strcmp(argv[2], "--port")) port = atoi(argv[3]);
+        else if (argc != 2) { fprintf(stderr, "usage: hyperian app.hyp [--port 9000]\n"); return 2; }
+        if (port < 0 || port > 65535) { fprintf(stderr, "error: invalid port\n"); return 2; }
+        return run_application_file(argv[1], port);
+    }
+    if ((argc == 3 && !strcmp(argv[1], "help") && !strcmp(argv[2], "run")) ||
+        (argc == 3 && !strcmp(argv[1], "run") && (!strcmp(argv[2], "--help") || !strcmp(argv[2], "-h")))) {
+        run_help(); return 0;
+    }
     if (argc < 2 || !strcmp(argv[1], "help") || !strcmp(argv[1], "--help") || !strcmp(argv[1], "-h")) { help(); return 0; }
     if (!strcmp(argv[1], "version") || !strcmp(argv[1], "--version")) { puts("Hyperian " HYPERIAN_VERSION); return 0; }
     if (!strcmp(argv[1], "platform")) {
@@ -1076,18 +1117,19 @@ int main(int argc, char **argv) {
         unlink(temporary); return result;
     }
     if (!strcmp(argv[1], "run")) {
-        if (argc < 3) { fprintf(stderr, "usage: hyperian run app.hyp [--port 9000]\n"); return 2; }
+        if (argc < 3) { run_help(); return 2; }
+        if (ends_with(argv[2], ".hyr")) {
+            fprintf(stderr, "error: a .hyr file is a native runtime pack, not an application\n"
+                            "run your English source instead: hyperian run app.hyp\n"); return 2;
+        }
+        if (!ends_with(argv[2], ".hyp") && !ends_with(argv[2], ".hyc")) {
+            fprintf(stderr, "error: run a Hyperian .hyp source file or a compiled .hyc bytecode file\n"); return 2;
+        }
         int port = 0;
         if (argc == 5 && !strcmp(argv[3], "--port")) port = atoi(argv[4]);
         else if (argc != 3) { fprintf(stderr, "usage: hyperian run app.hyp [--port 9000]\n"); return 2; }
         if (port < 0 || port > 65535) { fprintf(stderr, "error: invalid port\n"); return 2; }
-        if (ends_with(argv[2], ".hyp")) {
-            char temporary[128]; if (!temporary_bytecode(temporary, sizeof(temporary))) return 1;
-            int result = compile_file(argv[2], temporary);
-            if (!result) result = run_bytecode(temporary, port);
-            unlink(temporary); return result;
-        }
-        return run_bytecode(argv[2], port);
+        return run_application_file(argv[2], port);
     }
     fprintf(stderr, "error: unknown command %s\n", argv[1]); help(); return 2;
 }

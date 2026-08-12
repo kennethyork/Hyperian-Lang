@@ -1,0 +1,13 @@
+application "Bad table row" is web
+
+controller Main
+when someone visits "/"
+show view "main"
+that is all
+that is all
+
+view "main"
+show the following in a table row
+show value in a table cell
+that is all
+that is all

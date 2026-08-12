@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(Hyperian VERSION 0.49.0 LANGUAGES C)
+project(Hyperian VERSION 0.50.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -60,6 +60,7 @@ if(SDL2_FOUND AND HYPERIAN_ENABLE_SDL2_IMAGE AND SDL2_IMAGE_FOUND)
 endif()
 
 install(TARGETS hyperian RUNTIME DESTINATION bin)
+install(FILES README.md RUNNING.md DESTINATION .)
 
 add_library(hyperian_mobile_runtime STATIC
     src/mobile.c src/runtime.c src/bytecode.c src/network.c src/security.c src/platform.c src/desktop.c src/game.c)
@@ -101,8 +102,36 @@ endif()
 
 enable_testing()
 add_test(NAME compiler_help COMMAND hyperian help)
+add_test(NAME run_source_help COMMAND hyperian help run)
+set_tests_properties(run_source_help PROPERTIES PASS_REGULAR_EXPRESSION "You do not need a .hyr file")
+add_test(NAME run_without_source_shows_help
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/reject_with_message_test.sh "Your .hyp file contains the left-aligned English MVC source."
+        $<TARGET_FILE:hyperian> run)
+add_test(NAME reject_running_runtime_pack
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/reject_with_message_test.sh "a .hyr file is a native runtime pack, not an application"
+        $<TARGET_FILE:hyperian> run RuntimePack.hyr)
+add_test(NAME reject_running_unknown_file
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/reject_with_message_test.sh "run a Hyperian .hyp source file or a compiled .hyc bytecode file"
+        $<TARGET_FILE:hyperian> run application.txt)
+add_test(NAME run_source_without_command
+    COMMAND hyperian ${CMAKE_SOURCE_DIR}/examples/left_aligned_console.hyp)
+set_tests_properties(run_source_without_command PROPERTIES PASS_REGULAR_EXPRESSION "Hello from left aligned Hyperian")
 add_test(NAME toolchain_doctor COMMAND hyperian doctor)
 set_tests_properties(toolchain_doctor PROPERTIES PASS_REGULAR_EXPRESSION "compiler and bytecode VM: ready")
+add_test(NAME clean_installed_toolchain
+    COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}/InstalledToolchain)
+add_test(NAME install_toolchain_for_users
+    COMMAND ${CMAKE_COMMAND} --install ${CMAKE_BINARY_DIR} --config $<CONFIG> --prefix ${CMAKE_BINARY_DIR}/InstalledToolchain)
+set_tests_properties(install_toolchain_for_users PROPERTIES DEPENDS clean_installed_toolchain)
+if(WIN32)
+    set(HYPERIAN_INSTALLED_EXECUTABLE ${CMAKE_BINARY_DIR}/InstalledToolchain/bin/hyperian.exe)
+else()
+    set(HYPERIAN_INSTALLED_EXECUTABLE ${CMAKE_BINARY_DIR}/InstalledToolchain/bin/hyperian)
+endif()
+add_test(NAME verify_installed_toolchain
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/installed_toolchain_test.sh ${CMAKE_BINARY_DIR}/InstalledToolchain
+        ${HYPERIAN_INSTALLED_EXECUTABLE} ${CMAKE_SOURCE_DIR}/examples/left_aligned_console.hyp)
+set_tests_properties(verify_installed_toolchain PROPERTIES DEPENDS install_toolchain_for_users)
 add_test(NAME compile_example
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/tasks.hyp -o ${CMAKE_BINARY_DIR}/tasks.hyc)
 add_test(NAME inspect_example
@@ -142,6 +171,15 @@ add_test(NAME reject_missing_english_closing_phrase
 add_test(NAME reject_unclosed_view_layout
     COMMAND sh ${CMAKE_SOURCE_DIR}/tests/reject_with_message_test.sh "finish this block by saying: that is all"
         $<TARGET_FILE:hyperian> check ${CMAKE_SOURCE_DIR}/tests/bad_unclosed_view_layout.hyp)
+add_test(NAME reject_table_row_outside_table
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/reject_with_message_test.sh "a table row must be inside a table"
+        $<TARGET_FILE:hyperian> check ${CMAKE_SOURCE_DIR}/tests/bad_table_row_outside_table.hyp)
+add_test(NAME reject_table_cell_outside_row
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/reject_with_message_test.sh "a table cell must be directly inside a table row"
+        $<TARGET_FILE:hyperian> check ${CMAKE_SOURCE_DIR}/tests/bad_table_cell_outside_row.hyp)
+add_test(NAME reject_late_table_heading
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/reject_with_message_test.sh "put every table heading before the table rows"
+        $<TARGET_FILE:hyperian> check ${CMAKE_SOURCE_DIR}/tests/bad_late_table_heading.hyp)
 add_test(NAME compile_pwa
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/pwa_tasks/app.hyp -o ${CMAKE_BINARY_DIR}/pwa_tasks.hyc)
 add_test(NAME reject_pwa_without_route
@@ -442,6 +480,12 @@ add_test(NAME compile_mobile_preview
 add_test(NAME inspect_and_format_view_layouts
     COMMAND sh ${CMAKE_SOURCE_DIR}/tests/view_layout_test.sh $<TARGET_FILE:hyperian>
         ${CMAKE_SOURCE_DIR}/examples/mobile_tasks.hyp ${CMAKE_BINARY_DIR}/view_layouts.hyc)
+add_test(NAME inspect_and_format_view_tables
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/view_table_test.sh $<TARGET_FILE:hyperian>
+        ${CMAKE_SOURCE_DIR}/examples/mobile_tasks.hyp ${CMAKE_BINARY_DIR}/view_tables.hyc)
+add_test(NAME run_console_table
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/console_table_test.sh $<TARGET_FILE:hyperian>
+        ${CMAKE_SOURCE_DIR}/examples/console_table.hyp)
 add_test(NAME clean_generated_english_mobile
     COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}/GeneratedEnglishMobile)
 add_test(NAME create_generated_english_mobile

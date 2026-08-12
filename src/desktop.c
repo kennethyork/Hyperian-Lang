@@ -160,14 +160,29 @@ static void add_desktop_widgets(DesktopContext *context, GtkWidget *box, size_t 
             }
             if (next < 0) hyperian_state_set(&context->state, "error", "a collected list could not be displayed");
             i = end; continue;
-        } else if (in->opcode == OP_VIEW_ROW || in->opcode == OP_VIEW_COLUMN || in->opcode == OP_VIEW_CARD) {
+        } else if (in->opcode == OP_VIEW_ROW || in->opcode == OP_VIEW_COLUMN || in->opcode == OP_VIEW_CARD ||
+            in->opcode == OP_VIEW_TABLE || in->opcode == OP_TABLE_ROW) {
             uint8_t close = in->opcode == OP_VIEW_ROW ? OP_END_VIEW_ROW :
-                in->opcode == OP_VIEW_COLUMN ? OP_END_VIEW_COLUMN : OP_END_VIEW_CARD;
+                in->opcode == OP_VIEW_COLUMN ? OP_END_VIEW_COLUMN : in->opcode == OP_VIEW_CARD ? OP_END_VIEW_CARD :
+                in->opcode == OP_VIEW_TABLE ? OP_END_VIEW_TABLE : OP_END_TABLE_ROW;
             size_t end = desktop_matching_end(context->code, i, in->opcode, close);
-            GtkOrientation direction = in->opcode == OP_VIEW_ROW ? GTK_ORIENTATION_HORIZONTAL : GTK_ORIENTATION_VERTICAL;
+            GtkOrientation direction = in->opcode == OP_VIEW_ROW || in->opcode == OP_TABLE_ROW ?
+                GTK_ORIENTATION_HORIZONTAL : GTK_ORIENTATION_VERTICAL;
             GtkWidget *children = gtk_box_new(direction, 10);
-            add_desktop_widgets(context, children, i + 1, end, reactive);
-            if (in->opcode == OP_VIEW_CARD) {
+            size_t content = i + 1;
+            if (in->opcode == OP_VIEW_TABLE && content < end && context->code->items[content].opcode == OP_TABLE_HEADING) {
+                size_t headings_end = content;
+                while (headings_end < end && context->code->items[headings_end].opcode == OP_TABLE_HEADING) headings_end++;
+                GtkWidget *headings = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
+                add_desktop_widgets(context, headings, content, headings_end, reactive);
+                gtk_box_pack_start(GTK_BOX(children), headings, FALSE, FALSE, 4); content = headings_end;
+            }
+            add_desktop_widgets(context, children, content, end, reactive);
+            if (in->opcode == OP_VIEW_TABLE) {
+                widget = gtk_scrolled_window_new(NULL, NULL);
+                gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(widget), GTK_POLICY_AUTOMATIC, GTK_POLICY_NEVER);
+                gtk_container_add(GTK_CONTAINER(widget), children);
+            } else if (in->opcode == OP_VIEW_CARD) {
                 widget = gtk_frame_new(NULL); gtk_frame_set_shadow_type(GTK_FRAME(widget), GTK_SHADOW_ETCHED_IN);
                 gtk_container_set_border_width(GTK_CONTAINER(children), 12); gtk_container_add(GTK_CONTAINER(widget), children);
             } else widget = children;
@@ -176,6 +191,15 @@ static void add_desktop_widgets(DesktopContext *context, GtkWidget *box, size_t 
             char *safe = g_markup_escape_text(in->args[0], -1), *markup = g_strdup_printf("<span size=\"xx-large\" weight=\"bold\">%s</span>", safe);
             widget = gtk_label_new(NULL); gtk_label_set_markup(GTK_LABEL(widget), markup); g_free(markup); g_free(safe);
         } else if (in->opcode == OP_TEXT) widget = gtk_label_new(in->args[0]);
+        else if (in->opcode == OP_TABLE_HEADING) {
+            char *safe = g_markup_escape_text(in->args[0], -1), *markup = g_strdup_printf("<b>%s</b>", safe);
+            widget = gtk_label_new(NULL); gtk_label_set_markup(GTK_LABEL(widget), markup); gtk_label_set_xalign(GTK_LABEL(widget), 0);
+            gtk_widget_set_size_request(widget, 140, -1); g_free(markup); g_free(safe);
+        }
+        else if (in->opcode == OP_TABLE_CELL) {
+            char value[HYPERIAN_VALUE_SIZE]; hyperian_state_evaluate(&context->state, in->args[0], value, sizeof(value)); widget = gtk_label_new(value);
+            gtk_label_set_xalign(GTK_LABEL(widget), 0); gtk_widget_set_size_request(widget, 140, -1);
+        }
         else if (in->opcode == OP_SHOW_VALUE) {
             widget = gtk_label_new("");
             if (reactive && context->output_count < HYPERIAN_STATE_MAX) context->outputs[context->output_count++] = (DesktopOutput){in->args[0], widget};

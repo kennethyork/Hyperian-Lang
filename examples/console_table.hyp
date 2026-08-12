@@ -1,0 +1,26 @@
+application "Task report" is console
+
+model Task
+field title is text required
+that is all
+
+controller Reports
+when application starts
+make list tasks
+add "Write the model" to tasks
+add "Render the view" to tasks
+show view "report"
+that is all
+that is all
+
+view "report"
+heading "Task report"
+show the following in a table
+use "Task" as a table heading
+for each task in tasks show
+show the following in a table row
+show task in a table cell
+that is all
+that is all
+that is all
+that is all

@@ -14,4 +14,7 @@ grep 'when input "item name" changes' "$project/controllers/items.hyp" >/dev/nul
 grep 'joined with value called "item name"' "$project/controllers/items.hyp" >/dev/null
 grep 'input "Your name" as "item name"' "$project/views/main.hyp" >/dev/null
 grep 'for each "saved item" in "item names" show' "$project/views/main.hyp" >/dev/null
+grep 'show the following in a table' "$project/views/main.hyp" >/dev/null
+grep 'use "Saved items" as a table heading' "$project/views/main.hyp" >/dev/null
+grep 'show "saved item" in a table cell' "$project/views/main.hyp" >/dev/null
 "$compiler" check "$project/app.hyp"

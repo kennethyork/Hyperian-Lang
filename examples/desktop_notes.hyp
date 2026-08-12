@@ -68,9 +68,13 @@ text "Application status:"
 show status
 that is all
 show window_status
-text "Saved note titles:"
+show the following in a table
+use "Saved note titles" as a table heading
 for each note_title in note_titles show
-show note_title
+show the following in a table row
+show note_title in a table cell
+that is all
+that is all
 that is all
 that is all
 that is all

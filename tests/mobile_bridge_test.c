@@ -17,6 +17,8 @@ int main(int argc, char **argv) {
         hyperian_mobile_render_json(mobile, json, sizeof(json), error, sizeof(error)) &&
         contains(json, "\"view\":\"home\"") && contains(json, "\"kind\":\"card\"") &&
         contains(json, "\"kind\":\"column\"") && contains(json, "\"kind\":\"row\"") &&
+        contains(json, "\"kind\":\"table\"") && contains(json, "\"kind\":\"tableRow\"") &&
+        contains(json, "\"kind\":\"tableHeading\"") &&
         contains(json, "\"children\":[") && contains(json, "\"kind\":\"input\"") &&
         contains(json, "\"action\":\"add task\"") && contains(json, "\"changeEvent\":\"CHANGE:title\"") &&
         contains(json, "\"submitEvent\":\"SUBMIT:title\"") && contains(json, "\"changeEvent\":\"CHANGE:details\"") &&
@@ -49,7 +51,7 @@ int main(int argc, char **argv) {
         hyperian_mobile_send_event(mobile, "SUBMIT:title", error, sizeof(error)) &&
         hyperian_mobile_value(mobile, "status") && !strcmp(hyperian_mobile_value(mobile, "status"), "Added: Coffee \"and\" tea") &&
         hyperian_mobile_render_json(mobile, json, sizeof(json), error, sizeof(error)) &&
-        contains(json, "Coffee \\\"and\\\" tea") && contains(json, "\"timers\":[1000]") &&
+        contains(json, "Coffee \\\"and\\\" tea") && contains(json, "\"kind\":\"tableCell\"") && contains(json, "\"timers\":[1000]") &&
         hyperian_mobile_run_action(mobile, "show completed", NULL, error, sizeof(error)) &&
         hyperian_mobile_render_json(mobile, json, sizeof(json), error, sizeof(error)) && contains(json, "\"view\":\"completed\"") &&
         hyperian_mobile_send_event(mobile, "TIMER:1000", error, sizeof(error)) &&

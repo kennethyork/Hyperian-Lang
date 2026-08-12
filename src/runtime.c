@@ -50,6 +50,7 @@ typedef struct {
     const char *raw_content;
     VariableSet *locals;
     HyperianData *data;
+    int table_depth;
 } Scope;
 
 static const char *resolve(Scope *scope, const char *expression);
@@ -1195,7 +1196,7 @@ static int render_range(const Bytecode *code, size_t from, size_t to, Buffer *bo
             }
             case OP_EACH: {
                 size_t end = find_end(code, i, OP_EACH, OP_END_EACH);
-                buffer_add(body, "<ul>");
+                if (!scope->table_depth) buffer_add(body, "<ul>");
                 if (scope->collection_alias && !strcmp(scope->collection_alias, in->args[1])) {
                     size_t count = 0;
                     for (Record *record = records; record; record = record->next)
@@ -1217,7 +1218,9 @@ static int render_range(const Bytecode *code, size_t from, size_t to, Buffer *bo
                     for (size_t record_at = 0; record_at < count; record_at++) {
                         Record *record = matches[record_at];
                         Scope child = *scope; child.item_alias = in->args[0]; child.item = record;
-                        buffer_add(body, "<li>"); render_range(code, i + 1, end, body, &child, records); buffer_add(body, "</li>");
+                        if (!scope->table_depth) buffer_add(body, "<li>");
+                        render_range(code, i + 1, end, body, &child, records);
+                        if (!scope->table_depth) buffer_add(body, "</li>");
                     }
                     free(matches);
                 } else {
@@ -1226,11 +1229,14 @@ static int render_range(const Bytecode *code, size_t from, size_t to, Buffer *bo
                         const char *cursor = encoded; char value[2048]; int next;
                         while ((next = list_next(&cursor, value, sizeof(value))) > 0) {
                             Scope child = *scope; local_set(child.locals, in->args[0], value);
-                            buffer_add(body, "<li>"); render_range(code, i + 1, end, body, &child, records); buffer_add(body, "</li>");
+                            if (!scope->table_depth) buffer_add(body, "<li>");
+                            render_range(code, i + 1, end, body, &child, records);
+                            if (!scope->table_depth) buffer_add(body, "</li>");
                         }
                     }
                 }
-                buffer_add(body, "</ul>"); i = end; break;
+                if (!scope->table_depth) buffer_add(body, "</ul>");
+                i = end; break;
             }
             case OP_IF: {
                 size_t end = find_end(code, i, OP_IF, OP_END_IF);
@@ -1248,6 +1254,26 @@ static int render_range(const Bytecode *code, size_t from, size_t to, Buffer *bo
                 render_range(code, i + 1, end, body, scope, records);
                 buffer_add(body, "</div>"); i = end; break;
             }
+            case OP_VIEW_TABLE: {
+                size_t end = find_end(code, i, OP_VIEW_TABLE, OP_END_VIEW_TABLE), content = i + 1;
+                buffer_add(body, "<div class=\"hyperian-table-scroll\"><table class=\"hyperian-table\">");
+                if (content < end && code->items[content].opcode == OP_TABLE_HEADING) {
+                    buffer_add(body, "<thead><tr>");
+                    while (content < end && code->items[content].opcode == OP_TABLE_HEADING) {
+                        buffer_add(body, "<th scope=\"col\">"); buffer_html(body, code->items[content].args[0]); buffer_add(body, "</th>"); content++;
+                    }
+                    buffer_add(body, "</tr></thead>");
+                }
+                Scope table_scope = *scope; table_scope.table_depth++;
+                buffer_add(body, "<tbody>"); render_range(code, content, end, body, &table_scope, records);
+                buffer_add(body, "</tbody></table></div>"); i = end; break;
+            }
+            case OP_TABLE_ROW: {
+                size_t end = find_end(code, i, OP_TABLE_ROW, OP_END_TABLE_ROW);
+                buffer_add(body, "<tr>"); render_range(code, i + 1, end, body, scope, records); buffer_add(body, "</tr>"); i = end; break;
+            }
+            case OP_TABLE_CELL:
+                buffer_add(body, "<td>"); buffer_html(body, resolve(scope, in->args[0])); buffer_add(body, "</td>"); break;
             case OP_USE_COMPONENT: {
                 for (size_t component = 0; component < code->count; component++) if (code->items[component].opcode == OP_COMPONENT && !strcmp(code->items[component].args[0], in->args[0])) {
                     size_t end = find_end(code, component, OP_COMPONENT, OP_END_COMPONENT);
@@ -1283,7 +1309,7 @@ static char *render_view(const Bytecode *code, const char *view, Scope *scope, R
     buffer_html(&result, title);
     buffer_add(&result, "</title>");
     if (pwa) buffer_add(&result, "<meta name=\"theme-color\" content=\"#2563eb\"><meta name=\"apple-mobile-web-app-capable\" content=\"yes\"><link rel=\"manifest\" href=\"/assets/manifest.webmanifest\"><link rel=\"icon\" href=\"/assets/icon.svg\"><script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js'))}</script>");
-    buffer_add(&result, "<style>:root{font:17px/1.5 system-ui,sans-serif;color-scheme:light dark}body{width:min(44rem,calc(100% - 2rem));margin:3rem auto}h1{line-height:1.1}form{display:flex;gap:.6rem;margin:1rem 0}input,button,textarea{font:inherit;padding:.65rem .8rem}input,textarea{flex:1}button{cursor:pointer}li{margin:.45rem 0}img{max-width:100%;height:auto}.hyperian-row,.hyperian-column{display:flex;gap:1rem;margin:1rem 0}.hyperian-row{flex-flow:row wrap;align-items:flex-start}.hyperian-row>*{flex:1 1 12rem}.hyperian-column{flex-direction:column}.hyperian-card{padding:1rem;border:1px solid color-mix(in srgb,currentColor 25%,transparent);border-radius:.75rem;margin:1rem 0;box-shadow:0 .2rem .8rem #0002}@media(max-width:38rem){.hyperian-row{flex-direction:column}.hyperian-row>*{width:100%}}</style>");
+    buffer_add(&result, "<style>:root{font:17px/1.5 system-ui,sans-serif;color-scheme:light dark}body{width:min(44rem,calc(100% - 2rem));margin:3rem auto}h1{line-height:1.1}form{display:flex;gap:.6rem;margin:1rem 0}input,button,textarea{font:inherit;padding:.65rem .8rem}input,textarea{flex:1}button{cursor:pointer}li{margin:.45rem 0}img{max-width:100%;height:auto}.hyperian-row,.hyperian-column{display:flex;gap:1rem;margin:1rem 0}.hyperian-row{flex-flow:row wrap;align-items:flex-start}.hyperian-row>*{flex:1 1 12rem}.hyperian-column{flex-direction:column}.hyperian-card{padding:1rem;border:1px solid color-mix(in srgb,currentColor 25%,transparent);border-radius:.75rem;margin:1rem 0;box-shadow:0 .2rem .8rem #0002}.hyperian-table-scroll{max-width:100%;overflow-x:auto}.hyperian-table{width:100%;border-collapse:collapse;margin:1rem 0}.hyperian-table th,.hyperian-table td{text-align:left;padding:.65rem .75rem;border-bottom:1px solid color-mix(in srgb,currentColor 22%,transparent)}.hyperian-table th{font-weight:700;background:color-mix(in srgb,currentColor 7%,transparent)}@media(max-width:38rem){.hyperian-row{flex-direction:column}.hyperian-row>*{width:100%}}</style>");
     for (size_t i = start; i < end; i++) if (code->items[i].opcode == OP_STYLE) {
         buffer_add(&result, "<link rel=\"stylesheet\" href=\""); buffer_dynamic_html(&result, code->items[i].args[0], scope); buffer_add(&result, "\">");
     }
@@ -1956,7 +1982,8 @@ static int console_render_range(const Bytecode *code, size_t from, size_t to, Sc
                 if (scope->collection_alias && !strcmp(scope->collection_alias, in->args[1])) {
                     for (Record *record = records; record; record = record->next) if (!strcmp(record->model, scope->model)) {
                         Scope child = *scope; child.item_alias = in->args[0]; child.item = record;
-                        fputs("- ", stdout); console_render_range(code, i + 1, end, &child, records);
+                        if (!scope->table_depth) fputs("- ", stdout);
+                        console_render_range(code, i + 1, end, &child, records);
                     }
                 } else {
                     const char *encoded = local_value(scope->locals, in->args[1]);
@@ -1964,12 +1991,27 @@ static int console_render_range(const Bytecode *code, size_t from, size_t to, Sc
                         const char *cursor = encoded; char value[2048]; int next;
                         while ((next = list_next(&cursor, value, sizeof(value))) > 0) {
                             Scope child = *scope; local_set(child.locals, in->args[0], value);
-                            fputs("- ", stdout); console_render_range(code, i + 1, end, &child, records);
+                            if (!scope->table_depth) fputs("- ", stdout);
+                            console_render_range(code, i + 1, end, &child, records);
                         }
                     }
                 }
                 i = end; break;
             }
+            case OP_VIEW_TABLE: {
+                size_t end = find_end(code, i, OP_VIEW_TABLE, OP_END_VIEW_TABLE), content = i + 1; int headings = 0;
+                while (content < end && code->items[content].opcode == OP_TABLE_HEADING) {
+                    printf("%s\t", code->items[content].args[0]); content++; headings = 1;
+                }
+                if (headings) putchar('\n');
+                Scope child = *scope; child.table_depth++;
+                console_render_range(code, content, end, &child, records); i = end; break;
+            }
+            case OP_TABLE_ROW: {
+                size_t end = find_end(code, i, OP_TABLE_ROW, OP_END_TABLE_ROW);
+                console_render_range(code, i + 1, end, scope, records); putchar('\n'); i = end; break;
+            }
+            case OP_TABLE_CELL: printf("%s\t", resolve(scope, in->args[0])); break;
             case OP_IF: {
                 size_t end = find_end(code, i, OP_IF, OP_END_IF);
                 if (truthy(resolve(scope, in->args[0]))) console_render_range(code, i + 1, end, scope, records);

@@ -115,8 +115,15 @@ button "Add task" runs action "add task"
 button "Completed tasks" runs action "show completed"
 that is all
 show status
+show the following in a table
+use "Task" as a table heading
+use "Current status" as a table heading
 for each task_title in task_titles show
-show task_title
+show the following in a table row
+show task_title in a table cell
+show status in a table cell
+that is all
+that is all
 that is all
 that is all
 that is all

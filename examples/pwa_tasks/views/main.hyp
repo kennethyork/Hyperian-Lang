@@ -13,8 +13,13 @@ that is all
 that is all
 
 show the following in a card
+show the following in a table
+use "Task" as a table heading
 for each task in tasks show
-show task.title
+show the following in a table row
+show task.title in a table cell
+that is all
+that is all
 that is all
 that is all
 that is all

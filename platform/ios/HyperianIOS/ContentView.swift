@@ -139,8 +139,16 @@ struct HyperianControlView: View {
         case "card": VStack(alignment: .leading, spacing: 14) {
             ForEach(Array((control.children ?? []).enumerated()), id: \.offset) { _, child in HyperianControlView(control: child, application: application) }
         }.padding().background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
+        case "table": ScrollView(.horizontal) { VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array((control.children ?? []).enumerated()), id: \.offset) { _, child in HyperianControlView(control: child, application: application) }
+        }.overlay(RoundedRectangle(cornerRadius: 4).stroke(.secondary.opacity(0.5))) }
+        case "tableRow": HStack(alignment: .top, spacing: 0) {
+            ForEach(Array((control.children ?? []).enumerated()), id: \.offset) { _, child in HyperianControlView(control: child, application: application) }
+        }
         case "heading": Text(control.text ?? "").font(.largeTitle).bold()
         case "text", "value": Text(control.text ?? "")
+        case "tableHeading": Text(control.text ?? "").bold().frame(minWidth: 120, alignment: .leading).padding(8).background(.secondary.opacity(0.12))
+        case "tableCell": Text(control.text ?? "").frame(minWidth: 120, alignment: .leading).padding(8)
         case "input": TextField(control.label ?? "", text: application.binding(for: control)).textFieldStyle(.roundedBorder).onSubmit { application.submit(control) }
         case "textarea": TextEditor(text: application.binding(for: control)).frame(minHeight: 120).overlay(RoundedRectangle(cornerRadius: 8).stroke(.secondary))
         case "checkbox": Toggle(control.label ?? "", isOn: application.booleanBinding(for: control))

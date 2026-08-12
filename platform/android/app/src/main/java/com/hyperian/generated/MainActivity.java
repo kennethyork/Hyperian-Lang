@@ -20,6 +20,7 @@ import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.ImageView;
+import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -138,19 +139,23 @@ public final class MainActivity extends Activity {
 
     private void addControl(JSONObject control, LinearLayout parent) throws Exception {
         String kind = control.getString("kind"); View view;
-        if (kind.equals("row") || kind.equals("column") || kind.equals("card")) {
+        if (kind.equals("row") || kind.equals("column") || kind.equals("card") || kind.equals("table") || kind.equals("tableRow")) {
             LinearLayout group = new LinearLayout(this);
-            group.setOrientation(kind.equals("row") ? LinearLayout.HORIZONTAL : LinearLayout.VERTICAL);
-            int inset = pixels(kind.equals("card") ? 14 : 4); group.setPadding(inset, inset, inset, inset);
-            if (kind.equals("card")) {
+            group.setOrientation(kind.equals("row") || kind.equals("tableRow") ? LinearLayout.HORIZONTAL : LinearLayout.VERTICAL);
+            int inset = pixels(kind.equals("card") ? 14 : kind.equals("table") ? 8 : 4); group.setPadding(inset, inset, inset, inset);
+            if (kind.equals("card") || kind.equals("table")) {
                 GradientDrawable card = new GradientDrawable(); card.setColor(Color.argb(18, 127, 127, 127));
-                card.setStroke(pixels(1), Color.argb(80, 127, 127, 127)); card.setCornerRadius(pixels(12));
+                card.setStroke(pixels(1), Color.argb(80, 127, 127, 127)); card.setCornerRadius(pixels(kind.equals("card") ? 12 : 4));
                 group.setBackground(card); group.setElevation(pixels(2));
             }
-            addControls(control.getJSONArray("children"), group); view = group;
-        } else if (kind.equals("heading") || kind.equals("text") || kind.equals("value")) {
+            addControls(control.getJSONArray("children"), group);
+            if (kind.equals("table")) { HorizontalScrollView scrolling = new HorizontalScrollView(this); scrolling.addView(group); view = scrolling; }
+            else view = group;
+        } else if (kind.equals("heading") || kind.equals("text") || kind.equals("value") || kind.equals("tableHeading") || kind.equals("tableCell")) {
             TextView text = new TextView(this); text.setText(control.optString("text"));
-            text.setTextSize(kind.equals("heading") ? 28 : 17); if (kind.equals("heading")) text.setTypeface(null, Typeface.BOLD); view = text;
+            text.setTextSize(kind.equals("heading") ? 28 : 17);
+            if (kind.equals("heading") || kind.equals("tableHeading")) text.setTypeface(null, Typeface.BOLD);
+            if (kind.equals("tableHeading") || kind.equals("tableCell")) text.setMinWidth(pixels(120)); view = text;
         } else if (kind.equals("input") || kind.equals("textarea")) {
             EditText input = new EditText(this); input.setHint(control.optString("label")); input.setText(control.optString("value"));
             if (kind.equals("textarea")) { input.setMinLines(4); input.setGravity(android.view.Gravity.TOP); input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE); }

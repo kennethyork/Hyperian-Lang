@@ -14,7 +14,7 @@
 
 typedef enum { BLOCK_ROOT, BLOCK_MODEL, BLOCK_CONTROLLER, BLOCK_ROUTE, BLOCK_VIEW, BLOCK_FORM, BLOCK_EACH, BLOCK_IF,
     BLOCK_LAYOUT, BLOCK_COMPONENT, BLOCK_ACTION, BLOCK_LOGIC_IF, BLOCK_REPEAT, BLOCK_TEST, BLOCK_MIGRATION, BLOCK_TRY,
-    BLOCK_VIEW_ROW, BLOCK_VIEW_COLUMN, BLOCK_VIEW_CARD } Block;
+    BLOCK_VIEW_ROW, BLOCK_VIEW_COLUMN, BLOCK_VIEW_CARD, BLOCK_VIEW_TABLE, BLOCK_TABLE_ROW } Block;
 
 static int block_end_opcode(Block block) {
     return block == BLOCK_MODEL ? OP_END_MODEL : block == BLOCK_CONTROLLER ? OP_END_CONTROLLER :
@@ -24,7 +24,8 @@ static int block_end_opcode(Block block) {
         block == BLOCK_ACTION ? OP_END_ACTION : block == BLOCK_LOGIC_IF ? OP_END_LOGIC_IF :
         block == BLOCK_REPEAT ? OP_END_REPEAT : block == BLOCK_MIGRATION ? OP_END_MIGRATION :
         block == BLOCK_TRY ? OP_END_TRY : block == BLOCK_VIEW_ROW ? OP_END_VIEW_ROW :
-        block == BLOCK_VIEW_COLUMN ? OP_END_VIEW_COLUMN : block == BLOCK_VIEW_CARD ? OP_END_VIEW_CARD : OP_END_TEST;
+        block == BLOCK_VIEW_COLUMN ? OP_END_VIEW_COLUMN : block == BLOCK_VIEW_CARD ? OP_END_VIEW_CARD :
+        block == BLOCK_VIEW_TABLE ? OP_END_VIEW_TABLE : block == BLOCK_TABLE_ROW ? OP_END_TABLE_ROW : OP_END_TEST;
 }
 
 static int indentation_branch(Block block, char **words, int count) {
@@ -980,7 +981,8 @@ int compile_file(const char *source_path, const char *output_path) {
             } else { source_error(source_path, number, "unknown controller instruction"); okay = 0; }
         } else {
             if ((current == BLOCK_VIEW || current == BLOCK_LAYOUT || current == BLOCK_COMPONENT || current == BLOCK_FORM || current == BLOCK_EACH || current == BLOCK_IF ||
-                current == BLOCK_VIEW_ROW || current == BLOCK_VIEW_COLUMN || current == BLOCK_VIEW_CARD) &&
+                current == BLOCK_VIEW_ROW || current == BLOCK_VIEW_COLUMN || current == BLOCK_VIEW_CARD ||
+                current == BLOCK_VIEW_TABLE || current == BLOCK_TABLE_ROW) &&
                 n == 2 && !strcmp(w[0], "title")) okay = emit(&code, OP_TITLE, 1, &w[1], number);
             else if (n == 2 && !strcmp(w[0], "heading")) okay = emit(&code, OP_HEADING, 1, &w[1], number);
             else if (n == 2 && !strcmp(w[0], "text")) okay = emit(&code, OP_TEXT, 1, &w[1], number);
@@ -1035,6 +1037,33 @@ int compile_file(const char *source_path, const char *output_path) {
             else if (n == 6 && !strcmp(w[0], "show") && !strcmp(w[1], "the") && !strcmp(w[2], "following") &&
                 !strcmp(w[3], "in") && !strcmp(w[4], "a") && !strcmp(w[5], "card")) {
                 okay = emit(&code, OP_VIEW_CARD, 0, NULL, number); PUSH_BLOCK(BLOCK_VIEW_CARD);
+            }
+            else if (n == 6 && !strcmp(w[0], "show") && !strcmp(w[1], "the") && !strcmp(w[2], "following") &&
+                !strcmp(w[3], "in") && !strcmp(w[4], "a") && !strcmp(w[5], "table")) {
+                okay = emit(&code, OP_VIEW_TABLE, 0, NULL, number); PUSH_BLOCK(BLOCK_VIEW_TABLE);
+            }
+            else if (n == 6 && !strcmp(w[0], "use") && !strcmp(w[2], "as") && !strcmp(w[3], "a") &&
+                !strcmp(w[4], "table") && !strcmp(w[5], "heading")) {
+                if (current != BLOCK_VIEW_TABLE) { source_error(source_path, number, "a table heading must be directly inside a table"); okay = 0; }
+                else {
+                    int headings_first = 1;
+                    for (size_t at = code.count; at > 0 && code.items[at - 1].opcode != OP_VIEW_TABLE; at--)
+                        if (code.items[at - 1].opcode != OP_TABLE_HEADING) headings_first = 0;
+                    if (!headings_first) { source_error(source_path, number, "put every table heading before the table rows"); okay = 0; }
+                    else okay = emit(&code, OP_TABLE_HEADING, 1, &w[1], number);
+                }
+            }
+            else if (n == 7 && !strcmp(w[0], "show") && !strcmp(w[1], "the") && !strcmp(w[2], "following") &&
+                !strcmp(w[3], "in") && !strcmp(w[4], "a") && !strcmp(w[5], "table") && !strcmp(w[6], "row")) {
+                int inside_table = 0;
+                for (int level = 1; level < depth; level++) if (stack[level] == BLOCK_VIEW_TABLE) inside_table = 1;
+                if (!inside_table) { source_error(source_path, number, "a table row must be inside a table"); okay = 0; }
+                else { okay = emit(&code, OP_TABLE_ROW, 0, NULL, number); PUSH_BLOCK(BLOCK_TABLE_ROW); }
+            }
+            else if (n == 6 && !strcmp(w[0], "show") && !strcmp(w[2], "in") && !strcmp(w[3], "a") &&
+                !strcmp(w[4], "table") && !strcmp(w[5], "cell")) {
+                if (current != BLOCK_TABLE_ROW) { source_error(source_path, number, "a table cell must be directly inside a table row"); okay = 0; }
+                else okay = emit(&code, OP_TABLE_CELL, 1, &w[1], number);
             }
             else if (n == 2 && !strcmp(w[0], "show")) okay = emit(&code, OP_SHOW_VALUE, 1, &w[1], number);
             else if (n == 4 && !strcmp(w[0], "link") && !strcmp(w[2], "to")) { char *a[2] = {w[1], w[3]}; okay = emit(&code, OP_LINK, 2, a, number); }

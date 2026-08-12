@@ -107,13 +107,23 @@ static void render_controls(HyperianMobile *mobile, Json *json, size_t from, siz
             if (value_is_true(value)) render_controls(mobile, json, i + 1, end);
             i = end; continue;
         }
-        if (in->opcode == OP_VIEW_ROW || in->opcode == OP_VIEW_COLUMN || in->opcode == OP_VIEW_CARD) {
+        if (in->opcode == OP_VIEW_ROW || in->opcode == OP_VIEW_COLUMN || in->opcode == OP_VIEW_CARD ||
+            in->opcode == OP_VIEW_TABLE || in->opcode == OP_TABLE_ROW) {
             uint8_t close = in->opcode == OP_VIEW_ROW ? OP_END_VIEW_ROW :
-                in->opcode == OP_VIEW_COLUMN ? OP_END_VIEW_COLUMN : OP_END_VIEW_CARD;
-            const char *kind = in->opcode == OP_VIEW_ROW ? "row" : in->opcode == OP_VIEW_COLUMN ? "column" : "card";
+                in->opcode == OP_VIEW_COLUMN ? OP_END_VIEW_COLUMN : in->opcode == OP_VIEW_CARD ? OP_END_VIEW_CARD :
+                in->opcode == OP_VIEW_TABLE ? OP_END_VIEW_TABLE : OP_END_TABLE_ROW;
+            const char *kind = in->opcode == OP_VIEW_ROW ? "row" : in->opcode == OP_VIEW_COLUMN ? "column" :
+                in->opcode == OP_VIEW_CARD ? "card" : in->opcode == OP_VIEW_TABLE ? "table" : "tableRow";
             size_t end = matching_end(&mobile->code, i, in->opcode, close);
             control_start(json, kind); json_raw(json, ",\"children\":[");
-            json->first = 1; render_controls(mobile, json, i + 1, end); json_raw(json, "]}"); json->first = 0;
+            json->first = 1; size_t content = i + 1;
+            if (in->opcode == OP_VIEW_TABLE && content < end && mobile->code.items[content].opcode == OP_TABLE_HEADING) {
+                size_t headings_end = content;
+                while (headings_end < end && mobile->code.items[headings_end].opcode == OP_TABLE_HEADING) headings_end++;
+                control_start(json, "tableRow"); json_raw(json, ",\"children\":["); json->first = 1;
+                render_controls(mobile, json, content, headings_end); json_raw(json, "]}"); json->first = 0; content = headings_end;
+            }
+            render_controls(mobile, json, content, end); json_raw(json, "]}"); json->first = 0;
             i = end; continue;
         }
         const char *kind = NULL;
@@ -126,9 +136,11 @@ static void render_controls(HyperianMobile *mobile, Json *json, size_t from, siz
         else if (in->opcode == OP_BUTTON_ACTION || in->opcode == OP_BUTTON) kind = "button";
         else if (in->opcode == OP_LINK) kind = "link";
         else if (in->opcode == OP_IMAGE) kind = "image";
+        else if (in->opcode == OP_TABLE_HEADING) kind = "tableHeading";
+        else if (in->opcode == OP_TABLE_CELL) kind = "tableCell";
         if (!kind) continue;
         control_start(json, kind);
-        if (in->opcode == OP_SHOW_VALUE) {
+        if (in->opcode == OP_SHOW_VALUE || in->opcode == OP_TABLE_CELL) {
             hyperian_state_evaluate(&mobile->state, in->args[0], value, sizeof(value)); control_value(json, "text", value);
         } else if (in->opcode == OP_INPUT || in->opcode == OP_TEXTAREA || in->opcode == OP_CHECKBOX) {
             control_value(json, "label", in->args[0]); control_value(json, "name", in->args[1]);
