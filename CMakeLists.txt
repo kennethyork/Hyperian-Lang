@@ -95,8 +95,8 @@ install(FILES src/mobile.c src/runtime.c src/bytecode.c src/network.c src/securi
     DESTINATION share/hyperian/runtime)
 
 if(WIN32)
-    target_link_libraries(hyperian PRIVATE ws2_32)
-    target_link_libraries(hyperian_mobile_runtime PRIVATE ws2_32)
+    target_link_libraries(hyperian PRIVATE ws2_32 bcrypt)
+    target_link_libraries(hyperian_mobile_runtime PRIVATE ws2_32 bcrypt)
 endif()
 
 enable_testing()
@@ -209,6 +209,9 @@ add_test(NAME compile_authentication
 add_executable(hyperian_security_test tests/security_test.c src/security.c)
 target_include_directories(hyperian_security_test PRIVATE src)
 target_compile_options(hyperian_security_test PRIVATE ${HYPERIAN_WARNING_OPTIONS})
+if(WIN32)
+    target_link_libraries(hyperian_security_test PRIVATE bcrypt)
+endif()
 add_test(NAME native_security COMMAND hyperian_security_test ${CMAKE_SOURCE_DIR}/tests/sha256_fixture.txt)
 add_test(NAME compile_english_logic
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/english_logic.hyp -o ${CMAKE_BINARY_DIR}/english_logic.hyc)

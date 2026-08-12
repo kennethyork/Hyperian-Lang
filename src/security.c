@@ -5,6 +5,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef _WIN32
+#include <windows.h>
+#include <bcrypt.h>
+#endif
+
 typedef struct { uint32_t state[8]; uint64_t bits; unsigned char block[64]; size_t used; } Sha256;
 
 static const uint32_t constants[64] = {
@@ -91,15 +96,24 @@ static void pbkdf2(const char *secret, const unsigned char salt[16], unsigned it
     }
 }
 
+static int secure_random_bytes(unsigned char *output, size_t count) {
+#ifdef _WIN32
+    return count <= ULONG_MAX && BCryptGenRandom(NULL, output, (ULONG)count, BCRYPT_USE_SYSTEM_PREFERRED_RNG) == 0;
+#else
+    FILE *file = fopen("/dev/urandom", "rb");
+    if (!file) return 0;
+    int okay = fread(output, 1, count, file) == count;
+    if (fclose(file)) okay = 0;
+    return okay;
+#endif
+}
+
 int hyperian_random_token(char *output, size_t bytes) {
-    unsigned char random[64]; if(bytes>sizeof(random))return 0; FILE *file=fopen("/dev/urandom","rb");
-    if(!file)return 0;
-    int okay=fread(random,1,bytes,file)==bytes; fclose(file); if(!okay)return 0; hex(random,bytes,output); return 1;
+    unsigned char random[64]; if(bytes>sizeof(random)||!secure_random_bytes(random,bytes))return 0; hex(random,bytes,output); return 1;
 }
 int hyperian_hash_secret(const char *secret, char output[HYPERIAN_SECRET_SIZE]) {
-    const unsigned iterations = 120000; unsigned char salt[16], digest[32]; char salt_hex[33], digest_hex[65]; FILE *file=fopen("/dev/urandom","rb");
-    if(!file)return 0;
-    int okay=fread(salt,1,sizeof(salt),file)==sizeof(salt);fclose(file);if(!okay)return 0;
+    const unsigned iterations = 120000; unsigned char salt[16], digest[32]; char salt_hex[33], digest_hex[65];
+    if(!secure_random_bytes(salt,sizeof(salt)))return 0;
     pbkdf2(secret, salt, iterations, digest);
     hex(salt,sizeof(salt),salt_hex);hex(digest,sizeof(digest),digest_hex);snprintf(output,HYPERIAN_SECRET_SIZE,"$pbkdf2$%u$%s$%s",iterations,salt_hex,digest_hex);return 1;
 }
