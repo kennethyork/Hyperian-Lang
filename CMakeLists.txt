@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(Hyperian VERSION 0.44.0 LANGUAGES C)
+project(Hyperian VERSION 0.45.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -215,6 +215,41 @@ add_test(NAME build_standalone_service
 add_test(NAME run_standalone_service
     COMMAND ${CMAKE_BINARY_DIR}/standalone_report)
 set_tests_properties(run_standalone_service PROPERTIES DEPENDS build_standalone_service)
+add_test(NAME native_platform_name COMMAND hyperian platform)
+set_tests_properties(native_platform_name PROPERTIES PASS_REGULAR_EXPRESSION "^(linux|macos|freebsd)-(x64|arm64)")
+add_test(NAME clean_native_runtime_pack
+    COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}/NativeRuntime)
+add_test(NAME create_native_runtime_pack
+    COMMAND hyperian pack runtime to ${CMAKE_BINARY_DIR}/NativeRuntime)
+set_tests_properties(create_native_runtime_pack PROPERTIES DEPENDS clean_native_runtime_pack
+    PASS_REGULAR_EXPRESSION "Packed the native Hyperian runtime")
+add_test(NAME reject_existing_native_runtime_pack
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/reject_with_message_test.sh "already exists"
+        $<TARGET_FILE:hyperian> pack runtime to ${CMAKE_BINARY_DIR}/NativeRuntime)
+set_tests_properties(reject_existing_native_runtime_pack PROPERTIES DEPENDS create_native_runtime_pack)
+add_test(NAME build_with_native_runtime_pack
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/runtime_pack_test.sh $<TARGET_FILE:hyperian>
+        ${CMAKE_SOURCE_DIR}/examples/report_service.hyp ${CMAKE_BINARY_DIR}/NativeRuntime ${CMAKE_BINARY_DIR}/runtime_pack_report)
+set_tests_properties(build_with_native_runtime_pack PROPERTIES DEPENDS create_native_runtime_pack
+    PASS_REGULAR_EXPRESSION "Daily service report")
+add_test(NAME reject_wrong_native_runtime_pack
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/runtime_pack_wrong_platform_test.sh $<TARGET_FILE:hyperian>
+        ${CMAKE_SOURCE_DIR}/examples/report_service.hyp ${CMAKE_BINARY_DIR}/NativeRuntime ${CMAKE_BINARY_DIR}/wrong_runtime_report)
+set_tests_properties(reject_wrong_native_runtime_pack PROPERTIES DEPENDS create_native_runtime_pack)
+add_test(NAME clean_stale_native_runtime_pack
+    COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}/StaleNativeRuntime)
+add_test(NAME reject_stale_native_runtime_pack
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/runtime_pack_stale_test.sh $<TARGET_FILE:hyperian>
+        ${CMAKE_SOURCE_DIR}/examples/report_service.hyp ${CMAKE_BINARY_DIR}/NativeRuntime
+        ${CMAKE_BINARY_DIR}/StaleNativeRuntime ${CMAKE_BINARY_DIR}/stale_runtime_report)
+set_tests_properties(reject_stale_native_runtime_pack PROPERTIES DEPENDS "create_native_runtime_pack;clean_stale_native_runtime_pack")
+add_test(NAME clean_tampered_native_runtime_pack
+    COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}/TamperedNativeRuntime)
+add_test(NAME reject_tampered_native_runtime_pack
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/runtime_pack_tampered_test.sh $<TARGET_FILE:hyperian>
+        ${CMAKE_SOURCE_DIR}/examples/report_service.hyp ${CMAKE_BINARY_DIR}/NativeRuntime
+        ${CMAKE_BINARY_DIR}/TamperedNativeRuntime ${CMAKE_BINARY_DIR}/tampered_runtime_report)
+set_tests_properties(reject_tampered_native_runtime_pack PROPERTIES DEPENDS "create_native_runtime_pack;clean_tampered_native_runtime_pack")
 add_test(NAME clean_console_bundle COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}/BundleConsole)
 add_test(NAME build_console_bundle
     COMMAND hyperian bundle ${CMAKE_SOURCE_DIR}/examples/bundle_console/app.hyp -o ${CMAKE_BINARY_DIR}/BundleConsole)

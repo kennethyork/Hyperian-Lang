@@ -34,7 +34,20 @@ static int read_u64(FILE *file, uint64_t *value) {
 }
 
 static FILE *running_executable(const char *fallback) {
-    FILE *file = fopen("/proc/self/exe", "rb"); return file ? file : fopen(fallback, "rb");
+    FILE *file = fopen("/proc/self/exe", "rb"); if (file) return file;
+    file = fopen(fallback, "rb"); if (file || strchr(fallback, '/')) return file;
+    const char *path = getenv("PATH");
+    while (path && *path) {
+        const char *ending = strchr(path, ':'); size_t length = ending ? (size_t)(ending - path) : strlen(path);
+        char candidate[PATH_MAX];
+        if (length && length + strlen(fallback) + 2 <= sizeof(candidate)) {
+            memcpy(candidate, path, length); candidate[length] = '/'; snprintf(candidate + length + 1, sizeof(candidate) - length - 1, "%s", fallback);
+            file = fopen(candidate, "rb"); if (file) return file;
+        }
+        if (!ending) break;
+        path = ending + 1;
+    }
+    return NULL;
 }
 
 static int embedded_bytecode(FILE *executable, uint64_t *offset, uint64_t *length, int *bundled) {
@@ -58,10 +71,12 @@ static int copy_bytes(FILE *from, FILE *to, uint64_t count) {
     return 1;
 }
 
-static int build_executable(const char *source, const char *output, const char *self_path, int bundled) {
+static int build_executable_with_runtime(const char *source, const char *output, const char *runtime_path,
+    const char *self_path, int bundled) {
     char bytecode_path[128]; if (!temporary_bytecode(bytecode_path, sizeof(bytecode_path))) return 1;
     int result = compile_file(source, bytecode_path); if (result) { unlink(bytecode_path); return result; }
-    FILE *runtime = running_executable(self_path), *bytecode = fopen(bytecode_path, "rb");
+    FILE *runtime = runtime_path ? fopen(runtime_path, "rb") : running_executable(self_path);
+    FILE *bytecode = fopen(bytecode_path, "rb");
     if (!runtime || !bytecode) { fprintf(stderr, "error: cannot read the runtime or compiled bytecode\n"); if (runtime) fclose(runtime); if (bytecode) fclose(bytecode); unlink(bytecode_path); return 1; }
     if (fseek(runtime, 0, SEEK_END) || fseek(bytecode, 0, SEEK_END)) { fclose(runtime); fclose(bytecode); unlink(bytecode_path); return 1; }
     long runtime_size = ftell(runtime), bytecode_size = ftell(bytecode); uint64_t old_offset, old_length; int old_bundle;
@@ -78,6 +93,10 @@ static int build_executable(const char *source, const char *output, const char *
     fclose(runtime); fclose(bytecode); unlink(bytecode_path);
     if (!okay || chmod(output, 0755)) { fprintf(stderr, "error: could not create executable %s\n", output); return 1; }
     printf("Built standalone executable %s.\n", output); return 0;
+}
+
+static int build_executable(const char *source, const char *output, const char *self_path, int bundled) {
+    return build_executable_with_runtime(source, output, NULL, self_path, bundled);
 }
 
 static int enter_bundle_directory(const char *fallback) {
@@ -223,6 +242,130 @@ static int remove_bundle_tree(const char *path) {
     if (closedir(directory)) okay = 0;
     if (okay && rmdir(path)) okay = 0;
     return okay;
+}
+
+static const char *host_platform_name(void) {
+#if defined(__x86_64__) || defined(_M_X64)
+    const char *architecture = "x64";
+#elif defined(__aarch64__) || defined(_M_ARM64)
+    const char *architecture = "arm64";
+#else
+    const char *architecture = NULL;
+#endif
+#if defined(__APPLE__)
+    static char platform[32]; if (architecture) snprintf(platform, sizeof(platform), "macos-%s", architecture); return architecture ? platform : NULL;
+#elif defined(__linux__)
+    static char platform[32]; if (architecture) snprintf(platform, sizeof(platform), "linux-%s", architecture); return architecture ? platform : NULL;
+#elif defined(__FreeBSD__)
+    static char platform[32]; if (architecture) snprintf(platform, sizeof(platform), "freebsd-%s", architecture); return architecture ? platform : NULL;
+#else
+    (void)architecture; return NULL;
+#endif
+}
+
+static int safe_platform_name(const char *value) {
+    if (!value || !*value) return 0;
+    for (const char *at = value; *at; at++)
+        if (!((*at >= 'a' && *at <= 'z') || (*at >= '0' && *at <= '9') || *at == '-')) return 0;
+    return 1;
+}
+
+static int copy_runtime_prefix(FILE *runtime, const char *destination) {
+    if (fseek(runtime, 0, SEEK_END)) return 0;
+    long size = ftell(runtime); uint64_t offset, length; int bundled;
+    if (embedded_bytecode(runtime, &offset, &length, &bundled)) size = (long)offset;
+    rewind(runtime); FILE *output = fopen(destination, "wx");
+    int okay = output && size >= 0 && copy_bytes(runtime, output, (uint64_t)size);
+    if (output && fclose(output)) okay = 0;
+    if (!okay) unlink(destination);
+    return okay && !chmod(destination, 0755);
+}
+
+static int runtime_checksum(const char *path, char output[17]) {
+    FILE *file = fopen(path, "rb"); if (!file) return 0;
+    uint64_t hash = UINT64_C(14695981039346656037); unsigned char data[65536]; size_t count;
+    while ((count = fread(data, 1, sizeof(data), file)) != 0)
+        for (size_t at = 0; at < count; at++) { hash ^= data[at]; hash *= UINT64_C(1099511628211); }
+    int okay = !ferror(file); if (fclose(file)) okay = 0; if (!okay) return 0;
+    snprintf(output, 17, "%016llx", (unsigned long long)hash); return 1;
+}
+
+static int create_runtime_pack(const char *output, const char *self_path) {
+    const char *platform = host_platform_name();
+    if (!platform) { fprintf(stderr, "error: this operating system or processor cannot be named as a Hyperian runtime pack yet\n"); return 1; }
+    struct stat existing;
+    if (!stat(output, &existing)) { fprintf(stderr, "error: runtime pack %s already exists\n", output); return 1; }
+    if (errno != ENOENT || mkdir(output, 0755)) { fprintf(stderr, "error: cannot create runtime pack %s: %s\n", output, strerror(errno)); return 1; }
+    char runtime_path[PATH_MAX], manifest_path[PATH_MAX];
+    int paths_fit = snprintf(runtime_path, sizeof(runtime_path), "%s/runtime", output) < (int)sizeof(runtime_path) &&
+        snprintf(manifest_path, sizeof(manifest_path), "%s/hyperian.runtime", output) < (int)sizeof(manifest_path);
+    FILE *runtime = paths_fit ? running_executable(self_path) : NULL;
+    int okay = runtime && copy_runtime_prefix(runtime, runtime_path); if (runtime) fclose(runtime);
+    char manifest[512], checksum[17]; if (okay) okay = runtime_checksum(runtime_path, checksum);
+    if (okay) {
+        snprintf(manifest, sizeof(manifest),
+            "Hyperian native runtime pack\nformat: HYRP1\ntoolchain: %s\nbytecode: %s\nplatform: %s\nexecutable: runtime\nchecksum: %s\n",
+            HYPERIAN_VERSION, HYC_MAGIC, platform, checksum);
+        okay = write_project_file(manifest_path, manifest);
+    }
+    if (!okay) { remove_bundle_tree(output); fprintf(stderr, "error: could not finish runtime pack %s\n", output); return 1; }
+    printf("Packed the native Hyperian runtime for %s in %s.\n", platform, output); return 0;
+}
+
+static void clean_manifest_value(char *value) {
+    size_t length = strlen(value); while (length && (value[length - 1] == '\n' || value[length - 1] == '\r')) value[--length] = 0;
+}
+
+static int runtime_pack_executable(const char *pack, const char *wanted_platform, char *runtime_path, size_t runtime_path_size) {
+    char manifest_path[PATH_MAX];
+    if (snprintf(manifest_path, sizeof(manifest_path), "%s/hyperian.runtime", pack) >= (int)sizeof(manifest_path)) {
+        fprintf(stderr, "error: runtime pack path is too long\n"); return 0;
+    }
+    FILE *manifest = fopen(manifest_path, "rb");
+    if (!manifest) { fprintf(stderr, "error: %s is not a Hyperian native runtime pack\n", pack); return 0; }
+    char line[1024], format[32] = "", toolchain[32] = "", bytecode[32] = "", platform[64] = "", executable[64] = "", checksum[32] = "";
+    while (fgets(line, sizeof(line), manifest)) {
+        char *value = strchr(line, ':'); if (!value) continue; *value++ = 0; if (*value == ' ') value++; clean_manifest_value(value);
+        if (!strcmp(line, "format")) snprintf(format, sizeof(format), "%s", value);
+        else if (!strcmp(line, "toolchain")) snprintf(toolchain, sizeof(toolchain), "%s", value);
+        else if (!strcmp(line, "bytecode")) snprintf(bytecode, sizeof(bytecode), "%s", value);
+        else if (!strcmp(line, "platform")) snprintf(platform, sizeof(platform), "%s", value);
+        else if (!strcmp(line, "executable")) snprintf(executable, sizeof(executable), "%s", value);
+        else if (!strcmp(line, "checksum")) snprintf(checksum, sizeof(checksum), "%s", value);
+    }
+    int read_failed = ferror(manifest); fclose(manifest);
+    int checksum_valid = strlen(checksum) == 16;
+    for (const char *at = checksum; checksum_valid && *at; at++) checksum_valid = (*at >= '0' && *at <= '9') || (*at >= 'a' && *at <= 'f');
+    if (read_failed || strcmp(format, "HYRP1") || strcmp(bytecode, HYC_MAGIC) || !safe_platform_name(platform) || !checksum_valid ||
+        (strcmp(executable, "runtime") && strcmp(executable, "runtime.exe"))) {
+        fprintf(stderr, "error: %s has a damaged Hyperian runtime manifest\n", pack); return 0;
+    }
+    if (strcmp(toolchain, HYPERIAN_VERSION)) {
+        fprintf(stderr, "error: runtime pack %s uses Hyperian %s but this compiler is Hyperian %s\n", pack, toolchain, HYPERIAN_VERSION); return 0;
+    }
+    if (strcmp(platform, wanted_platform)) {
+        fprintf(stderr, "error: runtime pack %s is for %s, not %s\n", pack, platform, wanted_platform); return 0;
+    }
+    if (snprintf(runtime_path, runtime_path_size, "%s/%s", pack, executable) >= (int)runtime_path_size) {
+        fprintf(stderr, "error: runtime executable path is too long\n"); return 0;
+    }
+    struct stat info;
+    if (lstat(runtime_path, &info) || !S_ISREG(info.st_mode) || S_ISLNK(info.st_mode)) {
+        fprintf(stderr, "error: runtime pack %s does not contain its native executable\n", pack); return 0;
+    }
+    char actual_checksum[17];
+    if (!runtime_checksum(runtime_path, actual_checksum) || strcmp(checksum, actual_checksum)) {
+        fprintf(stderr, "error: runtime executable in %s does not match its manifest\n", pack); return 0;
+    }
+    return 1;
+}
+
+static int build_for_native_platform(const char *source, const char *platform, const char *pack, const char *output) {
+    if (!safe_platform_name(platform)) { fprintf(stderr, "error: native platform names use lowercase letters, numbers, and hyphens\n"); return 2; }
+    char runtime_path[PATH_MAX]; if (!runtime_pack_executable(pack, platform, runtime_path, sizeof(runtime_path))) return 1;
+    int result = build_executable_with_runtime(source, output, runtime_path, NULL, 0);
+    if (!result) printf("Used the %s native runtime pack.\n", platform);
+    return result;
 }
 
 static void source_directory(const char *source, char *directory, size_t size) {
@@ -581,6 +724,9 @@ static int doctor(void) {
 #else
     puts("  HTTP client: basic HTTP only; libcurl HTTPS is not included");
 #endif
+    const char *platform = host_platform_name();
+    if (platform) printf("  native runtime pack creation (%s): ready\n", platform);
+    else puts("  native runtime pack creation: unavailable on this processor");
     puts("  standalone executables and asset bundles: ready\n"
          "  Android and iOS bytecode deployment packages: ready\n"
          "  native mobile runtime bridge library: ready\n"
@@ -708,7 +854,10 @@ static void help(void) {
          "  hyperian build app.hyp -o MyApp       Build one executable application\n"
          "  hyperian build app.hyp for android as App.aab\n"
          "                                          Build and sign a phone application\n"
+         "  hyperian build app.hyp for PLATFORM using RuntimePack as App\n"
+         "                                          Build with another native runtime\n"
          "  hyperian bundle app.hyp -o App        Bundle an executable and assets\n"
+         "  hyperian pack runtime to RuntimePack Create a runtime pack for this computer\n"
          "  hyperian export app.hyp for android to App\n"
          "                                          Export a phone deployment package\n"
          "  hyperian new MyApp [--target web]     Create a foldered MVC project\n"
@@ -724,6 +873,7 @@ static void help(void) {
          "  hyperian test app.hyp                 Run English test blocks\n"
          "  hyperian migrate app.hyp              Apply pending data migrations\n"
          "  hyperian doctor                       Check available native backends\n"
+         "  hyperian platform                     Show this runtime's native platform\n"
          "  hyperian version                      Show the version\n");
 }
 
@@ -735,6 +885,12 @@ int main(int argc, char **argv) {
     int embedded = 0, embedded_result = run_embedded_program(argc, argv, &embedded); if (embedded) return embedded_result;
     if (argc < 2 || !strcmp(argv[1], "help") || !strcmp(argv[1], "--help") || !strcmp(argv[1], "-h")) { help(); return 0; }
     if (!strcmp(argv[1], "version") || !strcmp(argv[1], "--version")) { puts("Hyperian " HYPERIAN_VERSION); return 0; }
+    if (!strcmp(argv[1], "platform")) {
+        if (argc != 2) { fprintf(stderr, "usage: hyperian platform\n"); return 2; }
+        const char *platform = host_platform_name();
+        if (!platform) { fprintf(stderr, "error: this operating system or processor does not have a Hyperian platform name yet\n"); return 1; }
+        puts(platform); return 0;
+    }
     if (!strcmp(argv[1], "doctor")) {
         if (argc != 2) { fprintf(stderr, "usage: hyperian doctor\n"); return 2; }
         return doctor();
@@ -753,8 +909,17 @@ int main(int argc, char **argv) {
         if (argc == 5 && !strcmp(argv[3], "-o")) return build_executable(argv[2], argv[4], argv[0], 0);
         if (argc == 7 && !strcmp(argv[3], "for") && !strcmp(argv[5], "as"))
             return build_mobile_application(argv[2], argv[4], argv[6], argv[0]);
+        if (argc == 9 && !strcmp(argv[3], "for") && !strcmp(argv[5], "using") && !strcmp(argv[7], "as"))
+            return build_for_native_platform(argv[2], argv[4], argv[6], argv[8]);
         fprintf(stderr, "usage: hyperian build app.hyp -o MyApp\n"
-                        "   or: hyperian build app.hyp for android as App.aab\n"); return 2;
+                        "   or: hyperian build app.hyp for android as App.aab\n"
+                        "   or: hyperian build app.hyp for PLATFORM using RuntimePack as MyApp\n"); return 2;
+    }
+    if (!strcmp(argv[1], "pack")) {
+        if (argc != 5 || strcmp(argv[2], "runtime") || strcmp(argv[3], "to")) {
+            fprintf(stderr, "usage: hyperian pack runtime to RuntimePack\n"); return 2;
+        }
+        return create_runtime_pack(argv[4], argv[0]);
     }
     if (!strcmp(argv[1], "bundle")) {
         if (argc != 5 || strcmp(argv[3], "-o")) { fprintf(stderr, "usage: hyperian bundle app.hyp -o App\n"); return 2; }

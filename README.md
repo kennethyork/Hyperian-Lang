@@ -8,7 +8,7 @@ Hyperian is an English-like, general-purpose language where every application is
 - a bytecode virtual machine;
 - separate native runtimes for different application targets.
 
-The goal is that a beginner can read the source aloud and understand it. Web, installable offline web application, console, API, one-shot service, native GTK desktop, phone-sized mobile preview, and native SDL2 game programs are executable today. Mobile programs can also be compiled into versioned Android or iOS deployment packages, driven through the native mobile runtime library, or built as signed APK, AAB, and IPA artifacts when the platform SDK and signing identity are installed. Android exports include a native Android Studio project, and iOS exports include a native SwiftUI Xcode project.
+The goal is that a beginner can read the source aloud and understand it. Web, installable offline web application, console, API, one-shot service, native GTK desktop, phone-sized mobile preview, and native SDL2 game programs are executable today. Native runtime packs let one computer produce Hyperian executables for another operating-system and processor combination without recompiling the application source. Mobile programs can also be compiled into versioned Android or iOS deployment packages, driven through the native mobile runtime library, or built as signed APK, AAB, and IPA artifacts when the platform SDK and signing identity are installed. Android exports include a native Android Studio project, and iOS exports include a native SwiftUI Xcode project.
 
 ## Build the compiler
 
@@ -55,6 +55,25 @@ build/hyperian bundle examples/bundle_console/app.hyp -o BundleReader
 ```
 
 A bundle carries an `HYBN1` manifest. Its executable automatically uses the bundle folder as its working directory, so file access, game media, and public web assets work even when the program is launched elsewhere. Bundles target the operating system and CPU on which the compiler was built; native system libraries are still external dependencies.
+
+## Build for another native platform
+
+Hyperian bytecode is portable, but each standalone executable needs a native VM for its destination. On a computer with the destination operating system and processor, create that VM once:
+
+```sh
+hyperian platform
+hyperian pack runtime to LinuxArmRuntime
+```
+
+`hyperian platform` prints a precise name such as `linux-x64`, `linux-arm64`, `macos-x64`, or `macos-arm64`. Move the runtime-pack folder to the development computer. It can then build any compatible Hyperian application directly for that platform:
+
+```sh
+hyperian build app.hyp for linux-arm64 using LinuxArmRuntime as MyApp
+```
+
+The destination does not need the Hyperian compiler, the `.hyp` source, or a separate `.hyc` file. The runtime pack has an `HYRP1` manifest containing its platform, bytecode format, exact Hyperian toolchain version, executable name, and integrity checksum. Hyperian rejects a pack for the wrong platform, a pack from another toolchain version, a changed executable, a symbolic-link substitute, or a damaged manifest before creating the application. Runtime packs are version-specific because newer language releases may add bytecode instructions; recreate them after upgrading Hyperian.
+
+This workflow performs cross-platform application assembly rather than compiling C on the development computer: the destination’s native VM is already in the pack, and Hyperian compiles the fully left-aligned English MVC program into portable bytecode before joining the two. Dynamic libraries required by that VM, such as GTK3 or SDL2, must still be installed on the destination. Keep `assets/` and `public/` beside a standalone executable when the application uses them.
 
 See which backends were compiled into the current toolchain:
 
@@ -928,6 +947,6 @@ that is all
 
 ## Project status
 
-Version 0.44 is a small but real MVC platform: canonical fully left-aligned English source with readable `that is all` block endings and compatibility for older indentation-based programs, custom bytecode, a native VM, standalone executable and asset-bundle creation, readable quoted phrase names across MVC and every runtime, literal-safe English expressions, versioned Android/iOS mobile deployment packages, automated signed APK/AAB/IPA orchestration, a linkable native mobile runtime bridge, self-contained native Android Studio and SwiftUI Xcode project generation, native phone HTTPS and SQLite integration, native backend diagnostics, eight compiler targets including installable offline web applications, parallel-safe compiler tooling, an English source-line debugger, persistent model CRUD plus filtered and ordered collection queries inside native controller actions, repeated native collection views, recurring service and native-interface timers, interactive multi-view GTK desktop and phone-sized mobile preview interfaces with close, live-input-change, keyboard-submission, focus, pause, resume, tap, press-and-hold, and four-direction swipe events, matching generated Android/iOS lifecycle and gesture events, SDL2 keyboard/frame events, frame-rate-independent movement, gravity, smooth value transitions, timed animation frames, boundaries, native rectangle, circle, line, and filled polygon drawing plus collision detection between every shape pair, BMP/PNG/JPEG/WebP sprites, WAV and compressed overlapping sound effects, streamed music controls, readable frame-time state, and state-driven rendering, native lists and maps, selectable HDB or transactional SQLite storage, recoverable runtime errors, an HTTP/HTTPS client, local packages, reusable actions, native file access, foldered project generation, versioned migrations, persistent CRUD models, safe HTML and typed JSON, authentication and authorization, middleware, formatting, and English tests.
+Version 0.45 is a small but real MVC platform: canonical fully left-aligned English source with readable `that is all` block endings and compatibility for older indentation-based programs, custom portable bytecode, a native VM, verified versioned native runtime packs and direct cross-platform executable assembly, standalone executable and asset-bundle creation, readable quoted phrase names across MVC and every runtime, literal-safe English expressions, versioned Android/iOS mobile deployment packages, automated signed APK/AAB/IPA orchestration, a linkable native mobile runtime bridge, self-contained native Android Studio and SwiftUI Xcode project generation, native phone HTTPS and SQLite integration, native backend diagnostics, eight compiler targets including installable offline web applications, parallel-safe compiler tooling, an English source-line debugger, persistent model CRUD plus filtered and ordered collection queries inside native controller actions, repeated native collection views, recurring service and native-interface timers, interactive multi-view GTK desktop and phone-sized mobile preview interfaces with close, live-input-change, keyboard-submission, focus, pause, resume, tap, press-and-hold, and four-direction swipe events, matching generated Android/iOS lifecycle and gesture events, SDL2 keyboard/frame events, frame-rate-independent movement, gravity, smooth value transitions, timed animation frames, boundaries, native rectangle, circle, line, and filled polygon drawing plus collision detection between every shape pair, BMP/PNG/JPEG/WebP sprites, WAV and compressed overlapping sound effects, streamed music controls, readable frame-time state, and state-driven rendering, native lists and maps, selectable HDB or transactional SQLite storage, recoverable runtime errors, an HTTP/HTTPS client, local packages, reusable actions, native file access, foldered project generation, versioned migrations, persistent CRUD models, safe HTML and typed JSON, authentication and authorization, middleware, formatting, and English tests.
 
-The next major layer is broader cross-compilation so one host can directly produce native executables for more operating systems. That is not claimed as complete yet.
+The next deployment layers are official downloadable runtime packs, Windows runtime portability, and cross-platform asset bundles. Those are not claimed as complete yet.
