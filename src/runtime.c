@@ -248,6 +248,18 @@ static void sessions_free(Session *session) {
 }
 
 static const char *resolve(Scope *scope, const char *expression) {
+    static const char called[] = "value called ";
+    if (!strncmp(expression, called, sizeof(called) - 1)) {
+        const char *name = expression + sizeof(called) - 1;
+        char quoted_name[sizeof(((HyperianState *)0)->names[0])];
+        if (*name == '"') {
+            name++; const char *close = strrchr(name, '"');
+            if (!close || close[1] || (size_t)(close - name) >= sizeof(quoted_name)) return "";
+            memcpy(quoted_name, name, (size_t)(close - name)); quoted_name[close - name] = 0; name = quoted_name;
+        }
+        const char *local = local_value(scope->locals, name);
+        return local ? local : "";
+    }
     const char *local = local_value(scope->locals, expression); if (local) return local;
     const char *dot = strchr(expression, '.');
     if (!dot) {
@@ -276,13 +288,35 @@ static int number_value(const char *text, double *value) {
     char *end; *value = strtod(text, &end); return !*end;
 }
 
+static char *phrase_outside_quotes(char *text, const char *phrase) {
+    int quoted = 0, escaped = 0;
+    for (char *at = text; *at; at++) {
+        if (escaped) escaped = 0;
+        else if (quoted && *at == '\\') escaped = 1;
+        else if (*at == '"') quoted = !quoted;
+        else if (!quoted && !strncmp(at, phrase, strlen(phrase))) return at;
+    }
+    return NULL;
+}
+
+static int quoted_text(const char *text, char *output, size_t size) {
+    size_t length = strlen(text);
+    if (length < 2 || text[0] != '"' || text[length - 1] != '"') return 0;
+    size_t used = 0;
+    for (size_t at = 1; at + 1 < length && used + 1 < size; at++) {
+        if (text[at] == '\\' && at + 2 < length && (text[at + 1] == '"' || text[at + 1] == '\\')) at++;
+        output[used++] = text[at];
+    }
+    output[used] = 0; return 1;
+}
+
 static void evaluate(Scope *scope, const char *expression, char *output, size_t size) {
     char clean[2048]; trimmed(expression, clean, sizeof(clean));
     static const struct { const char *words; int operation; } operators[] = {
         {" plus ", 1}, {" minus ", 2}, {" joined with ", 3}, {" times ", 4}, {" divided by ", 5}
     };
     for (size_t op = 0; op < sizeof(operators) / sizeof(operators[0]); op++) {
-        char *middle = strstr(clean, operators[op].words); if (!middle) continue;
+        char *middle = phrase_outside_quotes(clean, operators[op].words); if (!middle) continue;
         char left_expression[1024], right_expression[1024], left[2048], right[2048];
         size_t left_length = (size_t)(middle - clean); if (left_length >= sizeof(left_expression)) left_length = sizeof(left_expression) - 1;
         memcpy(left_expression, clean, left_length); left_expression[left_length] = 0;
@@ -296,8 +330,9 @@ static void evaluate(Scope *scope, const char *expression, char *output, size_t 
         else snprintf(output, size, "%s%s", left, right);
         return;
     }
+    if (quoted_text(clean, output, size)) return;
     const char *resolved = resolve(scope, clean);
-    if (*resolved || local_value(scope->locals, clean)) snprintf(output, size, "%s", resolved);
+    if (!strncmp(clean, "value called ", sizeof("value called ") - 1) || *resolved || local_value(scope->locals, clean)) snprintf(output, size, "%s", resolved);
     else snprintf(output, size, "%s", clean);
 }
 
@@ -311,7 +346,7 @@ static int condition_is_true(Scope *scope, const char *expression) {
         {" is not ", 1}, {" is greater than ", 2}, {" is less than ", 3}, {" contains ", 4}, {" is ", 5}
     };
     for (size_t comparison = 0; comparison < sizeof(comparisons) / sizeof(comparisons[0]); comparison++) {
-        char *middle = strstr(clean, comparisons[comparison].words); if (!middle) continue;
+        char *middle = phrase_outside_quotes(clean, comparisons[comparison].words); if (!middle) continue;
         char left_expression[1024], right_expression[1024], left[2048], right[2048];
         size_t length = (size_t)(middle - clean); if (length >= sizeof(left_expression)) length = sizeof(left_expression) - 1;
         memcpy(left_expression, clean, length); left_expression[length] = 0;

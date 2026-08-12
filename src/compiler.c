@@ -17,12 +17,13 @@ static void source_error(const char *path, unsigned line, const char *message) {
     fprintf(stderr, "%s:%u: error: %s\n", path, line, message);
 }
 
-static int words(char *line, char **out, int maximum, char *error, size_t error_size) {
+static int words(char *line, char **out, unsigned char *quoted, int maximum, char *error, size_t error_size) {
     int count = 0; char *read = line, *write = line;
     while (*read) {
         while (isspace((unsigned char)*read)) read++;
         if (!*read || *read == '#') break;
         if (count == maximum) { snprintf(error, error_size, "too many words on one line"); return -1; }
+        if (quoted) quoted[count] = *read == '"';
         out[count++] = write;
         if (*read == '"') {
             read++;
@@ -50,18 +51,29 @@ static int emit(Bytecode *code, int op, int argc, char **args, unsigned line) {
     return 1;
 }
 
-static void join_words(char *output, size_t size, char **words, int from, int count) {
+static void join_words(char *output, size_t size, char **words, const unsigned char *quoted, int from, int count) {
     size_t used = 0; output[0] = 0;
     for (int i = from; i < count && used + 1 < size; i++) {
         if (i > from) output[used++] = ' ';
-        size_t length = strlen(words[i]); if (length > size - used - 1) length = size - used - 1;
-        memcpy(output + used, words[i], length); used += length; output[used] = 0;
+        int quote = quoted && quoted[i];
+        if (quote && used + 1 < size) output[used++] = '"';
+        for (const char *at = words[i]; *at && used + 1 < size; at++) {
+            if (quote && (*at == '"' || *at == '\\') && used + 2 < size) output[used++] = '\\';
+            output[used++] = *at;
+        }
+        if (quote && used + 1 < size) output[used++] = '"';
+        output[used] = 0;
     }
 }
 
 static int is_name(const char *value) {
-    if (!isalpha((unsigned char)*value)) return 0;
-    for (value++; *value; value++) if (!isalnum((unsigned char)*value) && *value != '_') return 0;
+    if (!*value || !isalpha((unsigned char)*value)) return 0;
+    int previous_space = 0;
+    for (value++; *value; value++) {
+        if (isalnum((unsigned char)*value) || *value == '_') previous_space = 0;
+        else if (*value == ' ' && !previous_space && value[1]) previous_space = 1;
+        else return 0;
+    }
     return 1;
 }
 
@@ -328,7 +340,7 @@ static int expand_source(const char *path, FILE *output, int depth, const char *
     char line[MAX_LINE]; unsigned number = 0; int okay = 1;
     while (okay && fgets(line, sizeof(line), input)) {
         number++; char parsed[MAX_LINE]; snprintf(parsed, sizeof(parsed), "%s", line);
-        char *parts[MAX_WORDS], error[128]; int count = words(parsed, parts, MAX_WORDS, error, sizeof(error));
+        char *parts[MAX_WORDS], error[128]; int count = words(parsed, parts, NULL, MAX_WORDS, error, sizeof(error));
         if (count < 0) { source_error(path, number, error); okay = 0; break; }
         if (count && !strcmp(parts[0], "include")) {
             if (count != 2) { source_error(path, number, "say: include \"models.hyp\""); okay = 0; break; }
@@ -367,7 +379,7 @@ int compile_file(const char *source_path, const char *output_path) {
     while (okay && fgets(line, sizeof(line), file)) {
         number++;
         if (!strchr(line, '\n') && !feof(file)) { source_error(source_path, number, "line is too long"); okay = 0; break; }
-        char *w[MAX_WORDS]; int n = words(line, w, MAX_WORDS, error, sizeof(error));
+        char *w[MAX_WORDS]; unsigned char quoted[MAX_WORDS] = {0}; int n = words(line, w, quoted, MAX_WORDS, error, sizeof(error));
         if (n < 0) { source_error(source_path, number, error); okay = 0; break; }
         if (!n) continue;
         Block current = stack[depth - 1];
@@ -676,19 +688,22 @@ int compile_file(const char *source_path, const char *output_path) {
             } else if (n == 8 && !strcmp(w[0], "require") && !strcmp(w[2], "is") && !strcmp(w[4], "or") &&
                 !strcmp(w[5], "redirect") && !strcmp(w[6], "to")) {
                 char *args[3] = {w[1], w[3], w[7]}; okay = emit(&code, OP_REQUIRE_VALUE, 3, args, number);
-            } else if (n >= 4 && !strcmp(w[0], "set") && !strcmp(w[2], "to") && is_name(w[1])) {
-                char expression[MAX_LINE]; join_words(expression, sizeof(expression), w, 3, n);
-                char *args[2] = {w[1], expression}; okay = emit(&code, OP_SET_VALUE, 2, args, number);
+            } else if (n >= 4 && !strcmp(w[0], "set") && !strcmp(w[2], "to")) {
+                if (!is_name(w[1])) { source_error(source_path, number, "a value name must start with a letter and use only letters, numbers, spaces, or underscores"); okay = 0; }
+                else {
+                    char expression[MAX_LINE]; join_words(expression, sizeof(expression), w, quoted, 3, n);
+                    char *args[2] = {w[1], expression}; okay = emit(&code, OP_SET_VALUE, 2, args, number);
+                }
             } else if (n == 6 && !strcmp(w[0], "read") && !strcmp(w[2], "from") && !strcmp(w[3], "form") &&
                 !strcmp(w[4], "as") && is_name(w[5])) {
                 char *args[2] = {w[1], w[5]}; okay = emit(&code, OP_READ_FORM, 2, args, number);
             } else if (n >= 2 && !strcmp(w[0], "if")) {
-                char expression[MAX_LINE]; join_words(expression, sizeof(expression), w, 1, n);
+                char expression[MAX_LINE]; join_words(expression, sizeof(expression), w, quoted, 1, n);
                 char *arg = expression; okay = emit(&code, OP_LOGIC_IF, 1, &arg, number); stack[depth++] = BLOCK_LOGIC_IF;
             } else if (n == 1 && !strcmp(w[0], "otherwise") && current == BLOCK_LOGIC_IF) {
                 okay = emit(&code, OP_OTHERWISE, 0, NULL, number);
             } else if (n >= 3 && !strcmp(w[0], "repeat") && !strcmp(w[n - 1], "times")) {
-                char expression[MAX_LINE]; join_words(expression, sizeof(expression), w, 1, n - 1);
+                char expression[MAX_LINE]; join_words(expression, sizeof(expression), w, quoted, 1, n - 1);
                 char *arg = expression; okay = emit(&code, OP_REPEAT, 1, &arg, number); stack[depth++] = BLOCK_REPEAT;
             } else if (n == 1 && !strcmp(w[0], "try")) {
                 okay = emit(&code, OP_TRY, 0, NULL, number); stack[depth++] = BLOCK_TRY;
@@ -701,7 +716,7 @@ int compile_file(const char *source_path, const char *output_path) {
                 !strcmp(w[5], "as") && is_name(w[6])) {
                 char *args[3] = {w[2], w[4], w[6]}; okay = emit(&code, OP_RUN_ACTION, 3, args, number);
             } else if (n >= 2 && !strcmp(w[0], "return")) {
-                char expression[MAX_LINE]; join_words(expression, sizeof(expression), w, 1, n);
+                char expression[MAX_LINE]; join_words(expression, sizeof(expression), w, quoted, 1, n);
                 char *arg = expression; okay = emit(&code, OP_RETURN_VALUE, 1, &arg, number);
             } else if (n == 5 && !strcmp(w[0], "read") && !strcmp(w[1], "file") && !strcmp(w[3], "as") && is_name(w[4])) {
                 char *args[2] = {w[2], w[4]}; okay = emit(&code, OP_READ_FILE, 2, args, number);
@@ -739,7 +754,7 @@ int compile_file(const char *source_path, const char *output_path) {
                 !strcmp(w[4], "as") && is_name(w[3]) && is_name(w[5])) {
                 char *args[2] = {w[3], w[5]}; okay = emit(&code, OP_MAP_COUNT, 2, args, number);
             } else if (n >= 5 && !strcmp(w[0], "expect") && !strcmp(w[2], "to") && !strcmp(w[3], "be") && current == BLOCK_TEST) {
-                char expected[MAX_LINE], condition[MAX_LINE]; join_words(expected, sizeof(expected), w, 4, n);
+                char expected[MAX_LINE], condition[MAX_LINE]; join_words(expected, sizeof(expected), w, quoted, 4, n);
                 if (strlen(w[1]) + strlen(expected) + 5 >= sizeof(condition)) {
                     source_error(source_path, number, "this expectation is too long"); okay = 0; continue;
                 }

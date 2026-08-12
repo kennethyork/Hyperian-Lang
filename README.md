@@ -425,6 +425,25 @@ end
 
 Expressions support `plus`, `minus`, `times`, `divided by`, and `joined with`. Conditions support `is`, `is not`, `is greater than`, `is less than`, and `contains`. Controller variables can be shown directly in views or returned as JSON.
 
+Names can be readable quoted phrases instead of programming-style underscore names. This works for models, fields, controllers, values, action inputs and results, form controls, collections, native events, and game state:
+
+```hyperian
+model "Blog Post"
+    field "display title" is text required
+end
+
+set "visit count" to 1
+set "visit count" to value called "visit count" plus 1
+
+if value called "visit count" is greater than 1
+    set "page message" to "Welcome back"
+end
+
+show "page message"
+```
+
+Use `value called "visit count"` when a phrase-named value appears inside a calculation or condition. A quoted text value remains literal even when it contains words such as `plus` or `is`. Existing single-word and underscore names remain compatible. See [examples/english_names.hyp](examples/english_names.hyp), [examples/english_names_web.hyp](examples/english_names_web.hyp), [examples/mobile_connected.hyp](examples/mobile_connected.hyp), and [examples/physics_game.hyp](examples/physics_game.hyp).
+
 Web controllers can read ordinary form values before running an action:
 
 ```hyperian
@@ -715,16 +734,16 @@ end
 
 controller Game
     action initialize
-        set player_x to 100
-        set player_y to 100
-        set player_velocity_x to 200
-        set player_velocity_y to 0
-        set ball_x to 500
-        set ball_y to 320
-        set coin_x to 540
-        set coin_y to 320
+        set "player left" to 100
+        set "player top" to 100
+        set "horizontal speed" to 200
+        set "vertical speed" to 0
+        set "ball horizontal center" to 500
+        set "ball vertical center" to 320
+        set "coin horizontal center" to 540
+        set "coin vertical center" to 320
         set glow to 0
-        set animation_frame to 1
+        set "animation frame" to 1
     end
 
     when application starts
@@ -734,21 +753,21 @@ controller Game
 
     when game updates
         move value glow toward 1 at 2 per second
-        advance animation animation_frame from 1 through 4 every 100 milliseconds
-        apply gravity 300 to player_velocity_y
-        move position player_x player_y using velocity player_velocity_x player_velocity_y
-        keep position player_x player_y inside 960 by 540 sized 64 by 64
-        check whether rectangle at player_x player_y sized 64 by 64 touches rectangle at 400 260 sized 120 by 120 as player_hit
-        check whether circle centered at ball_x ball_y with radius 24 touches circle centered at coin_x coin_y with radius 12 as coin_hit
-        check whether rectangle at 400 260 sized 120 by 120 touches circle centered at ball_x ball_y with radius 24 as wall_hit
+        advance animation "animation frame" from 1 through 4 every 100 milliseconds
+        apply gravity 300 to "vertical speed"
+        move position "player left" "player top" using velocity "horizontal speed" "vertical speed"
+        keep position "player left" "player top" inside 960 by 540 sized 64 by 64
+        check whether rectangle at "player left" "player top" sized 64 by 64 touches rectangle at 400 260 sized 120 by 120 as "player hit"
+        check whether circle centered at "ball horizontal center" "ball vertical center" with radius 24 touches circle centered at "coin horizontal center" "coin vertical center" with radius 12 as "coin hit"
+        check whether rectangle at 400 260 sized 120 by 120 touches circle centered at "ball horizontal center" "ball vertical center" with radius 24 as "wall hit"
     end
 end
 
 view "playfield"
     fill background with color 18 24 38
-    draw rectangle at player_x player_y sized 64 by 64 with color 70 170 255
-    draw circle centered at ball_x ball_y with radius 24 and color 255 220 70
-    draw image "assets/player.bmp" at player_x player_y sized 64 by 64
+    draw rectangle at "player left" "player top" sized 64 by 64 with color 70 170 255
+    draw circle centered at "ball horizontal center" "ball vertical center" with radius 24 and color 255 220 70
+    draw image "assets/player.bmp" at "player left" "player top" sized 64 by 64
 end
 ```
 
@@ -900,6 +919,6 @@ Quoted text may contain spaces. `#` starts a comment. Indentation is optional bu
 
 ## Project status
 
-Version 0.37 is a small but real MVC platform: custom bytecode, a native VM, standalone executable and asset-bundle creation, versioned Android/iOS mobile deployment packages, automated signed APK/AAB/IPA orchestration, a linkable native mobile runtime bridge, self-contained native Android Studio and SwiftUI Xcode project generation, native phone HTTPS and SQLite integration, native backend diagnostics, eight compiler targets including installable offline web applications, parallel-safe compiler tooling, an English source-line debugger, persistent model CRUD plus filtered and ordered collection queries inside native controller actions, repeated native collection views, recurring service and native-interface timers, interactive multi-view GTK desktop and phone-sized mobile preview interfaces with close, live-input-change, keyboard-submission, focus, pause, resume, tap, press-and-hold, and four-direction swipe events, matching generated Android/iOS lifecycle and gesture events, SDL2 keyboard/frame events, frame-rate-independent movement, gravity, smooth value transitions, timed animation frames, boundaries, rectangle and circle drawing and collision detection, BMP sprites, WAV sound, and state-driven rendering, native lists and maps, selectable HDB or transactional SQLite storage, recoverable runtime errors, an HTTP/HTTPS client, local packages, reusable actions, native file access, foldered project generation, versioned migrations, persistent CRUD models, safe HTML and typed JSON, authentication and authorization, middleware, formatting, and English tests.
+Version 0.38 is a small but real MVC platform: custom bytecode, a native VM, standalone executable and asset-bundle creation, readable quoted phrase names across MVC and every runtime, literal-safe English expressions, versioned Android/iOS mobile deployment packages, automated signed APK/AAB/IPA orchestration, a linkable native mobile runtime bridge, self-contained native Android Studio and SwiftUI Xcode project generation, native phone HTTPS and SQLite integration, native backend diagnostics, eight compiler targets including installable offline web applications, parallel-safe compiler tooling, an English source-line debugger, persistent model CRUD plus filtered and ordered collection queries inside native controller actions, repeated native collection views, recurring service and native-interface timers, interactive multi-view GTK desktop and phone-sized mobile preview interfaces with close, live-input-change, keyboard-submission, focus, pause, resume, tap, press-and-hold, and four-direction swipe events, matching generated Android/iOS lifecycle and gesture events, SDL2 keyboard/frame events, frame-rate-independent movement, gravity, smooth value transitions, timed animation frames, boundaries, rectangle and circle drawing and collision detection, BMP sprites, WAV sound, and state-driven rendering, native lists and maps, selectable HDB or transactional SQLite storage, recoverable runtime errors, an HTTP/HTTPS client, local packages, reusable actions, native file access, foldered project generation, versioned migrations, persistent CRUD models, safe HTML and typed JSON, authentication and authorization, middleware, formatting, and English tests.
 
 The next major layers are polygon and line collision shapes, more media formats, and broader cross-compilation. Those are not claimed as complete yet.

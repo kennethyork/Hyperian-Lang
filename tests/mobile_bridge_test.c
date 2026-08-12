@@ -45,7 +45,7 @@ int main(int argc, char **argv) {
         hyperian_mobile_send_event(mobile, "CHANGE:urgent", error, sizeof(error)) &&
         hyperian_mobile_value(mobile, "urgency_preview") && !strcmp(hyperian_mobile_value(mobile, "urgency_preview"), "Urgent:true") &&
         hyperian_mobile_send_event(mobile, "SUBMIT:title", error, sizeof(error)) &&
-        hyperian_mobile_value(mobile, "status") && !strcmp(hyperian_mobile_value(mobile, "status"), "Added:Coffee \"and\" tea") &&
+        hyperian_mobile_value(mobile, "status") && !strcmp(hyperian_mobile_value(mobile, "status"), "Added: Coffee \"and\" tea") &&
         hyperian_mobile_render_json(mobile, json, sizeof(json), error, sizeof(error)) &&
         contains(json, "Coffee \\\"and\\\" tea") && contains(json, "\"timers\":[1000]") &&
         hyperian_mobile_run_action(mobile, "show completed", NULL, error, sizeof(error)) &&

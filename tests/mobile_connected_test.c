@@ -32,9 +32,15 @@ int main(int argc, char **argv) {
     HyperianMobile *mobile = hyperian_mobile_open(argv[1], error, sizeof(error));
     int okay = mobile && hyperian_mobile_start(mobile, error, sizeof(error)) &&
         hyperian_mobile_run_action(mobile, "refresh status", NULL, error, sizeof(error)) &&
-        hyperian_mobile_value(mobile, "message") &&
-        !strcmp(hyperian_mobile_value(mobile, "message"), "Internet status:200:ready") &&
-        hyperian_mobile_set(mobile, "title", "Persistent phone task", error, sizeof(error)) &&
+        hyperian_mobile_value(mobile, "internet message") &&
+        !strcmp(hyperian_mobile_value(mobile, "internet message"), "Internet status:200:ready") &&
+        hyperian_mobile_set(mobile, "task title", "Draft phone task", error, sizeof(error)) &&
+        hyperian_mobile_send_event(mobile, "CHANGE:task title", error, sizeof(error)) &&
+        hyperian_mobile_value(mobile, "saved message") &&
+        !strcmp(hyperian_mobile_value(mobile, "saved message"), "Typing:Draft phone task") &&
+        hyperian_mobile_send_event(mobile, "SUBMIT:task title", error, sizeof(error)) &&
+        !strcmp(hyperian_mobile_value(mobile, "saved message"), "Submitted:Draft phone task") &&
+        hyperian_mobile_set(mobile, "task title", "Persistent phone task", error, sizeof(error)) &&
         hyperian_mobile_run_action(mobile, "save task", NULL, error, sizeof(error)) &&
         rendered_contains(mobile, "Persistent phone task", error, sizeof(error));
     hyperian_mobile_close(mobile); mobile = NULL;

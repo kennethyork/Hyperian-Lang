@@ -1,0 +1,16 @@
+application "Bad English Value Name" is console
+
+model Setting
+    field name is text
+end
+
+controller Main
+    when application starts
+        set "123 invalid name" to 1
+        show view "main"
+    end
+end
+
+view "main"
+    text "This should not compile."
+end

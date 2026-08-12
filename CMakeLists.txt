@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(Hyperian VERSION 0.37.0 LANGUAGES C)
+project(Hyperian VERSION 0.38.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -93,6 +93,8 @@ find_program(CURL_EXECUTABLE curl)
 if(CURL_EXECUTABLE)
     add_test(NAME run_pwa_runtime
         COMMAND sh ${CMAKE_SOURCE_DIR}/tests/pwa_runtime_test.sh $<TARGET_FILE:hyperian> ${CMAKE_SOURCE_DIR}/examples/pwa_tasks/app.hyp ${CMAKE_BINARY_DIR})
+    add_test(NAME run_english_names_web
+        COMMAND sh ${CMAKE_SOURCE_DIR}/tests/english_names_web_test.sh $<TARGET_FILE:hyperian> ${CMAKE_SOURCE_DIR}/examples/english_names_web.hyp ${CMAKE_BINARY_DIR})
 endif()
 add_test(NAME clean_pwa_bundle COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}/PwaBundle)
 add_test(NAME build_pwa_bundle
@@ -187,6 +189,26 @@ if(CURL_FOUND)
     add_test(NAME compile_http_client
         COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/http_client.hyp -o ${CMAKE_BINARY_DIR}/http_client.hyc)
 endif()
+add_test(NAME compile_english_names
+    COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/english_names.hyp -o ${CMAKE_BINARY_DIR}/english_names.hyc)
+add_test(NAME run_english_names
+    COMMAND hyperian run ${CMAKE_SOURCE_DIR}/examples/english_names.hyp)
+set_tests_properties(run_english_names PROPERTIES PASS_REGULAR_EXPRESSION "Hello, Ada Lovelace")
+add_test(NAME test_english_names
+    COMMAND hyperian test ${CMAKE_SOURCE_DIR}/examples/english_names.hyp)
+set_tests_properties(test_english_names PROPERTIES PASS_REGULAR_EXPRESSION "1 test, 0 failures")
+add_test(NAME debug_english_names
+    COMMAND hyperian debug ${CMAKE_SOURCE_DIR}/examples/english_names.hyp)
+set_tests_properties(debug_english_names PROPERTIES PASS_REGULAR_EXPRESSION "visit count = 2")
+add_test(NAME inspect_english_names
+    COMMAND hyperian inspect ${CMAKE_BINARY_DIR}/english_names.hyc)
+set_tests_properties(inspect_english_names PROPERTIES DEPENDS compile_english_names PASS_REGULAR_EXPRESSION "SET_VALUE        visit count value called \"visit count\" plus 1")
+add_test(NAME format_english_names
+    COMMAND hyperian format ${CMAKE_SOURCE_DIR}/examples/english_names.hyp)
+set_tests_properties(format_english_names PROPERTIES PASS_REGULAR_EXPRESSION "set \"visit count\" to value called \"visit count\" plus 1")
+add_test(NAME reject_bad_english_value_name
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/reject_with_message_test.sh "a value name must start with a letter"
+        $<TARGET_FILE:hyperian> check ${CMAKE_SOURCE_DIR}/tests/bad_english_value_name.hyp)
 add_test(NAME reject_try_without_handler
     COMMAND hyperian check ${CMAKE_SOURCE_DIR}/tests/bad_try_without_handler.hyp)
 set_tests_properties(reject_try_without_handler PROPERTIES WILL_FAIL TRUE)
@@ -246,6 +268,20 @@ if(GTK3_FOUND AND XVFB_RUN)
 endif()
 add_test(NAME compile_mobile_preview
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/mobile_tasks.hyp -o ${CMAKE_BINARY_DIR}/mobile_tasks.hyc)
+add_test(NAME clean_generated_english_mobile
+    COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}/GeneratedEnglishMobile)
+add_test(NAME create_generated_english_mobile
+    COMMAND $<TARGET_FILE:hyperian> new GeneratedEnglishMobile --target mobile)
+set_tests_properties(create_generated_english_mobile PROPERTIES DEPENDS clean_generated_english_mobile WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+add_test(NAME verify_generated_english_mobile
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/generated_native_names_test.sh ${CMAKE_BINARY_DIR}/GeneratedEnglishMobile $<TARGET_FILE:hyperian>)
+set_tests_properties(verify_generated_english_mobile PROPERTIES DEPENDS create_generated_english_mobile)
+add_test(NAME clean_generated_english_targets
+    COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}/GeneratedEnglishTargets)
+add_test(NAME verify_generated_english_targets
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tests/generated_english_targets_test.sh
+        ${CMAKE_BINARY_DIR}/GeneratedEnglishTargets $<TARGET_FILE:hyperian>)
+set_tests_properties(verify_generated_english_targets PROPERTIES DEPENDS clean_generated_english_targets)
 add_test(NAME compile_mobile_connected
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/mobile_connected.hyp -o ${CMAKE_BINARY_DIR}/mobile_connected.hyc)
 add_executable(hyperian_mobile_bridge_test tests/mobile_bridge_test.c)
@@ -427,10 +463,10 @@ add_test(NAME run_game_physics
 set_tests_properties(run_game_physics PROPERTIES DEPENDS compile_game_physics)
 add_test(NAME inspect_circle_collision
     COMMAND hyperian inspect ${CMAKE_BINARY_DIR}/physics_game.hyc)
-set_tests_properties(inspect_circle_collision PROPERTIES DEPENDS compile_game_physics PASS_REGULAR_EXPRESSION "CHECK_CIRCLE_COLLISION ball_x ball_y ball_radius coin_x coin_y coin_radius coin_hit")
+set_tests_properties(inspect_circle_collision PROPERTIES DEPENDS compile_game_physics PASS_REGULAR_EXPRESSION "CHECK_CIRCLE_COLLISION ball horizontal center ball vertical center ball radius coin horizontal center coin vertical center coin radius coin hit")
 add_test(NAME debug_circle_collision
     COMMAND hyperian debug ${CMAKE_SOURCE_DIR}/examples/physics_game.hyp --event FRAME)
-set_tests_properties(debug_circle_collision PROPERTIES PASS_REGULAR_EXPRESSION "check whether circle centered at ball_x ball_y with radius ball_radius touches circle centered at coin_x coin_y with radius coin_radius as coin_hit")
+set_tests_properties(debug_circle_collision PROPERTIES PASS_REGULAR_EXPRESSION "check whether circle centered at ball horizontal center ball vertical center with radius ball radius touches circle centered at coin horizontal center coin vertical center with radius coin radius as coin hit")
 add_test(NAME preserve_legacy_rectangle_collision
     COMMAND hyperian debug ${CMAKE_SOURCE_DIR}/tests/legacy_rectangle_collision.hyp --event FRAME)
 set_tests_properties(preserve_legacy_rectangle_collision PROPERTIES PASS_REGULAR_EXPRESSION "touched = true")
@@ -463,10 +499,10 @@ add_test(NAME reject_bad_animation_number_at_runtime
 set_tests_properties(reject_bad_animation_number_at_runtime PROPERTIES WILL_FAIL TRUE)
 add_test(NAME inspect_game_animation
     COMMAND hyperian inspect ${CMAKE_BINARY_DIR}/physics_game.hyc)
-set_tests_properties(inspect_game_animation PROPERTIES DEPENDS compile_game_physics PASS_REGULAR_EXPRESSION "ADVANCE_ANIMATION animation_frame 1 4 100")
+set_tests_properties(inspect_game_animation PROPERTIES DEPENDS compile_game_physics PASS_REGULAR_EXPRESSION "ADVANCE_ANIMATION animation frame 1 4 100")
 add_test(NAME debug_game_animation
     COMMAND hyperian debug ${CMAKE_SOURCE_DIR}/examples/physics_game.hyp --event FRAME)
-set_tests_properties(debug_game_animation PROPERTIES PASS_REGULAR_EXPRESSION "advance animation animation_frame from 1 through 4 every 100 milliseconds")
+set_tests_properties(debug_game_animation PROPERTIES PASS_REGULAR_EXPRESSION "advance animation animation frame from 1 through 4 every 100 milliseconds")
 add_test(NAME compile_game_media
     COMMAND hyperian compile ${CMAKE_SOURCE_DIR}/examples/game_media.hyp -o ${CMAKE_BINARY_DIR}/game_media.hyc)
 if(SDL2_FOUND)
@@ -480,9 +516,9 @@ if(SDL2_FOUND)
             $<TARGET_FILE:hyperian> run ${CMAKE_BINARY_DIR}/blocks_game.hyc)
     set_tests_properties(run_game_timing_headless PROPERTIES DEPENDS compile_native_game PASS_REGULAR_EXPRESSION "seconds_since_last_frame=0\\.")
     add_test(NAME run_game_physics_headless
-        COMMAND ${CMAKE_COMMAND} -E env SDL_VIDEODRIVER=dummy HYPERIAN_VISUAL_TEST=1 HYPERIAN_VISUAL_TEST_STATE=player_hit
+        COMMAND ${CMAKE_COMMAND} -E env SDL_VIDEODRIVER=dummy HYPERIAN_VISUAL_TEST=1 "HYPERIAN_VISUAL_TEST_STATE=player hit"
             $<TARGET_FILE:hyperian> run ${CMAKE_BINARY_DIR}/physics_game.hyc)
-    set_tests_properties(run_game_physics_headless PROPERTIES DEPENDS compile_game_physics PASS_REGULAR_EXPRESSION "player_hit=true")
+    set_tests_properties(run_game_physics_headless PROPERTIES DEPENDS compile_game_physics PASS_REGULAR_EXPRESSION "player hit=true")
     add_test(NAME create_game_media_assets COMMAND hyperian_game_media_fixture)
     add_test(NAME run_game_media_headless
         COMMAND ${CMAKE_COMMAND} -E env SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy HYPERIAN_VISUAL_TEST=1
