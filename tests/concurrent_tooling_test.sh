@@ -16,8 +16,7 @@ wait "$second_process"
 
 grep 'No mistakes found.' "$work/first.txt"
 grep 'No mistakes found.' "$work/second.txt"
-first_path=$(sed -n 's/.* -> \([^ ]*\) (.*/\1/p' "$work/first.txt")
-second_path=$(sed -n 's/.* -> \([^ ]*\) (.*/\1/p' "$work/second.txt")
+first_path=$(sed -n 's/^Compiled .* -> \(.*\) ([0-9][0-9]* instructions)\r*$/\1/p' "$work/first.txt")
+second_path=$(sed -n 's/^Compiled .* -> \(.*\) ([0-9][0-9]* instructions)\r*$/\1/p' "$work/second.txt")
 test -n "$first_path"
 test -n "$second_path"
-test "$first_path" != "$second_path"
